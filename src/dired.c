@@ -1,84 +1,144 @@
-#include <stdio.h>
+#include <ncurses.h>
+#include <dirent.h>
+#include <sys/stat.h>
 #include <unistd.h>
-#include <termios.h>
-#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
 
-static struct termios orig_termios;
+#define MAX_ENTRIES 1024
+#define NAME_MAX 1024
+#define PATH_MAX 1024
 
-static void disable_raw_mode(void)
-{
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios);
-}
+typedef struct {
+    char name[NAME_MAX + 1];
+    struct stat st;
+} Entry;
 
-static void enable_raw_mode(void)
-{
-    struct termios raw;
+static Entry entries[MAX_ENTRIES];
+static int entry_count = 0;
+static int selected = 0;
+static char current_path[PATH_MAX];
 
-    tcgetattr(STDIN_FILENO, &orig_termios);
-    atexit(disable_raw_mode);
+static void load_directory(const char *path) {
+    DIR *dir;
+    struct dirent *de;
+    char fullpath[PATH_MAX];
 
-    raw = orig_termios;
-    raw.c_lflag &= ~(ICANON | ECHO);
-    raw.c_iflag &= ~(IXON | ICRNL);
-    raw.c_oflag &= ~(OPOST);
-    raw.c_cc[VMIN]  = 1;
-    raw.c_cc[VTIME] = 0;
+    entry_count = 0;
+    selected = 0;
 
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
-}
+    dir = opendir(path);
+    if (!dir)
+        return;
 
-static void cls(void)
-{
-    write(STDOUT_FILENO, "\x1b[2J\x1b[H", 7);
-}
-
-static void move_cursor(int row, int col)
-{
-    char buf[32];
-    int len = snprintf(buf, sizeof(buf), "\x1b[%d;%dH", row + 1, col + 1);
-    write(STDOUT_FILENO, buf, len);
-}
-
-int main(void)
-{
-    int x = 0, y = 0;
-    char c;
-
-    if (!isatty(STDIN_FILENO) || !isatty(STDOUT_FILENO)) {
-        fprintf(stderr, "stdin/stdout is not a tty\n");
-        return 1;
-    }
-
-    enable_raw_mode();
-    cls();
-
-    while (read(STDIN_FILENO, &c, 1) == 1) {
-        switch (c) {
-            case 'q':
-                disable_raw_mode();
-                cls();
-                return 0;
-            case 'h':
-                x--;
-                break;
-            case 'l':
-                x++;
-                break;
-            case 'k':
-                y--;
-                break;
-            case 'j':
-                y++;
-                break;
+    while ((de = readdir(dir)) && entry_count < MAX_ENTRIES) {
+        snprintf(fullpath, sizeof(fullpath), "%s/%s", path, de->d_name);
+        if (lstat(fullpath, &entries[entry_count].st) == 0) {
+            strncpy(entries[entry_count].name, de->d_name, NAME_MAX);
+            entry_count++;
         }
-
-        if (x < 0) x = 0;
-        if (y < 0) y = 0;
-
-        cls();
-        move_cursor(y, x);
-        write(STDOUT_FILENO, "@", 1);
     }
 
-    return 0;
+    closedir(dir);
+}
+
+static void mode_to_str(mode_t m, char *out) {
+    out[0] = S_ISDIR(m) ? 'd' : '-';
+    out[1] = (m & S_IRUSR) ? 'r' : '-';
+    out[2] = (m & S_IWUSR) ? 'w' : '-';
+    out[3] = (m & S_IXUSR) ? 'x' : '-';
+    out[4] = (m & S_IRGRP) ? 'r' : '-';
+    out[5] = (m & S_IWGRP) ? 'w' : '-';
+    out[6] = (m & S_IXGRP) ? 'x' : '-';
+    out[7] = (m & S_IROTH) ? 'r' : '-';
+    out[8] = (m & S_IWOTH) ? 'w' : '-';
+    out[9] = (m & S_IXOTH) ? 'x' : '-';
+    out[10] = '\0';
+}
+
+static void draw(void) {
+    clear();
+    mvprintw(0, 0, "Path: %s", current_path);
+
+    for (int i = 0; i < entry_count; i++) {
+        char perms[11];
+        mode_to_str(entries[i].st.st_mode, perms);
+
+        if (i == selected)
+            attron(A_REVERSE);
+
+        mvprintw(i + 2, 0, "%s %8ld %s",
+                 perms,
+                 (long)entries[i].st.st_size,
+                 entries[i].name);
+
+        if (i == selected)
+            attroff(A_REVERSE);
+    }
+
+    refresh();
+}
+
+static void enter_directory(void) {
+    if (!S_ISDIR(entries[selected].st.st_mode))
+        return;
+
+    if (strcmp(entries[selected].name, ".") == 0)
+        return;
+
+    if (strcmp(entries[selected].name, "..") == 0) {
+        chdir("..");
+    } else {
+        chdir(entries[selected].name);
+    }
+
+    getcwd(current_path, sizeof(current_path));
+    load_directory(current_path);
+}
+
+static void go_parent(void) {
+    chdir("..");
+    getcwd(current_path, sizeof(current_path));
+    load_directory(current_path);
+}
+
+int main(void) {
+    int ch;
+
+    initscr();
+    cbreak();
+    noecho();
+    keypad(stdscr, TRUE);
+
+    getcwd(current_path, sizeof(current_path));
+    load_directory(current_path);
+
+    while (1) {
+        draw();
+        ch = getch();
+
+        switch (ch) {
+        case KEY_UP:
+            if (selected > 0)
+                selected--;
+            break;
+
+        case KEY_DOWN:
+            if (selected < entry_count - 1)
+                selected++;
+            break;
+
+        case KEY_RIGHT:
+            enter_directory();
+            break;
+
+        case KEY_LEFT:
+            go_parent();
+            break;
+
+        case 'q':
+            endwin();
+            return 0;
+        }
+    }
 }

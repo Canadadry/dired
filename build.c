@@ -12,12 +12,12 @@ void build_lib(int debug){
 
     if (!debug){
         build_set_cflags(&ctx, "-Wall -O2");
-        build_set_ldflags(&ctx, " "MACOS_FLAGS);
+        build_set_ldflags(&ctx, "-lncurses "MACOS_FLAGS);
         build_add_static_lib(&ctx, "lib"TARGET".a");
         build_add_entry_point(&ctx, "dired.c",TARGET);
     }else{
         build_set_cflags(&ctx, "-Wall -Werror -g -fsanitize=address -DBUILD_DEBUG");
-        build_set_ldflags(&ctx, "-fsanitize=address xs"MACOS_FLAGS);
+        build_set_ldflags(&ctx, "-fsanitize=address -lncurses"MACOS_FLAGS);
         build_add_static_lib(&ctx, "lib"TARGET"d.a");
         build_add_entry_point(&ctx, "lust2d.c",TARGET"d");
     }
