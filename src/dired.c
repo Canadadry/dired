@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #define MAX_ENTRIES 1024
 #define NAME_MAX 1024
@@ -35,6 +36,7 @@ static void load_directory(const char *path) {
         snprintf(fullpath, sizeof(fullpath), "%s/%s", path, de->d_name);
         if (lstat(fullpath, &entries[entry_count].st) == 0) {
             strncpy(entries[entry_count].name, de->d_name, NAME_MAX);
+            entries[entry_count].name[NAME_MAX] = '\0';
             entry_count++;
         }
     }
@@ -79,30 +81,55 @@ static void draw(void) {
     refresh();
 }
 
-static void enter_directory(void) {
-    if (!S_ISDIR(entries[selected].st.st_mode))
-        return;
+static void open_file_with_vim(const char *filename)
+{
+    endwin();                /* sortir de ncurses */
 
-    if (strcmp(entries[selected].name, ".") == 0)
-        return;
-
-    if (strcmp(entries[selected].name, "..") == 0) {
-        chdir("..");
-    } else {
-        chdir(entries[selected].name);
+    pid_t pid = fork();
+    if (pid == 0) {
+        execlp("vim", "vim", filename, (char *)NULL);
+        perror("execlp");
+        _exit(1);
+    } else if (pid > 0) {
+        wait(NULL);
     }
 
-    getcwd(current_path, sizeof(current_path));
-    load_directory(current_path);
+    /* réinitialisation ncurses */
+    initscr();
+    cbreak();
+    noecho();
+    keypad(stdscr, TRUE);
 }
 
-static void go_parent(void) {
+static void enter_selected(void)
+{
+    if (S_ISDIR(entries[selected].st.st_mode)) {
+        if (strcmp(entries[selected].name, ".") == 0)
+            return;
+
+        if (strcmp(entries[selected].name, "..") == 0)
+            chdir("..");
+        else
+            chdir(entries[selected].name);
+
+        getcwd(current_path, sizeof(current_path));
+        load_directory(current_path);
+    }
+    else if (S_ISREG(entries[selected].st.st_mode)) {
+        open_file_with_vim(entries[selected].name);
+        load_directory(current_path);
+    }
+}
+
+static void go_parent(void)
+{
     chdir("..");
     getcwd(current_path, sizeof(current_path));
     load_directory(current_path);
 }
 
-int main(void) {
+int main(void)
+{
     int ch;
 
     initscr();
@@ -129,7 +156,8 @@ int main(void) {
             break;
 
         case KEY_RIGHT:
-            enter_directory();
+        case '\n':
+            enter_selected();
             break;
 
         case KEY_LEFT:
