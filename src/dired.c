@@ -26,7 +26,7 @@ static void load_directory(const char *path) {
     char fullpath[PATH_MAX];
 
     entry_count = 0;
-    selected = 0;
+    // selected = 0;
 
     dir = opendir(path);
     if (!dir)
@@ -103,6 +103,8 @@ static void open_file_with_vim(const char *filename)
 
 static void enter_selected(void)
 {
+    int saved_selected = selected;
+
     if (S_ISDIR(entries[selected].st.st_mode)) {
         if (strcmp(entries[selected].name, ".") == 0)
             return;
@@ -118,8 +120,10 @@ static void enter_selected(void)
     else if (S_ISREG(entries[selected].st.st_mode)) {
         open_file_with_vim(entries[selected].name);
         load_directory(current_path);
+        selected = saved_selected;
     }
 }
+
 
 static void go_parent(void)
 {
