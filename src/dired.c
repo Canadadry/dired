@@ -1,33 +1,49 @@
 #include <ncurses.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
+#include <errno.h>
 
 #define MAX_ENTRIES 1024
-#define NAME_MAX 1024
-#define PATH_MAX 1024
+#define NAME_MAX_LEN 1024
+#define PATH_MAX_LEN 1024
+
+typedef enum {
+    KEY_NONE = 0,
+    KEY_QUIT = 'q',
+    KEY_RENAME_LOWER = 'r',
+    KEY_RENAME_UPPER = 'R',
+    KEY_VALIDATE = '\n',
+    KEY_ESCAPE = 27
+} AppKey;
 
 typedef struct {
-    char name[NAME_MAX + 1];
+    char name[NAME_MAX_LEN + 1];
     struct stat st;
 } Entry;
 
 static Entry entries[MAX_ENTRIES];
 static int entry_count = 0;
 static int selected = 0;
-static char current_path[PATH_MAX];
 
-static void load_directory(const char *path) {
+static char current_path[PATH_MAX_LEN];
+
+static int rename_mode = 0;
+static char rename_buf[NAME_MAX_LEN + 1];
+static size_t rename_len = 0;
+
+static void load_directory(const char *path)
+{
     DIR *dir;
     struct dirent *de;
-    char fullpath[PATH_MAX];
+    char fullpath[PATH_MAX_LEN];
 
     entry_count = 0;
-    // selected = 0;
-
     dir = opendir(path);
     if (!dir)
         return;
@@ -35,8 +51,8 @@ static void load_directory(const char *path) {
     while ((de = readdir(dir)) && entry_count < MAX_ENTRIES) {
         snprintf(fullpath, sizeof(fullpath), "%s/%s", path, de->d_name);
         if (lstat(fullpath, &entries[entry_count].st) == 0) {
-            strncpy(entries[entry_count].name, de->d_name, NAME_MAX);
-            entries[entry_count].name[NAME_MAX] = '\0';
+            strncpy(entries[entry_count].name, de->d_name, NAME_MAX_LEN);
+            entries[entry_count].name[NAME_MAX_LEN] = '\0';
             entry_count++;
         }
     }
@@ -44,7 +60,8 @@ static void load_directory(const char *path) {
     closedir(dir);
 }
 
-static void mode_to_str(mode_t m, char *out) {
+static void mode_to_str(mode_t m, char *out)
+{
     out[0] = S_ISDIR(m) ? 'd' : '-';
     out[1] = (m & S_IRUSR) ? 'r' : '-';
     out[2] = (m & S_IWUSR) ? 'w' : '-';
@@ -58,7 +75,12 @@ static void mode_to_str(mode_t m, char *out) {
     out[10] = '\0';
 }
 
-static void draw(void) {
+/* =======================
+   Affichage
+   ======================= */
+
+static void draw(void)
+{
     clear();
     mvprintw(0, 0, "Path: %s", current_path);
 
@@ -69,10 +91,17 @@ static void draw(void) {
         if (i == selected)
             attron(A_REVERSE);
 
-        mvprintw(i + 2, 0, "%s %8ld %s",
-                 perms,
-                 (long)entries[i].st.st_size,
-                 entries[i].name);
+        if (rename_mode && i == selected) {
+            mvprintw(i + 2, 0, "%s %8ld %s",
+                     perms,
+                     (long)entries[i].st.st_size,
+                     rename_buf);
+        } else {
+            mvprintw(i + 2, 0, "%s %8ld %s",
+                     perms,
+                     (long)entries[i].st.st_size,
+                     entries[i].name);
+        }
 
         if (i == selected)
             attroff(A_REVERSE);
@@ -83,18 +112,16 @@ static void draw(void) {
 
 static void open_file_with_vim(const char *filename)
 {
-    endwin();                /* sortir de ncurses */
+    endwin();
 
     pid_t pid = fork();
     if (pid == 0) {
         execlp("vim", "vim", filename, (char *)NULL);
-        perror("execlp");
-        _exit(1);
-    } else if (pid > 0) {
+        _exit(EXIT_FAILURE);
+    } else {
         wait(NULL);
     }
 
-    /* réinitialisation ncurses */
     initscr();
     cbreak();
     noecho();
@@ -103,27 +130,18 @@ static void open_file_with_vim(const char *filename)
 
 static void enter_selected(void)
 {
-    int saved_selected = selected;
-
     if (S_ISDIR(entries[selected].st.st_mode)) {
         if (strcmp(entries[selected].name, ".") == 0)
             return;
 
-        if (strcmp(entries[selected].name, "..") == 0)
-            chdir("..");
-        else
-            chdir(entries[selected].name);
-
+        chdir(entries[selected].name);
         getcwd(current_path, sizeof(current_path));
         load_directory(current_path);
-    }
-    else if (S_ISREG(entries[selected].st.st_mode)) {
+    } else if (S_ISREG(entries[selected].st.st_mode)) {
         open_file_with_vim(entries[selected].name);
         load_directory(current_path);
-        selected = saved_selected;
     }
 }
-
 
 static void go_parent(void)
 {
@@ -131,6 +149,47 @@ static void go_parent(void)
     getcwd(current_path, sizeof(current_path));
     load_directory(current_path);
 }
+
+static void start_rename(void)
+{
+    if (!strcmp(entries[selected].name, ".") ||
+        !strcmp(entries[selected].name, ".."))
+        return;
+
+    rename_mode = 1;
+    strncpy(rename_buf, entries[selected].name, NAME_MAX_LEN);
+    rename_buf[NAME_MAX_LEN] = '\0';
+    rename_len = strlen(rename_buf);
+    curs_set(1);
+}
+
+static void cancel_rename(void)
+{
+    rename_mode = 0;
+    curs_set(0);
+}
+
+static void validate_rename(void)
+{
+    char oldpath[PATH_MAX_LEN];
+    char newpath[PATH_MAX_LEN];
+
+    snprintf(oldpath, sizeof(oldpath), "%s/%s",
+             current_path, entries[selected].name);
+    snprintf(newpath, sizeof(newpath), "%s/%s",
+             current_path, rename_buf);
+
+    if (strcmp(oldpath, newpath) != 0) {
+        if (rename(oldpath, newpath) != 0) {
+            mvprintw(LINES - 1, 0, "Rename error: %s", strerror(errno));
+            getch();
+        }
+    }
+
+    cancel_rename();
+    load_directory(current_path);
+}
+
 
 int main(void)
 {
@@ -140,6 +199,7 @@ int main(void)
     cbreak();
     noecho();
     keypad(stdscr, TRUE);
+    curs_set(0);
 
     getcwd(current_path, sizeof(current_path));
     load_directory(current_path);
@@ -147,6 +207,21 @@ int main(void)
     while (1) {
         draw();
         ch = getch();
+
+        if (rename_mode) {
+            if (ch == KEY_ESCAPE) {
+                cancel_rename();
+            } else if (ch == KEY_BACKSPACE || ch == KEY_DC || ch == 127) {
+                if (rename_len > 0)
+                    rename_buf[--rename_len] = '\0';
+            } else if (ch == KEY_VALIDATE) {
+                validate_rename();
+            } else if (isprint(ch) && rename_len < NAME_MAX_LEN) {
+                rename_buf[rename_len++] = (char)ch;
+                rename_buf[rename_len] = '\0';
+            }
+            continue;
+        }
 
         switch (ch) {
         case KEY_UP:
@@ -160,7 +235,7 @@ int main(void)
             break;
 
         case KEY_RIGHT:
-        case '\n':
+        case KEY_VALIDATE:
             enter_selected();
             break;
 
@@ -168,9 +243,14 @@ int main(void)
             go_parent();
             break;
 
-        case 'q':
+        case KEY_RENAME_LOWER:
+        case KEY_RENAME_UPPER:
+            start_rename();
+            break;
+
+        case KEY_QUIT:
             endwin();
-            return 0;
+            return EXIT_SUCCESS;
         }
     }
 }
