@@ -13,34 +13,30 @@
 #define NAME_MAX_LEN 1024
 #define PATH_MAX_LEN 1024
 
-/* =======================
-   Touches applicatives
-   ======================= */
-
 typedef enum {
     APP_KEY_NONE = 0,
     APP_KEY_QUIT = 'q',
     APP_KEY_RENAME_LOWER = 'r',
     APP_KEY_RENAME_UPPER = 'R',
+    APP_KEY_NEW_FILE = 'f',
+    APP_KEY_NEW_DIR  = 'd',
     APP_KEY_VALIDATE = '\n',
     APP_KEY_ESCAPE = 27,
     APP_KEY_BACKSPACE_ASCII = 8,
-    APP_KEY_BACKSPACE_DEL = 127,
-
+    APP_KEY_BACKSPACE_DEL = 127
 } AppKey;
 
-/* =======================
-   Structures
-   ======================= */
+typedef enum {
+    MODE_NAV = 0,
+    MODE_RENAME,
+    MODE_CREATE_FILE,
+    MODE_CREATE_DIR
+} AppMode;
 
 typedef struct {
     char name[NAME_MAX_LEN + 1];
     struct stat st;
 } Entry;
-
-/* =======================
-   État global
-   ======================= */
 
 static Entry entries[MAX_ENTRIES];
 static int entry_count = 0;
@@ -48,13 +44,12 @@ static int selected = 0;
 
 static char current_path[PATH_MAX_LEN];
 
-static int rename_mode = 0;
-static char rename_buf[NAME_MAX_LEN + 1];
-static size_t rename_len = 0;
+static AppMode mode = MODE_NAV;
+static char edit_buf[NAME_MAX_LEN + 1];
+static size_t edit_len = 0;
 
-/* =======================
-   Utilitaires
-   ======================= */
+static int virtual_line = 0;
+
 
 static int is_protected_name(const char *name)
 {
@@ -99,44 +94,52 @@ static void mode_to_str(mode_t m, char *out)
     out[10] = '\0';
 }
 
-/* =======================
-   Affichage
-   ======================= */
-
 static void draw(void)
 {
     clear();
     mvprintw(0, 0, "Path: %s", current_path);
 
-    for (int i = 0; i < entry_count; i++) {
+    if (mode == MODE_CREATE_FILE)
+        mvprintw(1, 0, "Create file:");
+    else if (mode == MODE_CREATE_DIR)
+        mvprintw(1, 0, "Create directory:");
+    else if (mode == MODE_RENAME)
+        mvprintw(1, 0, "Rename:");
+
+    int total_lines = entry_count + (virtual_line ? 1 : 0);
+
+    for (int i = 0; i < total_lines; i++) {
+        if (virtual_line && i == entry_count) {
+            if (i == selected)
+                attron(A_REVERSE);
+
+            mvprintw(i + 2, 0, "          %s", edit_buf);
+
+            if (i == selected)
+                attroff(A_REVERSE);
+
+            continue;
+        }
+
         char perms[11];
         mode_to_str(entries[i].st.st_mode, perms);
 
         if (i == selected)
             attron(A_REVERSE);
 
-        if (rename_mode && i == selected) {
-            mvprintw(i + 2, 0, "%s %8ld %s",
-                     perms,
-                     (long)entries[i].st.st_size,
-                     rename_buf);
-        } else {
-            mvprintw(i + 2, 0, "%s %8ld %s",
-                     perms,
-                     (long)entries[i].st.st_size,
-                     entries[i].name);
-        }
+        mvprintw(i + 2, 0, "%s %8ld %s",
+                 perms,
+                 (long)entries[i].st.st_size,
+                 entries[i].name);
 
         if (i == selected)
             attroff(A_REVERSE);
     }
-
+    mvprintw(LINES - 1, 0,
+              "up/down: Navigate  left: Parent  right/Enter: Open  r: Rename  f: New file  d: New dir  Backspace: Delete  q: Quit");
+    clrtoeol();
     refresh();
 }
-
-/* =======================
-   Navigation fichiers
-   ======================= */
 
 static void open_file_with_vim(const char *filename)
 {
@@ -159,6 +162,8 @@ static void open_file_with_vim(const char *filename)
 
 static void enter_selected(void)
 {
+    if (selected >= entry_count) return;
+
     if (S_ISDIR(entries[selected].st.st_mode)) {
         if (is_protected_name(entries[selected].name))
             return;
@@ -179,55 +184,61 @@ static void go_parent(void)
     load_directory(current_path);
 }
 
-/* =======================
-   Mode rename
-   ======================= */
-
-static void start_rename(void)
+static void start_edit(AppMode new_mode)
 {
-    if (is_protected_name(entries[selected].name))
-        return;
+    mode = new_mode;
+    edit_buf[0] = '\0';
+    edit_len = 0;
 
-    rename_mode = 1;
-    strncpy(rename_buf, entries[selected].name, NAME_MAX_LEN);
-    rename_buf[NAME_MAX_LEN] = '\0';
-    rename_len = strlen(rename_buf);
+    virtual_line = (new_mode == MODE_CREATE_FILE || new_mode == MODE_CREATE_DIR) ? 1 : 0;
+    selected = entry_count;
+
     curs_set(1);
 }
 
-static void cancel_rename(void)
+static void cancel_edit(void)
 {
-    rename_mode = 0;
+    mode = MODE_NAV;
+    virtual_line = 0;
+
+    if (selected >= entry_count && entry_count > 0)
+        selected = entry_count - 1;
+
     curs_set(0);
 }
 
-static void validate_rename(void)
+static void validate_edit(void)
 {
-    char oldpath[PATH_MAX_LEN];
-    char newpath[PATH_MAX_LEN];
-
-    snprintf(oldpath, sizeof(oldpath), "%s/%s",
-             current_path, entries[selected].name);
-    snprintf(newpath, sizeof(newpath), "%s/%s",
-             current_path, rename_buf);
-
-    if (strcmp(oldpath, newpath) != 0) {
-        if (rename(oldpath, newpath) != 0) {
-            mvprintw(LINES - 1, 0, "Rename error: %s", strerror(errno));
-            getch();
-        }
+    if (edit_len == 0) {
+        cancel_edit();
+        return;
     }
 
-    cancel_rename();
+    char path[PATH_MAX_LEN];
+    snprintf(path, sizeof(path), "%s/%s", current_path, edit_buf);
+
+    if (mode == MODE_RENAME) {
+        if (selected >= entry_count) { cancel_edit(); return; }
+        char oldpath[PATH_MAX_LEN];
+        snprintf(oldpath, sizeof(oldpath), "%s/%s",
+                 current_path, entries[selected].name);
+        rename(oldpath, path);
+    }
+    else if (mode == MODE_CREATE_FILE) {
+        FILE *f = fopen(path, "wx");
+        if (f) fclose(f);
+    }
+    else if (mode == MODE_CREATE_DIR) {
+        mkdir(path, 0755);
+    }
+
+    cancel_edit();
     load_directory(current_path);
 }
 
-/* =======================
-   Suppression
-   ======================= */
-
 static void delete_selected(void)
 {
+    if (selected >= entry_count) return;
     if (is_protected_name(entries[selected].name))
         return;
 
@@ -262,10 +273,6 @@ static void delete_selected(void)
     load_directory(current_path);
 }
 
-/* =======================
-   Main
-   ======================= */
-
 int main(void)
 {
     int ch;
@@ -283,17 +290,24 @@ int main(void)
         draw();
         ch = getch();
 
-        if (rename_mode) {
+        if (mode != MODE_NAV) {
             if (ch == APP_KEY_ESCAPE) {
-                cancel_rename();
-            } else if (ch == KEY_BACKSPACE || ch == KEY_DC || ch == 127) {
-                if (rename_len > 0)
-                    rename_buf[--rename_len] = '\0';
-            } else if (ch == APP_KEY_VALIDATE) {
-                validate_rename();
-            } else if (isprint(ch) && rename_len < NAME_MAX_LEN) {
-                rename_buf[rename_len++] = (char)ch;
-                rename_buf[rename_len] = '\0';
+                cancel_edit();
+            }
+            else if (ch == APP_KEY_VALIDATE) {
+                validate_edit();
+            }
+            else if (ch == KEY_BACKSPACE ||
+                     ch == KEY_DC ||
+                     ch == APP_KEY_BACKSPACE_ASCII ||
+                     ch == APP_KEY_BACKSPACE_DEL) {
+
+                if (edit_len > 0)
+                    edit_buf[--edit_len] = '\0';
+            }
+            else if (isprint(ch) && edit_len < NAME_MAX_LEN) {
+                edit_buf[edit_len++] = (char)ch;
+                edit_buf[edit_len] = '\0';
             }
             continue;
         }
@@ -305,7 +319,7 @@ int main(void)
             break;
 
         case KEY_DOWN:
-            if (selected < entry_count - 1)
+            if (selected < entry_count - 1 + virtual_line)
                 selected++;
             break;
 
@@ -327,16 +341,21 @@ int main(void)
 
         case APP_KEY_RENAME_LOWER:
         case APP_KEY_RENAME_UPPER:
-            start_rename();
+            if (selected < entry_count && !is_protected_name(entries[selected].name))
+                start_edit(MODE_RENAME);
+            break;
+
+        case APP_KEY_NEW_FILE:
+            start_edit(MODE_CREATE_FILE);
+            break;
+
+        case APP_KEY_NEW_DIR:
+            start_edit(MODE_CREATE_DIR);
             break;
 
         case APP_KEY_QUIT:
             endwin();
             return EXIT_SUCCESS;
-        default:
-            endwin();
-            printf("unhandeled %d\n",ch);
-            return EXIT_FAILURE;
         }
     }
 }

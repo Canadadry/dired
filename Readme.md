@@ -1,0 +1,70 @@
+# Terminal File Explorer (ncurses)
+
+A lightweight terminal-based file manager written in C using ncurses. Designed for fast navigation and file editing over SSH or any terminal session.
+
+## Features
+
+* Navigate directories with arrow keys.
+* Open and edit files with Vim directly from the interface.
+* Rename files and directories.
+* Create new files or directories (via a temporary virtual line).
+* Delete files and directories with confirmation.
+* Minimal, fast, and works entirely in the terminal.
+* Simple modal interface: navigation mode and edit mode.
+
+## Usage
+
+1. Clone the repository and enter it:
+
+```bash
+git clone <repo_url>
+cd dired
+```
+
+2. Build the project and run the file explorer:
+
+```bash
+cc build.c -o builder && ./builder debug clean dired
+```
+
+3. Run over SSH if needed:
+
+```bash
+ssh user@remotehost 'cd /path/to/dired && ./builder debug clean dired'
+```
+
+4. Controls:
+
+```
+↑↓: Navigate
+←: Go to parent directory
+→ / Enter: Open file or enter directory
+r: Rename selected file/directory
+f: Create a new file
+d: Create a new directory
+Backspace: Delete selected file/directory
+q: Quit
+```
+
+## Example Interface
+
+```
+Path: /home/user/project
+Rename:
+
+drwxr-xr-x    128 src
+-rw-r--r--    512 main.c
+-rw-r--r--     64 README.md
+-rw-r--r--     32 config.h
+>           new_file.txt      <- virtual line when creating a file
+
+↑↓: Navigate  ←: Parent  →/Enter: Open  r: Rename  f: New file  d: New dir  Backspace: Delete  q: Quit
+```
+
+* The `>` indicates the current selection.
+* The last line (virtual line) is used when creating a new file or directory — the user types the name directly.
+* Files and directories are displayed with permissions and sizes.
+
+## Purpose
+
+This tool provides a **simple and fast way to browse directories and edit files in a terminal**, particularly useful when working on remote systems via SSH. It focuses on minimalism and speed, allowing quick file management without a full-featured file manager.
