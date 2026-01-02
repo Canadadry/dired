@@ -1,8 +1,6 @@
 #include "build.h"
 
 #define TARGET_DIRED "dired"
-#define TARGET_EDITOR "editor"
-#define TARGET_VIM "vim"
 
 #define MACOS_FLAGS ""
 
@@ -17,15 +15,11 @@ void build_lib(int debug){
         build_set_ldflags(&ctx, "-lncurses "MACOS_FLAGS);
         build_add_static_lib(&ctx, "lib"TARGET_DIRED".a");
         build_add_entry_point(&ctx, TARGET_DIRED".c",TARGET_DIRED);
-        build_add_entry_point(&ctx, TARGET_EDITOR".c",TARGET_EDITOR);
-        build_add_entry_point(&ctx, TARGET_VIM".c",TARGET_VIM);
     }else{
         build_set_cflags(&ctx, "-Wall -Werror -g -fsanitize=address -DBUILD_DEBUG");
         build_set_ldflags(&ctx, "-fsanitize=address -lncurses"MACOS_FLAGS);
         build_add_static_lib(&ctx, "lib"TARGET_DIRED"d.a");
         build_add_entry_point(&ctx, TARGET_DIRED".c",TARGET_DIRED"d");
-        build_add_entry_point(&ctx, TARGET_EDITOR".c",TARGET_EDITOR"d");
-        build_add_entry_point(&ctx, TARGET_VIM".c",TARGET_VIM"d");
     }
 
     build_compile(&ctx, "*.c");
@@ -64,18 +58,6 @@ int main(int argc, char **argv) {
             BUILD_RUN_CMD("./build/"TARGET_DIRED"d");
         }else{
             BUILD_RUN_CMD("./build/"TARGET_DIRED);
-        }
-    }else if (build_has_arg(argc, argv,  TARGET_EDITOR)){
-        if(build_has_arg(argc, argv, "debug","test")){
-            BUILD_RUN_CMD("./build/"TARGET_EDITOR"d","readme.md");
-        }else{
-            BUILD_RUN_CMD("./build/"TARGET_EDITOR,"readme.md");
-        }
-    }else if (build_has_arg(argc, argv,  TARGET_VIM)){
-        if(build_has_arg(argc, argv, "debug","test")){
-            BUILD_RUN_CMD("./build/"TARGET_VIM"d","readme.md");
-        }else{
-            BUILD_RUN_CMD("./build/"TARGET_VIM,"readme.md");
         }
     }
 
