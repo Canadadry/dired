@@ -13,19 +13,34 @@
 #define NAME_MAX_LEN 1024
 #define PATH_MAX_LEN 1024
 
+/* =======================
+   Touches applicatives
+   ======================= */
+
 typedef enum {
-    KEY_NONE = 0,
-    KEY_QUIT = 'q',
-    KEY_RENAME_LOWER = 'r',
-    KEY_RENAME_UPPER = 'R',
-    KEY_VALIDATE = '\n',
-    KEY_ESCAPE = 27
+    APP_KEY_NONE = 0,
+    APP_KEY_QUIT = 'q',
+    APP_KEY_RENAME_LOWER = 'r',
+    APP_KEY_RENAME_UPPER = 'R',
+    APP_KEY_VALIDATE = '\n',
+    APP_KEY_ESCAPE = 27,
+    APP_KEY_BACKSPACE_ASCII = 8,
+    APP_KEY_BACKSPACE_DEL = 127,
+
 } AppKey;
+
+/* =======================
+   Structures
+   ======================= */
 
 typedef struct {
     char name[NAME_MAX_LEN + 1];
     struct stat st;
 } Entry;
+
+/* =======================
+   État global
+   ======================= */
 
 static Entry entries[MAX_ENTRIES];
 static int entry_count = 0;
@@ -36,6 +51,15 @@ static char current_path[PATH_MAX_LEN];
 static int rename_mode = 0;
 static char rename_buf[NAME_MAX_LEN + 1];
 static size_t rename_len = 0;
+
+/* =======================
+   Utilitaires
+   ======================= */
+
+static int is_protected_name(const char *name)
+{
+    return (!strcmp(name, ".") || !strcmp(name, ".."));
+}
 
 static void load_directory(const char *path)
 {
@@ -110,6 +134,10 @@ static void draw(void)
     refresh();
 }
 
+/* =======================
+   Navigation fichiers
+   ======================= */
+
 static void open_file_with_vim(const char *filename)
 {
     endwin();
@@ -126,12 +154,13 @@ static void open_file_with_vim(const char *filename)
     cbreak();
     noecho();
     keypad(stdscr, TRUE);
+    curs_set(0);
 }
 
 static void enter_selected(void)
 {
     if (S_ISDIR(entries[selected].st.st_mode)) {
-        if (strcmp(entries[selected].name, ".") == 0)
+        if (is_protected_name(entries[selected].name))
             return;
 
         chdir(entries[selected].name);
@@ -150,10 +179,13 @@ static void go_parent(void)
     load_directory(current_path);
 }
 
+/* =======================
+   Mode rename
+   ======================= */
+
 static void start_rename(void)
 {
-    if (!strcmp(entries[selected].name, ".") ||
-        !strcmp(entries[selected].name, ".."))
+    if (is_protected_name(entries[selected].name))
         return;
 
     rename_mode = 1;
@@ -190,6 +222,49 @@ static void validate_rename(void)
     load_directory(current_path);
 }
 
+/* =======================
+   Suppression
+   ======================= */
+
+static void delete_selected(void)
+{
+    if (is_protected_name(entries[selected].name))
+        return;
+
+    mvprintw(LINES - 1, 0,
+             "Delete '%s' ? [y/N] ",
+             entries[selected].name);
+    clrtoeol();
+    refresh();
+
+    int ch = getch();
+    if (ch != 'y' && ch != 'Y')
+        return;
+
+    char fullpath[PATH_MAX_LEN];
+    snprintf(fullpath, sizeof(fullpath), "%s/%s",
+             current_path, entries[selected].name);
+
+    int rc;
+    if (S_ISDIR(entries[selected].st.st_mode))
+        rc = rmdir(fullpath);
+    else
+        rc = unlink(fullpath);
+
+    if (rc != 0) {
+        mvprintw(LINES - 1, 0, "Delete error: %s", strerror(errno));
+        getch();
+    }
+
+    if (selected >= entry_count - 1 && selected > 0)
+        selected--;
+
+    load_directory(current_path);
+}
+
+/* =======================
+   Main
+   ======================= */
 
 int main(void)
 {
@@ -209,12 +284,12 @@ int main(void)
         ch = getch();
 
         if (rename_mode) {
-            if (ch == KEY_ESCAPE) {
+            if (ch == APP_KEY_ESCAPE) {
                 cancel_rename();
             } else if (ch == KEY_BACKSPACE || ch == KEY_DC || ch == 127) {
                 if (rename_len > 0)
                     rename_buf[--rename_len] = '\0';
-            } else if (ch == KEY_VALIDATE) {
+            } else if (ch == APP_KEY_VALIDATE) {
                 validate_rename();
             } else if (isprint(ch) && rename_len < NAME_MAX_LEN) {
                 rename_buf[rename_len++] = (char)ch;
@@ -235,7 +310,7 @@ int main(void)
             break;
 
         case KEY_RIGHT:
-        case KEY_VALIDATE:
+        case APP_KEY_VALIDATE:
             enter_selected();
             break;
 
@@ -243,14 +318,25 @@ int main(void)
             go_parent();
             break;
 
-        case KEY_RENAME_LOWER:
-        case KEY_RENAME_UPPER:
+        case KEY_BACKSPACE:
+        case KEY_DC:
+        case APP_KEY_BACKSPACE_ASCII:
+        case APP_KEY_BACKSPACE_DEL:
+            delete_selected();
+            break;
+
+        case APP_KEY_RENAME_LOWER:
+        case APP_KEY_RENAME_UPPER:
             start_rename();
             break;
 
-        case KEY_QUIT:
+        case APP_KEY_QUIT:
             endwin();
             return EXIT_SUCCESS;
+        default:
+            endwin();
+            printf("unhandeled %d\n",ch);
+            return EXIT_FAILURE;
         }
     }
 }
