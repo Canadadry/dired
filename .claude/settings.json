@@ -1,0 +1,74 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Edit(src/**)",
+      "Edit(test/**)",
+      "Edit(vendor/**)",
+      "Edit(docs/**)",
+      "Edit(.gitignore)",
+      "Edit(Readme.md)",
+      "Write(src/**)",
+      "Write(test/**)",
+      "Write(vendor/**)",
+      "Write(docs/**)",
+      "Write(.gitignore)",
+      "Write(Readme.md)",
+      "Bash(mkdir *)",
+      "Bash(rm tmp/*)",
+      "Bash(rm -r tmp/*)",
+      "Bash(rm -rf tmp/*)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git mv *)",
+      "Bash(.claude/skills/git-commit/scripts/status.sh)",
+      "Bash(.claude/skills/git-commit/scripts/unstaged-diff.sh *)",
+      "Bash(git status *)",
+      "Bash(git pull *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git show *)",
+      "Bash(xargs ls)",
+      "Bash(ls *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(cat *)",
+      "Bash(grep *)",
+      "Bash(find *)",
+      "Bash(cut *)",
+      "Bash(wc *)",
+      "Bash(sort *)",
+      "Bash(uniq *)",
+      "Bash(diff *)",
+      "Bash(pwd)",
+      "Bash(jq *)"
+    ],
+    "defaultMode": "dontAsk"
+  },
+  "sandbox": {
+    "enabled": true,
+    "network": {
+      "allowedDomains": ["github.com", "*.github.com"]
+    }
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/block-git-c.py",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/deny-absolute-paths.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

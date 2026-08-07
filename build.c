@@ -26,20 +26,20 @@ void build_lib(int debug){
     build_link_all(&ctx);
 }
 
-// void build_test(){
-//     BuildCtx ctx = build_init();
-//     build_set_src_dir(&ctx, "test");
-//     build_set_build_dir(&ctx, "build/tests");
-//     build_set_cflags(&ctx, "-Wall -g -fsanitize=address -DBUILD_DEBUG");
-//     build_set_ldflags(&ctx, "-Lbuild -fsanitize=address -Lvendor/raylib/macos -lraylib -l"TARGET_DIRED"d "MACOS_FLAGS);
+void build_test(){
+    BuildCtx ctx = build_init();
+    build_set_src_dir(&ctx, "test");
+    build_set_build_dir(&ctx, "build/tests");
+    build_set_cflags(&ctx, "-Wall -g -fsanitize=address -DBUILD_DEBUG");
+    build_set_ldflags(&ctx, "-Lbuild -fsanitize=address -l"TARGET_DIRED"d "MACOS_FLAGS);
 
-//     build_make_dir(ctx.build_dir);
+    build_make_dir(ctx.build_dir);
 
-//     build_add_entry_point(&ctx, "main.c", "run_testsd");
+    build_add_entry_point(&ctx, "main.c", "run_tests");
 
-//     build_compile(&ctx, "*.c");
-//     build_link_all(&ctx);
-// }
+    build_compile(&ctx, "*.c");
+    build_link_all(&ctx);
+}
 
 int main(int argc, char **argv) {
 
@@ -48,10 +48,10 @@ int main(int argc, char **argv) {
     }
 
     build_lib(build_has_arg(argc, argv,  "debug","test"));
-    // if (build_has_arg(argc, argv,  "test")){
-    //     build_test();
-    //     BUILD_RUN_CMD("./build/tests/run_testsd");
-    // }
+    if (build_has_arg(argc, argv,  "test")){
+        build_test();
+        BUILD_RUN_CMD("./build/tests/run_tests");
+    }
 
     if (build_has_arg(argc, argv,  TARGET_DIRED)){
         if(build_has_arg(argc, argv, "debug","test")){
