@@ -14,6 +14,7 @@ typedef enum {
     CMD_CREATE_DIR,
     CMD_DELETE,
     CMD_LAUNCH_EDITOR,
+    CMD_PREVIEW,
 } CmdType;
 
 typedef struct {

@@ -140,6 +140,48 @@ static void test_activate(void)
     }
 }
 
+static void test_preview(void)
+{
+    typedef struct {
+        const char *label;
+        const char *current_path;
+        const char *name;
+        mode_t st_mode;
+        int entry_count;
+        int selected;
+        CmdType expected_cmd_type;
+        const char *expected_cmd_path;
+    } Case;
+
+    Case cases[] = {
+        {"preview regular file", "/home/user", "main.c", S_IFREG | 0644, 1, 0,
+         CMD_PREVIEW, "/home/user/main.c"},
+        {"preview directory is a no-op", "/home/user", "sub", S_IFDIR | 0755, 1, 0,
+         CMD_NONE, NULL},
+        {"preview with nothing selected is a no-op", "/home/user", "", 0, 0, 0,
+         CMD_NONE, NULL},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model in = make_model_with_entry(cases[i].current_path, cases[i].name,
+                                          cases[i].st_mode, cases[i].selected);
+        in.entry_count = cases[i].entry_count;
+        Msg msg = { .type = MSG_PREVIEW };
+        Model out;
+        Cmd cmd;
+
+        update(&msg, &in, &out, &cmd);
+
+        if (cmd.type != cases[i].expected_cmd_type) {
+            TEST_ERRORF(cases[i].label, "cmd.type = %d, want %d", cmd.type, cases[i].expected_cmd_type);
+            continue;
+        }
+        if (cases[i].expected_cmd_path && strcmp(cmd.path, cases[i].expected_cmd_path) != 0) {
+            TEST_ERRORF(cases[i].label, "cmd.path = %s, want %s", cmd.path, cases[i].expected_cmd_path);
+        }
+    }
+}
+
 static void test_dir_loaded(void)
 {
     typedef struct {
@@ -600,6 +642,7 @@ void test_update(void)
     test_move_selection();
     test_go_parent();
     test_activate();
+    test_preview();
     test_dir_loaded();
     test_op_succeeded();
     test_op_failed();

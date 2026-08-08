@@ -85,6 +85,18 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
         parent_path(out_model->current_path, out_cmd->path, sizeof(out_cmd->path));
         break;
 
+    case MSG_PREVIEW: {
+        if (out_model->selected >= out_model->entry_count)
+            break;
+
+        Entry *e = &out_model->entries[out_model->selected];
+        if (S_ISREG(e->st.st_mode)) {
+            out_cmd->type = CMD_PREVIEW;
+            join_path(out_model->current_path, e->name, out_cmd->path, sizeof(out_cmd->path));
+        }
+        break;
+    }
+
     case MSG_ACTIVATE: {
         if (out_model->selected >= out_model->entry_count)
             break;

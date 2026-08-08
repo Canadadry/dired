@@ -22,6 +22,7 @@ typedef enum {
     MSG_RENAME,
     MSG_NEW_FILE,
     MSG_NEW_DIR,
+    MSG_PREVIEW,
     MSG_QUIT,
     MSG_TEXT_INPUT,
 

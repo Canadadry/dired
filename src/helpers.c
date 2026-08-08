@@ -6,6 +6,15 @@ int is_protected_name(const char *name)
     return (!strcmp(name, ".") || !strcmp(name, ".."));
 }
 
+int is_binary_content(const unsigned char *buf, size_t len)
+{
+    for (size_t i = 0; i < len; i++) {
+        if (buf[i] == '\0')
+            return 1;
+    }
+    return 0;
+}
+
 void mode_to_str(mode_t m, char *out)
 {
     out[0] = S_ISDIR(m) ? 'd' : '-';

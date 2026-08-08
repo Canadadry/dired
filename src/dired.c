@@ -3,6 +3,7 @@
 #include "cmd.h"
 #include "update.h"
 #include "view.h"
+#include "helpers.h"
 #include "../vendor/termbox2.h"
 
 #include <ctype.h>
@@ -15,6 +16,8 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
+#define PREVIEW_SNIFF_LEN 512
 
 /* main() is the only impure code in the program: the only place that calls
  * a tb_* function, and the only place that touches the filesystem or spawns
@@ -111,6 +114,33 @@ static Msg execute_launch_editor(const char *path)
     return (Msg){ .type = MSG_OP_SUCCEEDED };
 }
 
+static Msg execute_preview(const char *path)
+{
+    FILE *f = fopen(path, "r");
+    if (!f)
+        return msg_failed("preview: %s", strerror(errno));
+
+    unsigned char sniff[PREVIEW_SNIFF_LEN];
+    size_t n = fread(sniff, 1, sizeof(sniff), f);
+    fclose(f);
+
+    if (is_binary_content(sniff, n))
+        return msg_failed("preview: binary file");
+
+    tb_shutdown();
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        execlp("more", "more", path, (char *)NULL);
+        _exit(EXIT_FAILURE);
+    } else {
+        wait(NULL);
+    }
+
+    tb_init();
+    return (Msg){ .type = MSG_OP_SUCCEEDED };
+}
+
 static Msg execute_cmd(const Cmd *cmd)
 {
     switch (cmd->type) {
@@ -120,6 +150,7 @@ static Msg execute_cmd(const Cmd *cmd)
     case CMD_CREATE_DIR:    return execute_create_dir(cmd->path);
     case CMD_DELETE:        return execute_delete(cmd->path, cmd->is_dir);
     case CMD_LAUNCH_EDITOR: return execute_launch_editor(cmd->path);
+    case CMD_PREVIEW:       return execute_preview(cmd->path);
     default:                return (Msg){ .type = MSG_NONE };
     }
 }
@@ -214,6 +245,8 @@ static Msg translate_event(struct tb_event ev, AppMode mode)
         msg.type = MSG_NEW_FILE;
     else if (ev.ch == 'd')
         msg.type = MSG_NEW_DIR;
+    else if (ev.ch == ' ')
+        msg.type = MSG_PREVIEW;
     else if (ev.ch == 'q')
         msg.type = MSG_QUIT;
     else if (ev.ch != 0) {

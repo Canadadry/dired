@@ -52,8 +52,39 @@ static void test_mode_to_str(void)
     }
 }
 
+static void test_is_binary_content(void)
+{
+    typedef struct {
+        const char *label;
+        const unsigned char *buf;
+        size_t len;
+        int expected;
+    } Case;
+
+    unsigned char big_text[512];
+    memset(big_text, 'x', sizeof(big_text));
+
+    Case cases[] = {
+        {"empty buffer is not binary", (const unsigned char *)"", 0, 0},
+        {"all-printable text is not binary", (const unsigned char *)"hello world\n", 12, 0},
+        {"null byte at start is binary", (const unsigned char[]){0, 'a', 'b', 'c'}, 4, 1},
+        {"null byte in middle is binary", (const unsigned char[]){'a', 'b', 0, 'c', 'd'}, 5, 1},
+        {"null byte at end is binary", (const unsigned char[]){'a', 'b', 'c', 0}, 4, 1},
+        {"512-byte buffer with no null is not binary", big_text, sizeof(big_text), 0},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        int got = is_binary_content(cases[i].buf, cases[i].len);
+        if (got != cases[i].expected) {
+            TEST_ERRORF(cases[i].label, "is_binary_content(...) = %d, want %d",
+                        got, cases[i].expected);
+        }
+    }
+}
+
 void test_helpers(void)
 {
     test_is_protected_name();
     test_mode_to_str();
+    test_is_binary_content();
 }

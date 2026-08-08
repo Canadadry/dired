@@ -6,7 +6,7 @@
 
 #define HELP_TEXT \
     "up/down: Navigate  left: Parent  right/Enter: Open  r: Rename  " \
-    "f: New file  d: New dir  Backspace: Delete  q: Quit"
+    "f: New file  d: New dir  space: Preview  Backspace: Delete  q: Quit"
 
 static void add_line(View *v, StyleTag style, const char *fmt, ...)
 {
