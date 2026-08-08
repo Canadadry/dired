@@ -43,6 +43,36 @@ static void cancel_edit(Model *out_model)
         out_model->selected = out_model->entry_count - 1;
 }
 
+static void selected_name(const Model *m, char *out, size_t out_size)
+{
+    if (m->selected < m->entry_count)
+        strncpy(out, m->entries[m->selected].name, out_size - 1);
+    else
+        out[0] = '\0';
+    out[out_size - 1] = '\0';
+}
+
+/* Sorts out_model->entries per its current sort_mode/group_mode, then
+ * re-locates prev_name in the new order so the cursor stays on the same
+ * file across a resort. Falls back to the usual entry_count clamp if
+ * prev_name isn't found (not expected in normal operation). */
+static void resort_and_relocate(Model *out_model, const char *prev_name)
+{
+    sort_entries(out_model->entries, out_model->entry_count, out_model->sort_mode, out_model->group_mode);
+
+    if (prev_name && prev_name[0] != '\0') {
+        for (int i = 0; i < out_model->entry_count; i++) {
+            if (strcmp(out_model->entries[i].name, prev_name) == 0) {
+                out_model->selected = i;
+                return;
+            }
+        }
+    }
+
+    if (out_model->selected >= out_model->entry_count)
+        out_model->selected = out_model->entry_count > 0 ? out_model->entry_count - 1 : 0;
+}
+
 static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
 {
     switch (msg->type) {
@@ -89,6 +119,22 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
         join_path(out_model->current_path, resolved_name, out_cmd->path2, sizeof(out_cmd->path2));
 
         out_model->yank_path[0] = '\0';
+        break;
+    }
+
+    case MSG_CYCLE_SORT: {
+        char prev_name[NAME_MAX_LEN + 1];
+        selected_name(out_model, prev_name, sizeof(prev_name));
+        out_model->sort_mode = (out_model->sort_mode + 1) % SORT_MODE_COUNT;
+        resort_and_relocate(out_model, prev_name);
+        break;
+    }
+
+    case MSG_CYCLE_GROUP: {
+        char prev_name[NAME_MAX_LEN + 1];
+        selected_name(out_model, prev_name, sizeof(prev_name));
+        out_model->group_mode = (out_model->group_mode + 1) % GROUP_MODE_COUNT;
+        resort_and_relocate(out_model, prev_name);
         break;
     }
 
@@ -211,6 +257,9 @@ static void handle_confirm_delete(const Msg *msg, Model *out_model, Cmd *out_cmd
 
 static void handle_dir_loaded(const Msg *msg, Model *out_model)
 {
+    char prev_name[NAME_MAX_LEN + 1];
+    selected_name(out_model, prev_name, sizeof(prev_name));
+
     out_model->entry_count = msg->dir_loaded.entry_count;
     memcpy(out_model->entries, msg->dir_loaded.entries,
            sizeof(Entry) * msg->dir_loaded.entry_count);
@@ -218,8 +267,7 @@ static void handle_dir_loaded(const Msg *msg, Model *out_model)
             sizeof(out_model->current_path) - 1);
     out_model->current_path[sizeof(out_model->current_path) - 1] = '\0';
 
-    if (out_model->selected >= out_model->entry_count)
-        out_model->selected = out_model->entry_count > 0 ? out_model->entry_count - 1 : 0;
+    resort_and_relocate(out_model, prev_name);
 }
 
 void update(const Msg *msg, const Model *model, Model *out_model, Cmd *out_cmd)

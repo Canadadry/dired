@@ -161,6 +161,83 @@ static void test_classify_new_name(void)
     }
 }
 
+static Entry make_dated_entry(const char *name, mode_t st_mode, off_t size, time_t mtime)
+{
+    Entry e;
+    memset(&e, 0, sizeof(e));
+    strcpy(e.name, name);
+    e.st.st_mode = st_mode;
+    e.st.st_size = size;
+    e.st.st_mtime = mtime;
+    return e;
+}
+
+static void test_entry_compare(void)
+{
+    typedef struct {
+        const char *label;
+        Entry a;
+        Entry b;
+        SortMode sort_mode;
+        GroupMode group_mode;
+        int expect_sign; /* expected sign of entry_compare(a, b): -1 a-before-b, +1 b-before-a */
+    } Case;
+
+    Entry file_a = make_dated_entry("a.txt", S_IFREG | 0644, 100, 1000);
+    Entry file_b = make_dated_entry("b.txt", S_IFREG | 0644, 200, 2000);
+    Entry dir_c = make_dated_entry("cdir", S_IFDIR | 0755, 4096, 1500);
+
+    Case cases[] = {
+        {"name ascending", file_a, file_b, SORT_NAME_ASC, GROUP_MIXED, -1},
+        {"name descending", file_a, file_b, SORT_NAME_DESC, GROUP_MIXED, 1},
+        {"date ascending", file_a, file_b, SORT_DATE_ASC, GROUP_MIXED, -1},
+        {"date descending", file_a, file_b, SORT_DATE_DESC, GROUP_MIXED, 1},
+        {"size ascending", file_a, file_b, SORT_SIZE_ASC, GROUP_MIXED, -1},
+        {"size descending", file_a, file_b, SORT_SIZE_DESC, GROUP_MIXED, 1},
+
+        {"dirs-first groups dir before file regardless of name", dir_c, file_a, SORT_NAME_ASC, GROUP_DIRS_FIRST, -1},
+        {"dirs-last groups dir after file regardless of name", dir_c, file_a, SORT_NAME_ASC, GROUP_DIRS_LAST, 1},
+        {"mixed grouping ignores dir/file split", dir_c, file_a, SORT_NAME_ASC, GROUP_MIXED, 1 /* 'a.txt' < 'cdir' */},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        int cmp = entry_compare(&cases[i].a, &cases[i].b, cases[i].sort_mode, cases[i].group_mode);
+        int got_sign = (cmp > 0) - (cmp < 0);
+        if (got_sign != cases[i].expect_sign) {
+            TEST_ERRORF(cases[i].label, "entry_compare(a, b) sign = %d, want %d", got_sign, cases[i].expect_sign);
+        }
+    }
+
+    /* size-tie case above reuses file_a/file_b which don't actually tie on
+     * size; build a real tie explicitly. */
+    Entry tie_a = make_dated_entry("zzz.txt", S_IFREG | 0644, 100, 1000);
+    Entry tie_b = make_dated_entry("aaa.txt", S_IFREG | 0644, 100, 1000);
+    int cmp = entry_compare(&tie_a, &tie_b, SORT_SIZE_ASC, GROUP_MIXED);
+    if (cmp <= 0) {
+        TEST_ERRORF("tie on size breaks by name ascending (real tie)",
+                    "entry_compare(zzz, aaa) = %d, want > 0 (aaa before zzz)", cmp);
+    }
+
+    /* Extension worked example from the PRD (mixed grouping, ext ascending):
+     * zdir/ (dir, no ext), readme (file, no ext), a.md, b.txt
+     * -> readme, zdir, a.md, b.txt */
+    Entry zdir = make_dated_entry("zdir", S_IFDIR | 0755, 4096, 1000);
+    Entry readme = make_dated_entry("readme", S_IFREG | 0644, 10, 1000);
+    Entry a_md = make_dated_entry("a.md", S_IFREG | 0644, 10, 1000);
+    Entry b_txt = make_dated_entry("b.txt", S_IFREG | 0644, 10, 1000);
+    Entry expected_order[] = { readme, zdir, a_md, b_txt };
+
+    for (size_t i = 0; i < 4; i++) {
+        for (size_t j = i + 1; j < 4; j++) {
+            int c = entry_compare(&expected_order[i], &expected_order[j], SORT_EXT_ASC, GROUP_MIXED);
+            if (c >= 0) {
+                TEST_ERRORF("extension worked example", "entry_compare(%s, %s) = %d, want < 0",
+                            expected_order[i].name, expected_order[j].name, c);
+            }
+        }
+    }
+}
+
 void test_helpers(void)
 {
     test_is_protected_name();
@@ -168,4 +245,5 @@ void test_helpers(void)
     test_is_binary_content();
     test_find_available_name();
     test_classify_new_name();
+    test_entry_compare();
 }

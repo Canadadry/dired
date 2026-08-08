@@ -726,6 +726,91 @@ static void test_paste_pending(void)
     }
 }
 
+static void test_cycle_sort_wraps_through_all_eight_states(void)
+{
+    SortMode expected[] = {
+        SORT_NAME_DESC, SORT_DATE_ASC, SORT_DATE_DESC, SORT_SIZE_ASC,
+        SORT_SIZE_DESC, SORT_EXT_ASC, SORT_EXT_DESC, SORT_NAME_ASC,
+    };
+
+    Model in = make_nav_model(0, 0);
+    Msg msg = { .type = MSG_CYCLE_SORT };
+
+    for (size_t i = 0; i < sizeof(expected) / sizeof(expected[0]); i++) {
+        Model out;
+        Cmd cmd;
+        update(&msg, &in, &out, &cmd);
+
+        if (out.sort_mode != expected[i]) {
+            TEST_ERRORF("cycle sort", "step %zu: sort_mode = %d, want %d", i, out.sort_mode, expected[i]);
+        }
+        in = out;
+    }
+}
+
+static void test_cycle_group_wraps_through_all_three_states(void)
+{
+    GroupMode expected[] = { GROUP_DIRS_LAST, GROUP_MIXED, GROUP_DIRS_FIRST };
+
+    Model in = make_nav_model(0, 0);
+    Msg msg = { .type = MSG_CYCLE_GROUP };
+
+    for (size_t i = 0; i < sizeof(expected) / sizeof(expected[0]); i++) {
+        Model out;
+        Cmd cmd;
+        update(&msg, &in, &out, &cmd);
+
+        if (out.group_mode != expected[i]) {
+            TEST_ERRORF("cycle group", "step %zu: group_mode = %d, want %d", i, out.group_mode, expected[i]);
+        }
+        in = out;
+    }
+}
+
+static void test_resort_keeps_selection_on_same_file(void)
+{
+    Model in = make_nav_model(3, 0);
+    strcpy(in.entries[0].name, "zeta.txt");
+    strcpy(in.entries[1].name, "alpha.txt");
+    strcpy(in.entries[2].name, "middle.txt");
+    in.selected = 0; /* zeta.txt, currently first (unsorted) */
+
+    Msg msg = { .type = MSG_CYCLE_SORT }; /* name-asc -> name-desc */
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (strcmp(out.entries[out.selected].name, "zeta.txt") != 0) {
+        TEST_ERRORF("resort keeps selection", "selected entry = %s, want zeta.txt", out.entries[out.selected].name);
+    }
+}
+
+static void test_dir_loaded_sorts_entries(void)
+{
+    Model in = make_nav_model(0, 0);
+    static Entry loaded[3];
+    strcpy(loaded[0].name, "zeta");
+    strcpy(loaded[1].name, "alpha");
+    strcpy(loaded[2].name, "middle");
+
+    Msg msg = { .type = MSG_DIR_LOADED };
+    msg.dir_loaded.entries = loaded;
+    msg.dir_loaded.entry_count = 3;
+    strcpy(msg.dir_loaded.path, "/loaded");
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (strcmp(out.entries[0].name, "alpha") != 0 ||
+        strcmp(out.entries[1].name, "middle") != 0 ||
+        strcmp(out.entries[2].name, "zeta") != 0) {
+        TEST_ERRORF("dir loaded sorts", "order = %s, %s, %s, want alpha, middle, zeta",
+                    out.entries[0].name, out.entries[1].name, out.entries[2].name);
+    }
+}
+
 static void test_quit(void)
 {
     Model in = make_nav_model(3, 1);
@@ -793,6 +878,10 @@ void test_update(void)
     test_yank_replaces_pending();
     test_paste_nothing_pending_is_noop();
     test_paste_pending();
+    test_cycle_sort_wraps_through_all_eight_states();
+    test_cycle_group_wraps_through_all_three_states();
+    test_resort_keeps_selection_on_same_file();
+    test_dir_loaded_sorts_entries();
     test_quit();
     test_error_dismissed_by_any_key();
 }

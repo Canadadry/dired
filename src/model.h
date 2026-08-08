@@ -16,6 +16,28 @@ typedef enum {
     MODE_ERROR,
 } AppMode;
 
+/* Fixed 8-state cycle order for the `s` key: name -> date -> size -> ext,
+ * ascending before descending within each key, wrapping back to name-asc. */
+typedef enum {
+    SORT_NAME_ASC = 0,
+    SORT_NAME_DESC,
+    SORT_DATE_ASC,
+    SORT_DATE_DESC,
+    SORT_SIZE_ASC,
+    SORT_SIZE_DESC,
+    SORT_EXT_ASC,
+    SORT_EXT_DESC,
+    SORT_MODE_COUNT,
+} SortMode;
+
+/* 3-state cycle order for the `d` key. */
+typedef enum {
+    GROUP_DIRS_FIRST = 0,
+    GROUP_DIRS_LAST,
+    GROUP_MIXED,
+    GROUP_MODE_COUNT,
+} GroupMode;
+
 typedef struct {
     char name[NAME_MAX_LEN + 1];
     struct stat st;
@@ -27,6 +49,12 @@ typedef struct {
     int selected;
 
     char current_path[PATH_MAX_LEN];
+
+    /* Session-scoped: survive directory navigation like yank_path does, but
+     * never persisted — a fresh process always starts at the defaults
+     * (SORT_NAME_ASC, GROUP_DIRS_FIRST), which are also the zero values. */
+    SortMode sort_mode;
+    GroupMode group_mode;
 
     AppMode mode;
     char edit_buf[NAME_MAX_LEN + 1];

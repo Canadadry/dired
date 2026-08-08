@@ -4,10 +4,10 @@
 #include "update.h"
 #include "view.h"
 #include "helpers.h"
+#include "loaddir.h"
 #include "../vendor/termbox2.h"
 
 #include <ctype.h>
-#include <dirent.h>
 #include <fcntl.h>
 #include <stdarg.h>
 #include <errno.h>
@@ -35,36 +35,6 @@ static Msg msg_failed(const char *fmt, ...)
     vsnprintf(msg.error, sizeof(msg.error), fmt, args);
     va_end(args);
 
-    return msg;
-}
-
-static Msg execute_load_dir(const char *path)
-{
-    static Entry loaded[MAX_ENTRIES];
-
-    DIR *dir = opendir(path);
-    if (!dir)
-        return msg_failed("%s: %s", path, strerror(errno));
-
-    int count = 0;
-    struct dirent *de;
-    char fullpath[PATH_MAX_LEN];
-
-    while ((de = readdir(dir)) && count < MAX_ENTRIES) {
-        snprintf(fullpath, sizeof(fullpath), "%s/%s", path, de->d_name);
-        if (lstat(fullpath, &loaded[count].st) == 0) {
-            strncpy(loaded[count].name, de->d_name, NAME_MAX_LEN);
-            loaded[count].name[NAME_MAX_LEN] = '\0';
-            count++;
-        }
-    }
-    closedir(dir);
-
-    Msg msg = { .type = MSG_DIR_LOADED };
-    msg.dir_loaded.entries = loaded;
-    msg.dir_loaded.entry_count = count;
-    strncpy(msg.dir_loaded.path, path, sizeof(msg.dir_loaded.path) - 1);
-    msg.dir_loaded.path[sizeof(msg.dir_loaded.path) - 1] = '\0';
     return msg;
 }
 
@@ -206,7 +176,7 @@ static Msg execute_preview(const char *path)
 static Msg execute_cmd(const Cmd *cmd)
 {
     switch (cmd->type) {
-    case CMD_LOAD_DIR:      return execute_load_dir(cmd->path);
+    case CMD_LOAD_DIR:      return load_directory(cmd->path);
     case CMD_RENAME:        return execute_rename(cmd->path, cmd->path2);
     case CMD_CREATE_FILE:   return execute_create_file(cmd->path);
     case CMD_CREATE_DIR:    return execute_create_dir(cmd->path);
@@ -315,6 +285,10 @@ static Msg translate_event(struct tb_event ev, AppMode mode)
         msg.type = MSG_YANK_MOVE;
     else if (ev.ch == 'p')
         msg.type = MSG_PASTE;
+    else if (ev.ch == 's')
+        msg.type = MSG_CYCLE_SORT;
+    else if (ev.ch == 'd')
+        msg.type = MSG_CYCLE_GROUP;
     else if (ev.ch == 'q')
         msg.type = MSG_QUIT;
     else if (ev.ch != 0) {

@@ -18,4 +18,13 @@ void find_available_name(const char *base_name, const Entry *entries, int entry_
                           char *out_name, size_t out_size);
 NameKind classify_new_name(const char *raw, char *out_name, size_t out_size);
 
+/* Relative order of two entries under the given sort key/direction and
+ * directory-grouping mode. Returns <0, 0, >0 like strcmp/qsort. Any tie
+ * (including the extension key's no-extension bucket) breaks by name,
+ * ascending, regardless of the requested direction. */
+int entry_compare(const Entry *a, const Entry *b, SortMode sort_mode, GroupMode group_mode);
+
+/* Sorts entries[0..count) in place per entry_compare. */
+void sort_entries(Entry *entries, int count, SortMode sort_mode, GroupMode group_mode);
+
 #endif // DIRED_HELPERS_H

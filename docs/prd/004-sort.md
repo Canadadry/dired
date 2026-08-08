@@ -1,7 +1,7 @@
 ---
 title: "Sort entries"
 description: "Entries are listed in whatever order readdir() returns them, with no way to sort by name, size, date, or type."
-status: ready
+status: done
 ---
 
 ## Problem Statement

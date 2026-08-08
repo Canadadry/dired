@@ -25,6 +25,8 @@ typedef enum {
     MSG_YANK_COPY,
     MSG_YANK_MOVE,
     MSG_PASTE,
+    MSG_CYCLE_SORT,
+    MSG_CYCLE_GROUP,
     MSG_QUIT,
     MSG_TEXT_INPUT,
 

@@ -6,6 +6,7 @@ int main(void) {
     TEST_GROUP(test_helpers);
     TEST_GROUP(test_update);
     TEST_GROUP(test_view);
+    TEST_GROUP(test_loaddir);
 
     test_done();
     return 0;
