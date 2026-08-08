@@ -1,6 +1,6 @@
-# Terminal File Explorer (ncurses)
+# Terminal File Explorer
 
-A lightweight terminal-based file manager written in C using ncurses. Designed for fast navigation and file editing over SSH or any terminal session.
+A lightweight terminal-based file manager written in C using termbox2 (vendored — no system terminal library required). Designed for fast navigation and file editing over SSH or any terminal session.
 
 ## Features
 
@@ -21,7 +21,7 @@ git clone <repo_url>
 cd dired
 ```
 
-2. Build the project and run the file explorer:
+2. Build the project and run the file explorer (a plain C compiler is enough — no `libncurses-dev` or other system package needed):
 
 ```bash
 cc build.c -o builder && ./builder debug clean dired

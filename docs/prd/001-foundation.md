@@ -1,7 +1,7 @@
 ---
 title: "Foundation: pure core (Model/Msg/Cmd) + termbox2 migration"
 description: "dired's logic, rendering, and I/O are tangled into one ncurses-driven main() loop, making it impossible to test anything without a real terminal and filesystem."
-status: needs-triage
+status: done
 ---
 
 ## Problem Statement
