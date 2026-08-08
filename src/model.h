@@ -11,8 +11,7 @@
 typedef enum {
     MODE_NAV = 0,
     MODE_RENAME,
-    MODE_CREATE_FILE,
-    MODE_CREATE_DIR,
+    MODE_CREATE,
     MODE_CONFIRM_DELETE,
     MODE_ERROR,
 } AppMode;
@@ -51,7 +50,7 @@ typedef struct {
  * pending-delete index without a separate field. */
 static inline int model_has_virtual_line(const Model *m)
 {
-    return m->mode == MODE_CREATE_FILE || m->mode == MODE_CREATE_DIR;
+    return m->mode == MODE_CREATE;
 }
 
 #endif // DIRED_MODEL_H

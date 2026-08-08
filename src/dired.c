@@ -251,7 +251,7 @@ static void render(const Model *model)
     tb_present();
 }
 
-/* Command keys (MSG_RENAME/MSG_NEW_FILE/MSG_NEW_DIR/MSG_QUIT) are only
+/* Command keys (MSG_RENAME/MSG_NEW/MSG_QUIT) are only
  * recognized outside text-entry modes, so typing "r" while naming a file
  * inserts the letter instead of re-triggering rename. */
 static Msg translate_event(struct tb_event ev, AppMode mode)
@@ -261,7 +261,7 @@ static Msg translate_event(struct tb_event ev, AppMode mode)
     if (ev.type != TB_EVENT_KEY)
         return msg;
 
-    int text_entry = (mode == MODE_RENAME || mode == MODE_CREATE_FILE || mode == MODE_CREATE_DIR);
+    int text_entry = (mode == MODE_RENAME || mode == MODE_CREATE);
 
     if (text_entry) {
         if (ev.key == TB_KEY_ESC)
@@ -305,10 +305,8 @@ static Msg translate_event(struct tb_event ev, AppMode mode)
 
     if (ev.ch == 'r' || ev.ch == 'R')
         msg.type = MSG_RENAME;
-    else if (ev.ch == 'f')
-        msg.type = MSG_NEW_FILE;
-    else if (ev.ch == 'd')
-        msg.type = MSG_NEW_DIR;
+    else if (ev.ch == 'n')
+        msg.type = MSG_NEW;
     else if (ev.ch == ' ')
         msg.type = MSG_PREVIEW;
     else if (ev.ch == 'c')

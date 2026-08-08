@@ -53,6 +53,24 @@ void find_available_name(const char *base_name, const Entry *entries, int entry_
     }
 }
 
+NameKind classify_new_name(const char *raw, char *out_name, size_t out_size)
+{
+    size_t len = strlen(raw);
+    while (len > 0 && raw[len - 1] == '/')
+        len--;
+
+    if (len == 0) {
+        out_name[0] = '\0';
+        return NAME_EMPTY;
+    }
+
+    NameKind kind = (raw[len] == '/') ? NAME_IS_DIR : NAME_IS_FILE;
+    size_t copy_len = len < out_size - 1 ? len : out_size - 1;
+    memcpy(out_name, raw, copy_len);
+    out_name[copy_len] = '\0';
+    return kind;
+}
+
 int is_binary_content(const unsigned char *buf, size_t len)
 {
     for (size_t i = 0; i < len; i++) {

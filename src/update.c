@@ -32,7 +32,7 @@ static void start_edit(Model *out_model, AppMode new_mode)
     out_model->edit_buf[0] = '\0';
     out_model->edit_len = 0;
 
-    if (new_mode == MODE_CREATE_FILE || new_mode == MODE_CREATE_DIR)
+    if (new_mode == MODE_CREATE)
         out_model->selected = out_model->entry_count;
 }
 
@@ -52,12 +52,8 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
             start_edit(out_model, MODE_RENAME);
         break;
 
-    case MSG_NEW_FILE:
-        start_edit(out_model, MODE_CREATE_FILE);
-        break;
-
-    case MSG_NEW_DIR:
-        start_edit(out_model, MODE_CREATE_DIR);
+    case MSG_NEW:
+        start_edit(out_model, MODE_CREATE);
         break;
 
     case MSG_DELETE:
@@ -180,12 +176,16 @@ static void handle_edit(const Msg *msg, Model *out_model, Cmd *out_cmd)
                       out_cmd->path, sizeof(out_cmd->path));
             join_path(out_model->current_path, out_model->edit_buf,
                       out_cmd->path2, sizeof(out_cmd->path2));
-        } else if (out_model->mode == MODE_CREATE_FILE) {
-            out_cmd->type = CMD_CREATE_FILE;
-            join_path(out_model->current_path, out_model->edit_buf, out_cmd->path, sizeof(out_cmd->path));
-        } else if (out_model->mode == MODE_CREATE_DIR) {
-            out_cmd->type = CMD_CREATE_DIR;
-            join_path(out_model->current_path, out_model->edit_buf, out_cmd->path, sizeof(out_cmd->path));
+        } else if (out_model->mode == MODE_CREATE) {
+            char name[NAME_MAX_LEN + 1];
+            NameKind kind = classify_new_name(out_model->edit_buf, name, sizeof(name));
+            if (kind == NAME_IS_DIR) {
+                out_cmd->type = CMD_CREATE_DIR;
+                join_path(out_model->current_path, name, out_cmd->path, sizeof(out_cmd->path));
+            } else if (kind == NAME_IS_FILE) {
+                out_cmd->type = CMD_CREATE_FILE;
+                join_path(out_model->current_path, name, out_cmd->path, sizeof(out_cmd->path));
+            }
         }
 
         cancel_edit(out_model);
@@ -250,7 +250,7 @@ void update(const Msg *msg, const Model *model, Model *out_model, Cmd *out_cmd)
 
     if (model->mode == MODE_NAV)
         handle_nav(msg, out_model, out_cmd);
-    else if (model->mode == MODE_RENAME || model->mode == MODE_CREATE_FILE || model->mode == MODE_CREATE_DIR)
+    else if (model->mode == MODE_RENAME || model->mode == MODE_CREATE)
         handle_edit(msg, out_model, out_cmd);
     else if (model->mode == MODE_CONFIRM_DELETE)
         handle_confirm_delete(msg, out_model, out_cmd);

@@ -1,7 +1,7 @@
 ---
 title: "Unify create file/dir into one key"
 description: "Creating a file or a directory needs two separate keys and two separate AppModes today, which blocks the sort PRD from reusing one of those keys for its directory-grouping toggle."
-status: ready
+status: done
 ---
 
 ## Problem Statement

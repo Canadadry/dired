@@ -20,8 +20,7 @@ typedef enum {
     MSG_CANCEL,
     MSG_DELETE,        /* erase last typed char (edit modes) or ask to delete selected entry (nav) */
     MSG_RENAME,
-    MSG_NEW_FILE,
-    MSG_NEW_DIR,
+    MSG_NEW,
     MSG_PREVIEW,
     MSG_YANK_COPY,
     MSG_YANK_MOVE,

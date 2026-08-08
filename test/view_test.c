@@ -52,23 +52,23 @@ static void test_view_nav_listing(void)
     }
 }
 
-static void test_view_create_file_virtual_row(void)
+static void test_view_create_virtual_row(void)
 {
     Model m = make_view_model();
     set_entry(&m, 0, "main.c", S_IFREG | 0644, 512);
     m.entry_count = 1;
-    m.mode = MODE_CREATE_FILE;
+    m.mode = MODE_CREATE;
     m.selected = 1;
     strcpy(m.edit_buf, "new.txt");
     m.edit_len = strlen(m.edit_buf);
 
     View v = view(&m);
 
-    if (strcmp(v.lines[1].text, "Create file:") != 0) {
-        TEST_ERRORF("create file", "lines[1] = '%s', want 'Create file:'", v.lines[1].text);
+    if (strcmp(v.lines[1].text, "Create:") != 0) {
+        TEST_ERRORF("create", "lines[1] = '%s', want 'Create:'", v.lines[1].text);
     }
     if (!strstr(v.lines[3].text, "new.txt") || v.lines[3].style != STYLE_SELECTED) {
-        TEST_ERRORF("create file", "lines[3] = '%s' style=%d, want 'new.txt' STYLE_SELECTED",
+        TEST_ERRORF("create", "lines[3] = '%s' style=%d, want 'new.txt' STYLE_SELECTED",
                     v.lines[3].text, v.lines[3].style);
     }
 }
@@ -156,7 +156,7 @@ static void test_view_error_message(void)
 void test_view(void)
 {
     test_view_nav_listing();
-    test_view_create_file_virtual_row();
+    test_view_create_virtual_row();
     test_view_rename_keeps_old_name_in_row();
     test_view_confirm_delete_prompt();
     test_view_yank_pending();

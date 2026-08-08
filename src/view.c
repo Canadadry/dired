@@ -6,7 +6,7 @@
 
 #define HELP_TEXT \
     "up/down: Navigate  left: Parent  right/Enter: Open  r: Rename  " \
-    "f: New file  d: New dir  space: Preview  c: Yank copy  m: Yank move  " \
+    "n: New  space: Preview  c: Yank copy  m: Yank move  " \
     "p: Paste  Backspace: Delete  q: Quit"
 
 static void add_line(View *v, StyleTag style, const char *fmt, ...)
@@ -23,11 +23,8 @@ static void add_line(View *v, StyleTag style, const char *fmt, ...)
 static void add_prompt_line(View *v, const Model *m)
 {
     switch (m->mode) {
-    case MODE_CREATE_FILE:
-        add_line(v, STYLE_NORMAL, "Create file:");
-        break;
-    case MODE_CREATE_DIR:
-        add_line(v, STYLE_NORMAL, "Create directory:");
+    case MODE_CREATE:
+        add_line(v, STYLE_NORMAL, "Create:");
         break;
     case MODE_RENAME:
         add_line(v, STYLE_NORMAL, "Rename:");

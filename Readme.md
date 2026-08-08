@@ -40,8 +40,7 @@ ssh user@remotehost 'cd /path/to/dired && ./builder debug clean dired'
 ←: Go to parent directory
 → / Enter: Open file or enter directory
 r: Rename selected file/directory
-f: Create a new file
-d: Create a new directory
+n: Create a new file or directory (trailing / for a directory)
 Backspace: Delete selected file/directory
 q: Quit
 ```
@@ -58,7 +57,7 @@ drwxr-xr-x    128 src
 -rw-r--r--     32 config.h
 >           new_file.txt      <- virtual line when creating a file
 
-↑↓: Navigate  ←: Parent  →/Enter: Open  r: Rename  f: New file  d: New dir  Backspace: Delete  q: Quit
+↑↓: Navigate  ←: Parent  →/Enter: Open  r: Rename  n: New  Backspace: Delete  q: Quit
 ```
 
 * The `>` indicates the current selection.

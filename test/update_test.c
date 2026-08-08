@@ -280,8 +280,7 @@ static void test_start_edit(void)
         {"rename starts edit on unprotected entry", "file.txt", MSG_RENAME, MODE_RENAME, 1},
         {"rename is a no-op on '.'", ".", MSG_RENAME, MODE_NAV, 1},
         {"rename is a no-op on '..'", "..", MSG_RENAME, MODE_NAV, 1},
-        {"new file appends a virtual row", "file.txt", MSG_NEW_FILE, MODE_CREATE_FILE, 3},
-        {"new dir appends a virtual row", "file.txt", MSG_NEW_DIR, MODE_CREATE_DIR, 3},
+        {"new appends a virtual row", "file.txt", MSG_NEW, MODE_CREATE, 3},
     };
 
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
@@ -348,7 +347,7 @@ static void test_edit_text_entry_full_buffer_is_noop(void)
 
 static void test_edit_backspace(void)
 {
-    Model in = make_edit_model(MODE_CREATE_FILE, "abc", 3, 3);
+    Model in = make_edit_model(MODE_CREATE, "abc", 3, 3);
     Msg msg = { .type = MSG_DELETE };
     Model out;
     Cmd cmd;
@@ -362,7 +361,7 @@ static void test_edit_backspace(void)
 
 static void test_edit_backspace_on_empty_is_noop(void)
 {
-    Model in = make_edit_model(MODE_CREATE_FILE, "", 3, 3);
+    Model in = make_edit_model(MODE_CREATE, "", 3, 3);
     Msg msg = { .type = MSG_DELETE };
     Model out;
     Cmd cmd;
@@ -386,7 +385,7 @@ static void test_edit_cancel(void)
 
     Case cases[] = {
         {"cancel rename keeps selection", MODE_RENAME, 1, 3, 1},
-        {"cancel create clamps virtual-row selection back", MODE_CREATE_FILE, 3, 3, 2},
+        {"cancel create clamps virtual-row selection back", MODE_CREATE, 3, 3, 2},
     };
 
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
@@ -411,7 +410,7 @@ static void test_edit_cancel(void)
 
 static void test_validate_empty_cancels(void)
 {
-    Model in = make_edit_model(MODE_CREATE_FILE, "", 3, 3);
+    Model in = make_edit_model(MODE_CREATE, "", 3, 3);
     Msg msg = { .type = MSG_ACTIVATE };
     Model out;
     Cmd cmd;
@@ -426,38 +425,42 @@ static void test_validate_empty_cancels(void)
     }
 }
 
-static void test_validate_create_file(void)
+static void test_validate_create(void)
 {
-    Model in = make_edit_model(MODE_CREATE_FILE, "new.txt", 2, 2);
-    strcpy(in.current_path, "/tmp");
-    Msg msg = { .type = MSG_ACTIVATE };
-    Model out;
-    Cmd cmd;
+    typedef struct {
+        const char *label;
+        const char *edit_buf;
+        CmdType expected_cmd_type;
+        const char *expected_cmd_path;
+    } Case;
 
-    update(&msg, &in, &out, &cmd);
+    Case cases[] = {
+        {"plain name creates a file", "new.txt", CMD_CREATE_FILE, "/tmp/new.txt"},
+        {"one trailing slash creates a dir", "newdir/", CMD_CREATE_DIR, "/tmp/newdir"},
+        {"multiple trailing slashes creates a dir", "newdir///", CMD_CREATE_DIR, "/tmp/newdir"},
+        {"slash-only name cancels silently", "///", CMD_NONE, NULL},
+        {"embedded non-trailing slash creates a file, path unchanged", "sub/dir", CMD_CREATE_FILE, "/tmp/sub/dir"},
+    };
 
-    if (cmd.type != CMD_CREATE_FILE || strcmp(cmd.path, "/tmp/new.txt") != 0) {
-        TEST_ERRORF("validate create file", "cmd = {%d, %s}, want {CMD_CREATE_FILE, /tmp/new.txt}",
-                    cmd.type, cmd.path);
-    }
-    if (out.mode != MODE_NAV || out.selected != 1) {
-        TEST_ERRORF("validate create file", "mode/selected = %d/%d, want MODE_NAV/1", out.mode, out.selected);
-    }
-}
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model in = make_edit_model(MODE_CREATE, cases[i].edit_buf, 2, 2);
+        strcpy(in.current_path, "/tmp");
+        Msg msg = { .type = MSG_ACTIVATE };
+        Model out;
+        Cmd cmd;
 
-static void test_validate_create_dir(void)
-{
-    Model in = make_edit_model(MODE_CREATE_DIR, "newdir", 2, 2);
-    strcpy(in.current_path, "/tmp");
-    Msg msg = { .type = MSG_ACTIVATE };
-    Model out;
-    Cmd cmd;
+        update(&msg, &in, &out, &cmd);
 
-    update(&msg, &in, &out, &cmd);
-
-    if (cmd.type != CMD_CREATE_DIR || strcmp(cmd.path, "/tmp/newdir") != 0) {
-        TEST_ERRORF("validate create dir", "cmd = {%d, %s}, want {CMD_CREATE_DIR, /tmp/newdir}",
-                    cmd.type, cmd.path);
+        if (cmd.type != cases[i].expected_cmd_type) {
+            TEST_ERRORF(cases[i].label, "cmd.type = %d, want %d", cmd.type, cases[i].expected_cmd_type);
+            continue;
+        }
+        if (cases[i].expected_cmd_path && strcmp(cmd.path, cases[i].expected_cmd_path) != 0) {
+            TEST_ERRORF(cases[i].label, "cmd.path = %s, want %s", cmd.path, cases[i].expected_cmd_path);
+        }
+        if (out.mode != MODE_NAV) {
+            TEST_ERRORF(cases[i].label, "mode = %d, want MODE_NAV", out.mode);
+        }
     }
 }
 
@@ -781,8 +784,7 @@ void test_update(void)
     test_edit_backspace_on_empty_is_noop();
     test_edit_cancel();
     test_validate_empty_cancels();
-    test_validate_create_file();
-    test_validate_create_dir();
+    test_validate_create();
     test_validate_rename();
     test_delete_requests_confirmation();
     test_confirm_delete_yes_deletes();

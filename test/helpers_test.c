@@ -127,10 +127,45 @@ static void test_find_available_name(void)
     }
 }
 
+static void test_classify_new_name(void)
+{
+    typedef struct {
+        const char *label;
+        const char *raw;
+        NameKind expected_kind;
+        const char *expected_name;
+    } Case;
+
+    Case cases[] = {
+        {"plain name is a file", "notes.txt", NAME_IS_FILE, "notes.txt"},
+        {"one trailing slash is a dir", "sub/", NAME_IS_DIR, "sub"},
+        {"multiple trailing slashes is a dir", "sub///", NAME_IS_DIR, "sub"},
+        {"empty buffer is empty", "", NAME_EMPTY, NULL},
+        {"slash-only buffer is empty", "///", NAME_EMPTY, NULL},
+        {"embedded non-trailing slash is a file, unchanged", "sub/dir", NAME_IS_FILE, "sub/dir"},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        char out[NAME_MAX_LEN + 1];
+        NameKind got = classify_new_name(cases[i].raw, out, sizeof(out));
+
+        if (got != cases[i].expected_kind) {
+            TEST_ERRORF(cases[i].label, "classify_new_name(%s) kind = %d, want %d",
+                        cases[i].raw, got, cases[i].expected_kind);
+            continue;
+        }
+        if (cases[i].expected_name && strcmp(out, cases[i].expected_name) != 0) {
+            TEST_ERRORF(cases[i].label, "classify_new_name(%s) name = %s, want %s",
+                        cases[i].raw, out, cases[i].expected_name);
+        }
+    }
+}
+
 void test_helpers(void)
 {
     test_is_protected_name();
     test_mode_to_str();
     test_is_binary_content();
     test_find_available_name();
+    test_classify_new_name();
 }

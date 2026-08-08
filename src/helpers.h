@@ -5,10 +5,17 @@
 #include <sys/stat.h>
 #include "model.h"
 
+typedef enum {
+    NAME_EMPTY = 0,
+    NAME_IS_FILE,
+    NAME_IS_DIR,
+} NameKind;
+
 int is_protected_name(const char *name);
 void mode_to_str(mode_t m, char *out);
 int is_binary_content(const unsigned char *buf, size_t len);
 void find_available_name(const char *base_name, const Entry *entries, int entry_count,
                           char *out_name, size_t out_size);
+NameKind classify_new_name(const char *raw, char *out_name, size_t out_size);
 
 #endif // DIRED_HELPERS_H
