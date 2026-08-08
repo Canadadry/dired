@@ -8,6 +8,7 @@
 
 #include <ctype.h>
 #include <dirent.h>
+#include <fcntl.h>
 #include <stdarg.h>
 #include <errno.h>
 #include <stdio.h>
@@ -98,6 +99,67 @@ static Msg execute_delete(const char *path, int is_dir)
     return (Msg){ .type = MSG_OP_SUCCEEDED };
 }
 
+/* Runs argv[0] via fork+execvp (never a shell, so a filename can't inject a
+ * command), capturing stderr into errbuf so a real OS error can be folded
+ * into the MSG_OP_FAILED message. Returns 0 on a zero exit status. */
+static int run_argv(char *const argv[], char *errbuf, size_t errbuf_len)
+{
+    int errpipe[2];
+    if (pipe(errpipe) != 0)
+        return -1;
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        close(errpipe[0]);
+        dup2(errpipe[1], STDERR_FILENO);
+        close(errpipe[1]);
+
+        int devnull = open("/dev/null", O_WRONLY);
+        if (devnull >= 0) {
+            dup2(devnull, STDOUT_FILENO);
+            close(devnull);
+        }
+
+        execvp(argv[0], argv);
+        _exit(EXIT_FAILURE);
+    }
+
+    close(errpipe[1]);
+    if (errbuf && errbuf_len > 0) {
+        ssize_t n = read(errpipe[0], errbuf, errbuf_len - 1);
+        errbuf[n > 0 ? n : 0] = '\0';
+        size_t len = strlen(errbuf);
+        if (len > 0 && errbuf[len - 1] == '\n')
+            errbuf[len - 1] = '\0';
+    }
+    close(errpipe[0]);
+
+    int status;
+    waitpid(pid, &status, 0);
+    return (WIFEXITED(status) && WEXITSTATUS(status) == 0) ? 0 : -1;
+}
+
+static Msg execute_copy(const char *src, const char *dst)
+{
+    char errbuf[256] = { 0 };
+    char *argv[] = { "cp", "-r", (char *)src, (char *)dst, NULL };
+    if (run_argv(argv, errbuf, sizeof(errbuf)) != 0) {
+        char *rm_argv[] = { "rm", "-rf", (char *)dst, NULL };
+        run_argv(rm_argv, NULL, 0);
+        return msg_failed("copy: %s", errbuf[0] ? errbuf : "failed");
+    }
+    return (Msg){ .type = MSG_OP_SUCCEEDED };
+}
+
+static Msg execute_move(const char *src, const char *dst)
+{
+    char errbuf[256] = { 0 };
+    char *argv[] = { "mv", (char *)src, (char *)dst, NULL };
+    if (run_argv(argv, errbuf, sizeof(errbuf)) != 0)
+        return msg_failed("move: %s", errbuf[0] ? errbuf : "failed");
+    return (Msg){ .type = MSG_OP_SUCCEEDED };
+}
+
 static Msg execute_launch_editor(const char *path)
 {
     tb_shutdown();
@@ -151,6 +213,8 @@ static Msg execute_cmd(const Cmd *cmd)
     case CMD_DELETE:        return execute_delete(cmd->path, cmd->is_dir);
     case CMD_LAUNCH_EDITOR: return execute_launch_editor(cmd->path);
     case CMD_PREVIEW:       return execute_preview(cmd->path);
+    case CMD_COPY:          return execute_copy(cmd->path, cmd->path2);
+    case CMD_MOVE:          return execute_move(cmd->path, cmd->path2);
     default:                return (Msg){ .type = MSG_NONE };
     }
 }
@@ -247,6 +311,12 @@ static Msg translate_event(struct tb_event ev, AppMode mode)
         msg.type = MSG_NEW_DIR;
     else if (ev.ch == ' ')
         msg.type = MSG_PREVIEW;
+    else if (ev.ch == 'c')
+        msg.type = MSG_YANK_COPY;
+    else if (ev.ch == 'm')
+        msg.type = MSG_YANK_MOVE;
+    else if (ev.ch == 'p')
+        msg.type = MSG_PASTE;
     else if (ev.ch == 'q')
         msg.type = MSG_QUIT;
     else if (ev.ch != 0) {

@@ -6,7 +6,8 @@
 
 #define HELP_TEXT \
     "up/down: Navigate  left: Parent  right/Enter: Open  r: Rename  " \
-    "f: New file  d: New dir  space: Preview  Backspace: Delete  q: Quit"
+    "f: New file  d: New dir  space: Preview  c: Yank copy  m: Yank move  " \
+    "p: Paste  Backspace: Delete  q: Quit"
 
 static void add_line(View *v, StyleTag style, const char *fmt, ...)
 {
@@ -38,7 +39,13 @@ static void add_prompt_line(View *v, const Model *m)
         add_line(v, STYLE_ERROR, "%s", m->error_msg);
         break;
     default:
-        add_line(v, STYLE_NORMAL, "");
+        if (m->yank_path[0] != '\0') {
+            const char *slash = strrchr(m->yank_path, '/');
+            const char *name = slash ? slash + 1 : m->yank_path;
+            add_line(v, STYLE_NORMAL, "Yanked: %s (%s)", name, m->yank_is_move ? "move" : "copy");
+        } else {
+            add_line(v, STYLE_NORMAL, "");
+        }
         break;
     }
 }

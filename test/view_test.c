@@ -112,6 +112,33 @@ static void test_view_confirm_delete_prompt(void)
     }
 }
 
+static void test_view_yank_pending(void)
+{
+    Model m = make_view_model();
+    set_entry(&m, 0, "main.c", S_IFREG | 0644, 512);
+    m.entry_count = 1;
+    strcpy(m.yank_path, "/tmp/other/main.c");
+    m.yank_is_move = 1;
+
+    View v = view(&m);
+
+    if (!strstr(v.lines[1].text, "main.c") || !strstr(v.lines[1].text, "move")) {
+        TEST_ERRORF("yank pending", "lines[1] = '%s', want it to mention main.c and move", v.lines[1].text);
+    }
+}
+
+static void test_view_no_yank_pending_is_blank(void)
+{
+    Model m = make_view_model();
+    m.entry_count = 0;
+
+    View v = view(&m);
+
+    if (v.lines[1].text[0] != '\0') {
+        TEST_ERRORF("no yank pending", "lines[1] = '%s', want empty", v.lines[1].text);
+    }
+}
+
 static void test_view_error_message(void)
 {
     Model m = make_view_model();
@@ -132,5 +159,7 @@ void test_view(void)
     test_view_create_file_virtual_row();
     test_view_rename_keeps_old_name_in_row();
     test_view_confirm_delete_prompt();
+    test_view_yank_pending();
+    test_view_no_yank_pending_is_blank();
     test_view_error_message();
 }

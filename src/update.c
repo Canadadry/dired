@@ -66,6 +66,36 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
             out_model->mode = MODE_CONFIRM_DELETE;
         break;
 
+    case MSG_YANK_COPY:
+    case MSG_YANK_MOVE:
+        if (out_model->selected < out_model->entry_count &&
+            !is_protected_name(out_model->entries[out_model->selected].name)) {
+            join_path(out_model->current_path, out_model->entries[out_model->selected].name,
+                      out_model->yank_path, sizeof(out_model->yank_path));
+            out_model->yank_is_move = (msg->type == MSG_YANK_MOVE);
+        }
+        break;
+
+    case MSG_PASTE: {
+        if (out_model->yank_path[0] == '\0')
+            break;
+
+        const char *slash = strrchr(out_model->yank_path, '/');
+        const char *base_name = slash ? slash + 1 : out_model->yank_path;
+
+        char resolved_name[NAME_MAX_LEN + 1];
+        find_available_name(base_name, out_model->entries, out_model->entry_count,
+                             resolved_name, sizeof(resolved_name));
+
+        out_cmd->type = out_model->yank_is_move ? CMD_MOVE : CMD_COPY;
+        strncpy(out_cmd->path, out_model->yank_path, sizeof(out_cmd->path) - 1);
+        out_cmd->path[sizeof(out_cmd->path) - 1] = '\0';
+        join_path(out_model->current_path, resolved_name, out_cmd->path2, sizeof(out_cmd->path2));
+
+        out_model->yank_path[0] = '\0';
+        break;
+    }
+
     case MSG_QUIT:
         out_model->should_quit = 1;
         break;

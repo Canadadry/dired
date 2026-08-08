@@ -15,12 +15,14 @@ typedef enum {
     CMD_DELETE,
     CMD_LAUNCH_EDITOR,
     CMD_PREVIEW,
+    CMD_COPY,
+    CMD_MOVE,
 } CmdType;
 
 typedef struct {
     CmdType type;
-    char path[PATH_MAX_LEN];   /* load/create/delete/launch target, or rename source */
-    char path2[PATH_MAX_LEN];  /* CMD_RENAME destination */
+    char path[PATH_MAX_LEN];   /* load/create/delete/launch target, or rename/copy/move source */
+    char path2[PATH_MAX_LEN];  /* CMD_RENAME/CMD_COPY/CMD_MOVE destination */
     int is_dir;                /* CMD_DELETE: rmdir vs unlink */
 } Cmd;
 

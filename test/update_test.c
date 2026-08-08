@@ -595,6 +595,134 @@ static void test_confirm_delete_anything_else_cancels(void)
     }
 }
 
+static void test_yank(void)
+{
+    typedef struct {
+        const char *label;
+        const char *entry_name;
+        MsgType msg_type;
+        const char *expected_yank_path;
+        int expected_yank_is_move;
+    } Case;
+
+    Case cases[] = {
+        {"yank copy on unprotected entry", "file.txt", MSG_YANK_COPY, "/tmp/file.txt", 0},
+        {"yank move on unprotected entry", "file.txt", MSG_YANK_MOVE, "/tmp/file.txt", 1},
+        {"yank copy is a no-op on '.'", ".", MSG_YANK_COPY, "", 0},
+        {"yank move is a no-op on '..'", "..", MSG_YANK_MOVE, "", 0},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model in = make_nav_model(3, 1);
+        strcpy(in.entries[1].name, cases[i].entry_name);
+        Msg msg = { .type = cases[i].msg_type };
+        Model out;
+        Cmd cmd;
+
+        update(&msg, &in, &out, &cmd);
+
+        if (strcmp(out.yank_path, cases[i].expected_yank_path) != 0) {
+            TEST_ERRORF(cases[i].label, "yank_path = %s, want %s",
+                        out.yank_path, cases[i].expected_yank_path);
+        }
+        if (out.yank_is_move != cases[i].expected_yank_is_move) {
+            TEST_ERRORF(cases[i].label, "yank_is_move = %d, want %d",
+                        out.yank_is_move, cases[i].expected_yank_is_move);
+        }
+        if (out.mode != MODE_NAV) {
+            TEST_ERRORF(cases[i].label, "mode = %d, want MODE_NAV (yank must not enter a mode)", out.mode);
+        }
+        if (cmd.type != CMD_NONE) {
+            TEST_ERRORF(cases[i].label, "cmd.type = %d, want CMD_NONE", cmd.type);
+        }
+    }
+}
+
+static void test_yank_replaces_pending(void)
+{
+    Model in = make_nav_model(3, 1);
+    strcpy(in.entries[1].name, "second.txt");
+    strcpy(in.yank_path, "/tmp/first.txt");
+    in.yank_is_move = 1;
+
+    Msg msg = { .type = MSG_YANK_COPY };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (strcmp(out.yank_path, "/tmp/second.txt") != 0 || out.yank_is_move != 0) {
+        TEST_ERRORF("re-yank replaces pending", "yank = {%s, move=%d}, want {/tmp/second.txt, move=0}",
+                    out.yank_path, out.yank_is_move);
+    }
+}
+
+static void test_paste_nothing_pending_is_noop(void)
+{
+    Model in = make_nav_model(1, 0);
+    strcpy(in.current_path, "/tmp");
+    strcpy(in.entries[0].name, "existing.txt");
+
+    Msg msg = { .type = MSG_PASTE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("paste nothing pending", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+}
+
+static void test_paste_pending(void)
+{
+    typedef struct {
+        const char *label;
+        const char *yank_path;
+        int yank_is_move;
+        const char *existing_entry;
+        CmdType expected_cmd_type;
+        const char *expected_path2;
+    } Case;
+
+    Case cases[] = {
+        {"paste copy with no collision", "/src/file.txt", 0, "other.txt",
+         CMD_COPY, "/tmp/file.txt"},
+        {"paste move with no collision", "/src/file.txt", 1, "other.txt",
+         CMD_MOVE, "/tmp/file.txt"},
+        {"paste with name collision gets a numbered duplicate", "/src/file.txt", 0, "file.txt",
+         CMD_COPY, "/tmp/file (1).txt"},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model in = make_nav_model(1, 0);
+        strcpy(in.current_path, "/tmp");
+        strcpy(in.entries[0].name, cases[i].existing_entry);
+        strcpy(in.yank_path, cases[i].yank_path);
+        in.yank_is_move = cases[i].yank_is_move;
+
+        Msg msg = { .type = MSG_PASTE };
+        Model out;
+        Cmd cmd;
+
+        update(&msg, &in, &out, &cmd);
+
+        if (cmd.type != cases[i].expected_cmd_type) {
+            TEST_ERRORF(cases[i].label, "cmd.type = %d, want %d", cmd.type, cases[i].expected_cmd_type);
+            continue;
+        }
+        if (strcmp(cmd.path, cases[i].yank_path) != 0) {
+            TEST_ERRORF(cases[i].label, "cmd.path = %s, want %s", cmd.path, cases[i].yank_path);
+        }
+        if (strcmp(cmd.path2, cases[i].expected_path2) != 0) {
+            TEST_ERRORF(cases[i].label, "cmd.path2 = %s, want %s", cmd.path2, cases[i].expected_path2);
+        }
+        if (out.yank_path[0] != '\0') {
+            TEST_ERRORF(cases[i].label, "yank_path = %s, want cleared after paste", out.yank_path);
+        }
+    }
+}
+
 static void test_quit(void)
 {
     Model in = make_nav_model(3, 1);
@@ -659,6 +787,10 @@ void test_update(void)
     test_delete_requests_confirmation();
     test_confirm_delete_yes_deletes();
     test_confirm_delete_anything_else_cancels();
+    test_yank();
+    test_yank_replaces_pending();
+    test_paste_nothing_pending_is_noop();
+    test_paste_pending();
     test_quit();
     test_error_dismissed_by_any_key();
 }

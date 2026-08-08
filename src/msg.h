@@ -23,6 +23,9 @@ typedef enum {
     MSG_NEW_FILE,
     MSG_NEW_DIR,
     MSG_PREVIEW,
+    MSG_YANK_COPY,
+    MSG_YANK_MOVE,
+    MSG_PASTE,
     MSG_QUIT,
     MSG_TEXT_INPUT,
 

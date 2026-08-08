@@ -33,6 +33,11 @@ typedef struct {
     char edit_buf[NAME_MAX_LEN + 1];
     size_t edit_len;
 
+    /* Pending yank, independent of `mode` — survives normal navigation.
+     * An empty yank_path is the "nothing pending" sentinel. */
+    char yank_path[PATH_MAX_LEN];
+    int yank_is_move;
+
     char error_msg[256];
 
     int should_quit;
