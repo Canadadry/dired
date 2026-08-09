@@ -7,6 +7,11 @@ int is_protected_name(const char *name)
     return (!strcmp(name, ".") || !strcmp(name, ".."));
 }
 
+int is_hidden_name(const char *name)
+{
+    return name[0] == '.';
+}
+
 static int name_collides(const char *name, const Entry *entries, int entry_count)
 {
     for (int i = 0; i < entry_count; i++) {

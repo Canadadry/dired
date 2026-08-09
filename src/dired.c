@@ -212,7 +212,7 @@ static Msg execute_preview(const char *path)
 static Msg execute_cmd(const Cmd *cmd)
 {
     switch (cmd->type) {
-    case CMD_LOAD_DIR:      return load_directory(cmd->path);
+    case CMD_LOAD_DIR:      return load_directory(cmd->path, cmd->show_hidden);
     case CMD_RENAME:        return execute_rename(cmd->path, cmd->path2);
     case CMD_CREATE_FILE:   return execute_create_file(cmd->path);
     case CMD_CREATE_DIR:    return execute_create_dir(cmd->path);
@@ -325,6 +325,8 @@ static Msg translate_event(struct tb_event ev, AppMode mode)
         msg.type = MSG_CYCLE_SORT;
     else if (ev.ch == 'd')
         msg.type = MSG_CYCLE_GROUP;
+    else if (ev.ch == 'a' || ev.ch == 'A')
+        msg.type = MSG_TOGGLE_HIDDEN;
     else if (ev.ch == 'q')
         msg.type = MSG_QUIT;
     else if (ev.ch != 0) {
@@ -344,7 +346,7 @@ int main(void)
     model.mode = MODE_NAV;
     getcwd(model.current_path, sizeof(model.current_path));
 
-    Cmd cmd = { .type = CMD_LOAD_DIR };
+    Cmd cmd = { .type = CMD_LOAD_DIR, .show_hidden = model.show_hidden };
     strncpy(cmd.path, model.current_path, sizeof(cmd.path) - 1);
 
     while (!model.should_quit) {

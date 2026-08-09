@@ -27,6 +27,30 @@ static void test_is_protected_name(void)
     }
 }
 
+static void test_is_hidden_name(void)
+{
+    typedef struct {
+        const char *name;
+        int expected;
+    } Case;
+
+    Case cases[] = {
+        {".hidden", 1},
+        {"a", 0},
+        {"", 0},
+        {".", 1},
+        {"..", 1},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        int got = is_hidden_name(cases[i].name);
+        if (got != cases[i].expected) {
+            TEST_ERRORF(cases[i].name, "is_hidden_name(%s) = %d, want %d",
+                        cases[i].name, got, cases[i].expected);
+        }
+    }
+}
+
 static void test_mode_to_str(void)
 {
     typedef struct {
@@ -241,6 +265,7 @@ static void test_entry_compare(void)
 void test_helpers(void)
 {
     test_is_protected_name();
+    test_is_hidden_name();
     test_mode_to_str();
     test_is_binary_content();
     test_find_available_name();

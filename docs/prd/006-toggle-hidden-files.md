@@ -1,7 +1,7 @@
 ---
 title: "Toggle hidden files"
 description: "Dotfiles are always shown with no way to filter them out, cluttering listings in directories full of config/dotfiles."
-status: needs-triage
+status: done
 ---
 
 ## Problem Statement

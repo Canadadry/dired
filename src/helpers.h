@@ -12,6 +12,7 @@ typedef enum {
 } NameKind;
 
 int is_protected_name(const char *name);
+int is_hidden_name(const char *name);
 void mode_to_str(mode_t m, char *out);
 int is_binary_content(const unsigned char *buf, size_t len);
 void find_available_name(const char *base_name, const Entry *entries, int entry_count,

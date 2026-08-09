@@ -24,6 +24,7 @@ typedef struct {
     char path[PATH_MAX_LEN];   /* load/create/delete/launch target, or rename/copy/move source */
     char path2[PATH_MAX_LEN];  /* CMD_RENAME/CMD_COPY/CMD_MOVE destination */
     int is_dir;                /* CMD_DELETE: rmdir vs unlink */
+    int show_hidden;           /* CMD_LOAD_DIR: forwarded to load_directory() */
 } Cmd;
 
 #endif // DIRED_CMD_H

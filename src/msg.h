@@ -27,6 +27,7 @@ typedef enum {
     MSG_PASTE,
     MSG_CYCLE_SORT,
     MSG_CYCLE_GROUP,
+    MSG_TOGGLE_HIDDEN,
     MSG_QUIT,
     MSG_TEXT_INPUT,
 

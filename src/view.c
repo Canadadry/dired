@@ -7,7 +7,7 @@
 #define HELP_TEXT \
     "up/down: Navigate  left: Parent  right/Enter: Open  r: Rename  " \
     "n: New  space: Preview  c: Yank copy  m: Yank move  " \
-    "p: Paste  s: Sort  d: Group  Backspace: Delete  q: Quit"
+    "p: Paste  s: Sort  d: Group  a: Toggle hidden  Backspace: Delete  q: Quit"
 
 static void add_line(View *v, StyleTag style, const char *fmt, ...)
 {

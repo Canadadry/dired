@@ -69,6 +69,7 @@ static void test_go_parent(void)
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
         Model in = make_nav_model(0, 0);
         strcpy(in.current_path, cases[i].current_path);
+        in.show_hidden = 1;
         Msg msg = { .type = MSG_GO_PARENT };
         Model out;
         Cmd cmd;
@@ -81,6 +82,9 @@ static void test_go_parent(void)
         if (strcmp(cmd.path, cases[i].expected_parent) != 0) {
             TEST_ERRORF(cases[i].current_path, "cmd.path = %s, want %s",
                         cmd.path, cases[i].expected_parent);
+        }
+        if (!cmd.show_hidden) {
+            TEST_ERRORF(cases[i].current_path, "cmd.show_hidden = %d, want 1 (carried from model)", cmd.show_hidden);
         }
     }
 }
@@ -124,6 +128,7 @@ static void test_activate(void)
         Model in = make_model_with_entry(cases[i].current_path, cases[i].name,
                                           cases[i].st_mode, cases[i].selected);
         in.entry_count = cases[i].entry_count;
+        in.show_hidden = 1;
         Msg msg = { .type = MSG_ACTIVATE };
         Model out;
         Cmd cmd;
@@ -136,6 +141,9 @@ static void test_activate(void)
         }
         if (cases[i].expected_cmd_path && strcmp(cmd.path, cases[i].expected_cmd_path) != 0) {
             TEST_ERRORF(cases[i].label, "cmd.path = %s, want %s", cmd.path, cases[i].expected_cmd_path);
+        }
+        if (cases[i].expected_cmd_type == CMD_LOAD_DIR && !cmd.show_hidden) {
+            TEST_ERRORF(cases[i].label, "cmd.show_hidden = %d, want 1 (carried from model)", cmd.show_hidden);
         }
     }
 }
@@ -193,7 +201,7 @@ static void test_dir_loaded(void)
 
     Case cases[] = {
         {"fresh load selects first row", 0, 3, 0},
-        {"selection beyond new count clamps to last row", 5, 2, 1},
+        {"selection beyond new count falls back to first row", 5, 2, 0},
         {"loading an empty directory selects nothing", 5, 0, 0},
     };
 
@@ -234,6 +242,7 @@ static void test_op_succeeded(void)
 {
     Model in = make_nav_model(3, 1);
     strcpy(in.current_path, "/home/user");
+    in.show_hidden = 1;
     Msg msg = { .type = MSG_OP_SUCCEEDED };
     Model out;
     Cmd cmd;
@@ -245,6 +254,9 @@ static void test_op_succeeded(void)
     }
     if (strcmp(cmd.path, "/home/user") != 0) {
         TEST_ERRORF("op succeeded", "cmd.path = %s, want /home/user", cmd.path);
+    }
+    if (!cmd.show_hidden) {
+        TEST_ERRORF("op succeeded", "cmd.show_hidden = %d, want 1 (carried from model)", cmd.show_hidden);
     }
 }
 
@@ -767,6 +779,39 @@ static void test_cycle_group_wraps_through_all_three_states(void)
     }
 }
 
+static void test_toggle_hidden(void)
+{
+    Model in = make_nav_model(3, 1);
+    strcpy(in.current_path, "/home/user");
+    in.show_hidden = 0;
+    Msg msg = { .type = MSG_TOGGLE_HIDDEN };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (!out.show_hidden) {
+        TEST_ERRORF("toggle hidden on", "show_hidden = %d, want 1", out.show_hidden);
+    }
+    if (cmd.type != CMD_LOAD_DIR || strcmp(cmd.path, "/home/user") != 0 || !cmd.show_hidden) {
+        TEST_ERRORF("toggle hidden on", "cmd = {%d, %s, show_hidden=%d}, want {CMD_LOAD_DIR, /home/user, show_hidden=1}",
+                    cmd.type, cmd.path, cmd.show_hidden);
+    }
+
+    Model in2 = out;
+    Model out2;
+    Cmd cmd2;
+    update(&msg, &in2, &out2, &cmd2);
+
+    if (out2.show_hidden) {
+        TEST_ERRORF("toggle hidden off", "show_hidden = %d, want 0", out2.show_hidden);
+    }
+    if (cmd2.type != CMD_LOAD_DIR || cmd2.show_hidden) {
+        TEST_ERRORF("toggle hidden off", "cmd = {%d, show_hidden=%d}, want {CMD_LOAD_DIR, show_hidden=0}",
+                    cmd2.type, cmd2.show_hidden);
+    }
+}
+
 static void test_resort_keeps_selection_on_same_file(void)
 {
     Model in = make_nav_model(3, 0);
@@ -880,6 +925,7 @@ void test_update(void)
     test_paste_pending();
     test_cycle_sort_wraps_through_all_eight_states();
     test_cycle_group_wraps_through_all_three_states();
+    test_toggle_hidden();
     test_resort_keeps_selection_on_same_file();
     test_dir_loaded_sorts_entries();
     test_quit();

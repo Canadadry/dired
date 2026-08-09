@@ -69,8 +69,7 @@ static void resort_and_relocate(Model *out_model, const char *prev_name)
         }
     }
 
-    if (out_model->selected >= out_model->entry_count)
-        out_model->selected = out_model->entry_count > 0 ? out_model->entry_count - 1 : 0;
+    out_model->selected = 0;
 }
 
 static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
@@ -138,6 +137,14 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
         break;
     }
 
+    case MSG_TOGGLE_HIDDEN:
+        out_model->show_hidden = !out_model->show_hidden;
+        out_cmd->type = CMD_LOAD_DIR;
+        out_cmd->show_hidden = out_model->show_hidden;
+        strncpy(out_cmd->path, out_model->current_path, sizeof(out_cmd->path) - 1);
+        out_cmd->path[sizeof(out_cmd->path) - 1] = '\0';
+        break;
+
     case MSG_QUIT:
         out_model->should_quit = 1;
         break;
@@ -154,6 +161,7 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
 
     case MSG_GO_PARENT:
         out_cmd->type = CMD_LOAD_DIR;
+        out_cmd->show_hidden = out_model->show_hidden;
         parent_path(out_model->current_path, out_cmd->path, sizeof(out_cmd->path));
         break;
 
@@ -178,6 +186,7 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
             if (is_protected_name(e->name))
                 break;
             out_cmd->type = CMD_LOAD_DIR;
+            out_cmd->show_hidden = out_model->show_hidden;
             join_path(out_model->current_path, e->name, out_cmd->path, sizeof(out_cmd->path));
         } else if (S_ISREG(e->st.st_mode)) {
             out_cmd->type = CMD_LAUNCH_EDITOR;
@@ -282,6 +291,7 @@ void update(const Msg *msg, const Model *model, Model *out_model, Cmd *out_cmd)
 
     case MSG_OP_SUCCEEDED:
         out_cmd->type = CMD_LOAD_DIR;
+        out_cmd->show_hidden = out_model->show_hidden;
         strncpy(out_cmd->path, out_model->current_path, sizeof(out_cmd->path) - 1);
         out_cmd->path[sizeof(out_cmd->path) - 1] = '\0';
         return;

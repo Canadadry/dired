@@ -6,7 +6,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
-Msg load_directory(const char *path)
+Msg load_directory(const char *path, int show_hidden)
 {
     static Entry loaded[MAX_ENTRIES];
 
@@ -23,6 +23,8 @@ Msg load_directory(const char *path)
 
     while ((de = readdir(dir)) && count < MAX_ENTRIES) {
         if (is_protected_name(de->d_name))
+            continue;
+        if (!show_hidden && is_hidden_name(de->d_name))
             continue;
 
         snprintf(fullpath, sizeof(fullpath), "%s/%s", path, de->d_name);

@@ -46,6 +46,7 @@ n: Create a new file or directory (trailing / for a directory)
 Space: Preview selected file (text pages, binary is hex-dumped)
 s: Cycle sort key/direction (name, date, size, extension — asc/desc)
 d: Cycle directory grouping (first, last, mixed)
+a: Toggle hidden files (dotfiles hidden by default)
 Backspace: Delete selected file/directory
 q: Quit
 ```

@@ -55,6 +55,7 @@ typedef struct {
      * (SORT_NAME_ASC, GROUP_DIRS_FIRST), which are also the zero values. */
     SortMode sort_mode;
     GroupMode group_mode;
+    int show_hidden;
 
     AppMode mode;
     char edit_buf[NAME_MAX_LEN + 1];
