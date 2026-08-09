@@ -169,6 +169,11 @@ static void run_piped(char *const argv1[], char *const argv2[])
         close(fd[1]);
         dup2(fd[0], STDIN_FILENO);
         close(fd[0]);
+        /* Without this, more's default exit-on-eof quits the instant it
+         * hits EOF, which for content shorter than one screen is before it
+         * even finishes drawing - the pager exits and dired repaints over
+         * it before the user sees anything. */
+        setenv("POSIXLY_CORRECT", "1", 1);
         execvp(argv2[0], argv2);
         _exit(EXIT_FAILURE);
     }
@@ -198,6 +203,9 @@ static Msg execute_preview(const char *path)
     } else {
         pid_t pid = fork();
         if (pid == 0) {
+            /* See run_piped()'s POSIXLY_CORRECT comment: without it, more
+             * exits immediately on short files instead of pausing. */
+            setenv("POSIXLY_CORRECT", "1", 1);
             execlp("more", "more", path, (char *)NULL);
             _exit(EXIT_FAILURE);
         } else {
