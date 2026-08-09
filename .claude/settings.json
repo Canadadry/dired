@@ -22,6 +22,7 @@
       "Bash(git commit *)",
       "Bash(git push *)",
       "Bash(git mv *)",
+      "Bash(sh scripts/git-hooks/install.sh)",
       "Bash(.claude/skills/git-commit/scripts/status.sh)",
       "Bash(.claude/skills/git-commit/scripts/unstaged-diff.sh *)",
       "Bash(git status *)",
