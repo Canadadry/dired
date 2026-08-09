@@ -18,7 +18,7 @@ Add a trash mechanism: the existing delete keybinding moves the entry to
 `~/.trash` instead of permanently deleting it, while a separate, distinct
 keybinding still performs permanent deletion. Every trashed item gets a
 sidecar metadata file recording its original location, laying the
-groundwork for a future restore feature (`08-trash-restore`), which is
+groundwork for a future restore feature (`09-trash-restore`), which is
 explicitly out of scope here.
 
 ## User Stories
@@ -34,7 +34,7 @@ explicitly out of scope here.
 - The existing delete keybinding (Backspace, per current `dired.c`) moves the entry to `~/.trash` — it does **not** replace permanent delete, both remain available.
 - A second, distinct keybinding triggers permanent deletion (bypasses the trash). The exact key is not decided and is intentionally left open — the user explicitly said it's easy to change later and shouldn't be bikeshedded in this PRD.
 - Every trashed item always receives a uniquifying suffix on its name in `~/.trash` — not only when a collision is detected, but unconditionally, so trash entries never collide.
-- A sidecar metadata file is written alongside each trashed item, recording its original path, to support the future restore PRD (`08-trash-restore`).
+- A sidecar metadata file is written alongside each trashed item, recording its original path, to support the future restore PRD (`09-trash-restore`).
 - Trashing a directory is implemented as a `rename()` into `~/.trash`, which works regardless of whether the directory is empty — unlike the current `rmdir()`-based permanent delete, which requires an empty directory.
 - Cross-filesystem trashing (`rename()` failing with `EXDEV` when `~/.trash` is on a different mount than the item being trashed, e.g. deleting something from a removable drive) is explicitly out of scope for this PRD — no copy+delete fallback is implemented; this case can error.
 
@@ -51,9 +51,9 @@ explicitly out of scope here.
 
 ## Out of Scope
 
-- Restoring from trash (its own PRD: `08-trash-restore`).
+- Restoring from trash (its own PRD: `09-trash-restore`).
 - The `EXDEV` cross-filesystem case (documented above as an explicit gap, no fallback implemented).
-- Trash retention limits, automatic emptying, or a trash-browsing UI (the last of these is part of `08-trash-restore`).
+- Trash retention limits, automatic emptying, or a trash-browsing UI (the last of these is part of `09-trash-restore`).
 
 ## Further Notes
 

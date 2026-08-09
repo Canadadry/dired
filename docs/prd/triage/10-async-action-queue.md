@@ -11,7 +11,7 @@ status: needs-triage
 The foundation PRD's `Cmd` mechanism is deliberately synchronous — `main()`
 executes one effect immediately and blocks until it's done. That's fine for
 single, fast operations (rename, single-file copy, single delete), but once
-bulk operations exist (multi-select delete/copy/move, per `10-multi-select`),
+bulk operations exist (multi-select delete/copy/move, per `11-multi-select`),
 running many of them one after another synchronously would freeze the whole
 UI for the duration, with no feedback on progress.
 
@@ -27,7 +27,7 @@ queued actions have completed.
 1. As a user, I want to see a progress indicator while a batch of file operations runs, so that I know the app hasn't frozen.
 2. As a user, I want to keep using the app (e.g. see the UI redraw, and eventually cancel) while a batch operation is running, so that a long operation doesn't lock me out.
 3. As a developer, I want a mechanism to run queued actions without busy-waiting or blocking the keyboard-input wait, so that the terminal stays responsive.
-4. As a developer, I want `03-copy-move` and `07-trash`'s synchronous `Cmd`s to be upgradeable to run through this queue for bulk cases, without having to redesign their effect logic.
+4. As a developer, I want `03-copy-move` and `08-trash`'s synchronous `Cmd`s to be upgradeable to run through this queue for bulk cases, without having to redesign their effect logic.
 
 ## Implementation Decisions
 
@@ -35,7 +35,7 @@ queued actions have completed.
 - Two-process-oriented design: the main process keeps running the `update`/`view`/input loop; queued actions are executed by a separate process (or one child process per queued action, spawned via `fork`+`exec`) rather than inline in the main process.
 - Progress is reported back to the main process over a pipe. The read end of that pipe's file descriptor is folded into the main process's existing wait — using termbox2's `tb_get_fds(ttyfd, resizefd)` alongside the pipe fd in one `select()`/`poll()` call — so waiting for progress updates never becomes a busy-loop and never requires a second, separate blocking read loop.
 - Actions are dequeued one at a time and executed via `exec`; the progress bar reflects **count of completed vs. total queued actions**, not a per-action percentage (explicitly not "37% through this one file" — "un progress bar sur le nombre d'action total").
-- This queue is what `03-copy-move` and `07-trash` (and any bulk operation introduced by `10-multi-select`) get upgraded to use for multi-action or slow cases; single, fast operations can plausibly stay on the synchronous `Cmd` path from `01-foundation` — *whether that split (sync for single ops, queued for bulk) is the actual intended design, or whether the queue replaces the synchronous path entirely, needs to be confirmed in dedicated grilling.*
+- This queue is what `03-copy-move` and `08-trash` (and any bulk operation introduced by `11-multi-select`) get upgraded to use for multi-action or slow cases; single, fast operations can plausibly stay on the synchronous `Cmd` path from `01-foundation` — *whether that split (sync for single ops, queued for bulk) is the actual intended design, or whether the queue replaces the synchronous path entirely, needs to be confirmed in dedicated grilling.*
 
 **Not yet decided — needs dedicated grilling:**
 - The exact IPC protocol/message framing over the pipe (what bytes actually get written to report "one action completed" or "an action failed").
@@ -51,8 +51,8 @@ queued actions have completed.
 
 ## Out of Scope
 
-- The specific bulk operations that will use this queue (those are `03-copy-move`'s and `07-trash`'s concern, and `10-multi-select`'s) — this PRD is the queue mechanism itself.
+- The specific bulk operations that will use this queue (those are `03-copy-move`'s and `08-trash`'s concern, and `11-multi-select`'s) — this PRD is the queue mechanism itself.
 
 ## Further Notes
 
-Depends on `01-foundation` (for the `Cmd` shape it extends/complements) and conceptually pairs with `10-multi-select`, which is the main consumer of bulk queued actions — sequenced second-to-last deliberately, once there's an actual need for it.
+Depends on `01-foundation` (for the `Cmd` shape it extends/complements) and conceptually pairs with `11-multi-select`, which is the main consumer of bulk queued actions — sequenced second-to-last deliberately, once there's an actual need for it.

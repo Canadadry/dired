@@ -1,21 +1,21 @@
 ---
 title: "Restore from trash"
-description: "Once files can be moved to ~/.trash (07-trash), there's still no way to bring one back to its original location from inside dired."
+description: "Once files can be moved to ~/.trash (08-trash), there's still no way to bring one back to its original location from inside dired."
 status: needs-triage
 ---
 
-> **Draft status:** written from the high-level architecture/roadmap grilling session only, where this was explicitly deferred to "a later PRD" with almost no discussion beyond its existence and its dependency on `07-trash`'s metadata. Needs a dedicated grilling session before it's implementation-ready; nearly everything below is placeholder.
+> **Draft status:** written from the high-level architecture/roadmap grilling session only, where this was explicitly deferred to "a later PRD" with almost no discussion beyond its existence and its dependency on `08-trash`'s metadata. Needs a dedicated grilling session before it's implementation-ready; nearly everything below is placeholder.
 
 ## Problem Statement
 
-`07-trash` moves deleted items to `~/.trash` with metadata recording their
+`08-trash` moves deleted items to `~/.trash` with metadata recording their
 original location, but nothing in dired reads that metadata back — a
 trashed item can only be recovered manually, outside the app.
 
 ## Solution
 
 Add a way to browse `~/.trash` from inside dired and restore an item to its
-original location using the metadata written by `07-trash`. Exact mechanics
+original location using the metadata written by `08-trash`. Exact mechanics
 undecided.
 
 ## User Stories
@@ -27,7 +27,7 @@ undecided.
 ## Implementation Decisions
 
 **Decided:**
-- Depends entirely on `07-trash`'s metadata format (original path per trashed item) being defined first — this PRD cannot be scoped in detail until that format is settled.
+- Depends entirely on `08-trash`'s metadata format (original path per trashed item) being defined first — this PRD cannot be scoped in detail until that format is settled.
 
 **Not yet decided — needs dedicated grilling (essentially everything else):**
 - How trash is browsed: a dedicated screen/mode, or trash treated as just another directory to navigate into?
@@ -45,4 +45,4 @@ undecided.
 
 ## Further Notes
 
-Depends on `01-foundation` and `07-trash`. This is the least-specified PRD in the roadmap — deliberately deferred by the user during the roadmap-level discussion.
+Depends on `01-foundation` and `08-trash`. This is the least-specified PRD in the roadmap — deliberately deferred by the user during the roadmap-level discussion.

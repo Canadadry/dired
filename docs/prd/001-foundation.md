@@ -73,7 +73,7 @@ against the filesystem.
 - **Delete-confirm and error-display key handling**:
   - Delete-confirm: only `y`/`Y` confirms and performs the delete; any other keypress cancels and is consumed (not just Escape/`n`).
   - Error-display: any keypress at all dismisses the error message, consumed, not otherwise processed as a normal action.
-- **Semantic style tags produce zero visual change in this PRD**: in `main()`'s lookup table mapping semantic style tags to termbox2 attributes, every tag except `STYLE_SELECTED` maps to the same plain/default attribute. The tags exist for `view()`'s semantic clarity and testability, not for visual differentiation — actual distinct coloring (for `STYLE_PROMPT`, `STYLE_ERROR`, etc.) is left to the separate later PRD (`docs/prd/triage/05-colors.md`).
+- **Semantic style tags produce zero visual change in this PRD**: in `main()`'s lookup table mapping semantic style tags to termbox2 attributes, every tag except `STYLE_SELECTED` maps to the same plain/default attribute. The tags exist for `view()`'s semantic clarity and testability, not for visual differentiation — actual distinct coloring (for `STYLE_PROMPT`, `STYLE_ERROR`, etc.) is left to the separate later PRD (`docs/prd/triage/06-colors.md`).
 - **Error surfacing is widened to all operations**: rename, create-file, create-dir, delete, and load-directory all uniformly surface failures via the same error-`Model` state, `STYLE_ERROR`, and the "any key dismisses" rule above.
 
 ## Testing Decisions
