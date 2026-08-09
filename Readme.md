@@ -9,6 +9,7 @@ A lightweight terminal-based file manager written in C using termbox2 (vendored 
 * Rename files and directories.
 * Create new files or directories (via a temporary virtual line).
 * Delete files and directories with confirmation.
+* Preview a file's contents (paged as text, or hex-dumped if binary) without leaving the app.
 * Sort by name, date, size, or extension, with independent directory grouping.
 * Minimal, fast, and works entirely in the terminal.
 * Simple modal interface: navigation mode and edit mode.
@@ -42,6 +43,7 @@ ssh user@remotehost 'cd /path/to/dired && ./builder debug clean dired'
 → / Enter: Open file or enter directory
 r: Rename selected file/directory
 n: Create a new file or directory (trailing / for a directory)
+Space: Preview selected file (text pages, binary is hex-dumped)
 s: Cycle sort key/direction (name, date, size, extension — asc/desc)
 d: Cycle directory grouping (first, last, mixed)
 Backspace: Delete selected file/directory

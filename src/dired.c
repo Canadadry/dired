@@ -146,6 +146,39 @@ static Msg execute_launch_editor(const char *path)
     return (Msg){ .type = MSG_OP_SUCCEEDED };
 }
 
+/* Runs argv1 piped into argv2 (e.g. a hex dump piped into a pager), never
+ * via a shell. Waits on both children so quitting the reader early can't
+ * leave the writer as a zombie once it hits SIGPIPE. */
+static void run_piped(char *const argv1[], char *const argv2[])
+{
+    int fd[2];
+    if (pipe(fd) != 0)
+        return;
+
+    pid_t pid1 = fork();
+    if (pid1 == 0) {
+        close(fd[0]);
+        dup2(fd[1], STDOUT_FILENO);
+        close(fd[1]);
+        execvp(argv1[0], argv1);
+        _exit(EXIT_FAILURE);
+    }
+
+    pid_t pid2 = fork();
+    if (pid2 == 0) {
+        close(fd[1]);
+        dup2(fd[0], STDIN_FILENO);
+        close(fd[0]);
+        execvp(argv2[0], argv2);
+        _exit(EXIT_FAILURE);
+    }
+
+    close(fd[0]);
+    close(fd[1]);
+    waitpid(pid1, NULL, 0);
+    waitpid(pid2, NULL, 0);
+}
+
 static Msg execute_preview(const char *path)
 {
     FILE *f = fopen(path, "r");
@@ -156,17 +189,20 @@ static Msg execute_preview(const char *path)
     size_t n = fread(sniff, 1, sizeof(sniff), f);
     fclose(f);
 
-    if (is_binary_content(sniff, n))
-        return msg_failed("preview: binary file");
-
     tb_shutdown();
 
-    pid_t pid = fork();
-    if (pid == 0) {
-        execlp("more", "more", path, (char *)NULL);
-        _exit(EXIT_FAILURE);
+    if (is_binary_content(sniff, n)) {
+        char *dump_argv[] = { "hexdump", "-C", (char *)path, NULL };
+        char *pager_argv[] = { "more", NULL };
+        run_piped(dump_argv, pager_argv);
     } else {
-        wait(NULL);
+        pid_t pid = fork();
+        if (pid == 0) {
+            execlp("more", "more", path, (char *)NULL);
+            _exit(EXIT_FAILURE);
+        } else {
+            wait(NULL);
+        }
     }
 
     tb_init();

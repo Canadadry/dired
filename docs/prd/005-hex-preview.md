@@ -1,7 +1,7 @@
 ---
 title: "Hex view for binary files"
 description: "Pressing the preview key on a binary file currently just rejects it with an error, giving the user no way to glance at its content the way text preview already allows."
-status: needs-triage
+status: done
 ---
 
 ## Problem Statement
