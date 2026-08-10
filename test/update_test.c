@@ -503,23 +503,27 @@ static void test_delete_requests_confirmation(void)
 {
     typedef struct {
         const char *label;
+        MsgType msg_type;
         const char *entry_name;
         int entry_count;
         int selected;
         AppMode expected_mode;
+        int expected_permanent;
     } Case;
 
     Case cases[] = {
-        {"delete on regular entry asks to confirm", "file.txt", 3, 1, MODE_CONFIRM_DELETE},
-        {"delete on '.' is a no-op", ".", 3, 1, MODE_NAV},
-        {"delete on '..' is a no-op", "..", 3, 1, MODE_NAV},
-        {"delete on empty directory is a no-op", "", 0, 0, MODE_NAV},
+        {"delete on regular entry asks to confirm", MSG_DELETE, "file.txt", 3, 1, MODE_CONFIRM_DELETE, 0},
+        {"delete on '.' is a no-op", MSG_DELETE, ".", 3, 1, MODE_NAV, 0},
+        {"delete on '..' is a no-op", MSG_DELETE, "..", 3, 1, MODE_NAV, 0},
+        {"delete on empty directory is a no-op", MSG_DELETE, "", 0, 0, MODE_NAV, 0},
+        {"permanent delete on regular entry asks to confirm", MSG_DELETE_PERMANENT, "file.txt", 3, 1, MODE_CONFIRM_DELETE, 1},
+        {"permanent delete on '.' is a no-op", MSG_DELETE_PERMANENT, ".", 3, 1, MODE_NAV, 0},
     };
 
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
         Model in = make_nav_model(cases[i].entry_count, cases[i].selected);
         strcpy(in.entries[1].name, cases[i].entry_name);
-        Msg msg = { .type = MSG_DELETE };
+        Msg msg = { .type = cases[i].msg_type };
         Model out;
         Cmd cmd;
 
@@ -531,16 +535,22 @@ static void test_delete_requests_confirmation(void)
         if (out.selected != cases[i].selected) {
             TEST_ERRORF(cases[i].label, "selected = %d, want unchanged %d", out.selected, cases[i].selected);
         }
+        if (out.confirm_permanent_delete != cases[i].expected_permanent) {
+            TEST_ERRORF(cases[i].label, "confirm_permanent_delete = %d, want %d",
+                        out.confirm_permanent_delete, cases[i].expected_permanent);
+        }
         if (cmd.type != CMD_NONE) {
             TEST_ERRORF(cases[i].label, "cmd.type = %d, want CMD_NONE", cmd.type);
         }
     }
 }
 
-static Model make_confirm_delete_model(const char *name, mode_t st_mode, int selected, int entry_count)
+static Model make_confirm_delete_model(const char *name, mode_t st_mode, int selected, int entry_count,
+                                        int confirm_permanent)
 {
     Model m = make_nav_model(entry_count, selected);
     m.mode = MODE_CONFIRM_DELETE;
+    m.confirm_permanent_delete = confirm_permanent;
     strcpy(m.current_path, "/tmp");
     strcpy(m.entries[selected].name, name);
     m.entries[selected].st.st_mode = st_mode;
@@ -553,27 +563,31 @@ static void test_confirm_delete_yes_deletes(void)
         const char *label;
         char answer;
         mode_t st_mode;
+        int confirm_permanent;
+        CmdType expected_cmd_type;
         int expected_is_dir;
     } Case;
 
     Case cases[] = {
-        {"lowercase y deletes a file", 'y', S_IFREG | 0644, 0},
-        {"uppercase Y deletes a file", 'Y', S_IFREG | 0644, 0},
-        {"y deletes a directory", 'y', S_IFDIR | 0755, 1},
+        {"lowercase y trashes a file", 'y', S_IFREG | 0644, 0, CMD_TRASH, 0},
+        {"uppercase Y trashes a file", 'Y', S_IFREG | 0644, 0, CMD_TRASH, 0},
+        {"y trashes a directory", 'y', S_IFDIR | 0755, 0, CMD_TRASH, 1},
+        {"y permanently deletes a file", 'y', S_IFREG | 0644, 1, CMD_DELETE, 0},
+        {"y permanently deletes a directory", 'y', S_IFDIR | 0755, 1, CMD_DELETE, 1},
     };
 
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
-        Model in = make_confirm_delete_model("target", cases[i].st_mode, 1, 3);
+        Model in = make_confirm_delete_model("target", cases[i].st_mode, 1, 3, cases[i].confirm_permanent);
         Msg msg = { .type = MSG_TEXT_INPUT, .ch = cases[i].answer };
         Model out;
         Cmd cmd;
 
         update(&msg, &in, &out, &cmd);
 
-        if (cmd.type != CMD_DELETE || strcmp(cmd.path, "/tmp/target") != 0 ||
+        if (cmd.type != cases[i].expected_cmd_type || strcmp(cmd.path, "/tmp/target") != 0 ||
             cmd.is_dir != cases[i].expected_is_dir) {
-            TEST_ERRORF(cases[i].label, "cmd = {%d, %s, is_dir=%d}, want {CMD_DELETE, /tmp/target, is_dir=%d}",
-                        cmd.type, cmd.path, cmd.is_dir, cases[i].expected_is_dir);
+            TEST_ERRORF(cases[i].label, "cmd = {%d, %s, is_dir=%d}, want {%d, /tmp/target, is_dir=%d}",
+                        cmd.type, cmd.path, cmd.is_dir, cases[i].expected_cmd_type, cases[i].expected_is_dir);
         }
         if (out.mode != MODE_NAV) {
             TEST_ERRORF(cases[i].label, "mode = %d, want MODE_NAV", out.mode);
@@ -597,7 +611,7 @@ static void test_confirm_delete_anything_else_cancels(void)
     };
 
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
-        Model in = make_confirm_delete_model("target", S_IFREG | 0644, 1, 3);
+        Model in = make_confirm_delete_model("target", S_IFREG | 0644, 1, 3, 0);
         Model out;
         Cmd cmd;
 

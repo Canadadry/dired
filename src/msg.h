@@ -19,6 +19,7 @@ typedef enum {
     MSG_ACTIVATE,     /* open selected entry (nav) or validate edit (edit modes) */
     MSG_CANCEL,
     MSG_DELETE,        /* erase last typed char (edit modes) or ask to delete selected entry (nav) */
+    MSG_DELETE_PERMANENT,
     MSG_RENAME,
     MSG_NEW,
     MSG_PREVIEW,

@@ -95,9 +95,12 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
         break;
 
     case MSG_DELETE:
+    case MSG_DELETE_PERMANENT:
         if (out_model->selected < out_model->entry_count &&
-            !is_protected_name(out_model->entries[out_model->selected].name))
+            !is_protected_name(out_model->entries[out_model->selected].name)) {
             out_model->mode = MODE_CONFIRM_DELETE;
+            out_model->confirm_permanent_delete = (msg->type == MSG_DELETE_PERMANENT);
+        }
         break;
 
     case MSG_YANK_COPY:
@@ -282,7 +285,7 @@ static void handle_confirm_delete(const Msg *msg, Model *out_model, Cmd *out_cmd
         return;
 
     Entry *e = &out_model->entries[out_model->selected];
-    out_cmd->type = CMD_DELETE;
+    out_cmd->type = out_model->confirm_permanent_delete ? CMD_DELETE : CMD_TRASH;
     out_cmd->is_dir = S_ISDIR(e->st.st_mode);
     join_path(out_model->current_path, e->name, out_cmd->path, sizeof(out_cmd->path));
 }

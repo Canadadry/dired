@@ -62,6 +62,7 @@ typedef struct {
     int scroll_offset;
 
     AppMode mode;
+    int confirm_permanent_delete;
     char edit_buf[NAME_MAX_LEN + 1];
     size_t edit_len;
 

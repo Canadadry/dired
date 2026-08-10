@@ -8,7 +8,7 @@ A lightweight terminal-based file manager written in C using termbox2 (vendored 
 * Open and edit files with Vim directly from the interface.
 * Rename files and directories.
 * Create new files or directories (via a temporary virtual line).
-* Delete files and directories with confirmation.
+* Delete files and directories with confirmation — moved to `~/.trash` by default, or permanently with a separate key.
 * Preview a file's contents (paged as text, or hex-dumped if binary) without leaving the app.
 * Sort by name, date, size, or extension, with independent directory grouping.
 * Minimal, fast, and works entirely in the terminal.
@@ -47,7 +47,8 @@ Space: Preview selected file (text pages, binary is hex-dumped)
 s: Cycle sort key/direction (name, date, size, extension — asc/desc)
 d: Cycle directory grouping (first, last, mixed)
 a: Toggle hidden files (dotfiles hidden by default)
-Backspace: Delete selected file/directory
+Backspace: Move selected file/directory to trash (~/.trash)
+x: Permanently delete selected file/directory (bypasses trash)
 q: Quit
 ```
 

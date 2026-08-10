@@ -5,6 +5,7 @@
 #include "view.h"
 #include "helpers.h"
 #include "loaddir.h"
+#include "trash.h"
 #include "../vendor/termbox2.h"
 
 #include <ctype.h>
@@ -63,14 +64,6 @@ static Msg execute_create_dir(const char *path)
     return (Msg){ .type = MSG_OP_SUCCEEDED };
 }
 
-static Msg execute_delete(const char *path, int is_dir)
-{
-    int rc = is_dir ? rmdir(path) : unlink(path);
-    if (rc != 0)
-        return msg_failed("delete: %s", strerror(errno));
-    return (Msg){ .type = MSG_OP_SUCCEEDED };
-}
-
 /* Runs argv[0] via fork+execvp (never a shell, so a filename can't inject a
  * command), capturing stderr into errbuf so a real OS error can be folded
  * into the MSG_OP_FAILED message. Returns 0 on a zero exit status. */
@@ -109,6 +102,21 @@ static int run_argv(char *const argv[], char *errbuf, size_t errbuf_len)
     int status;
     waitpid(pid, &status, 0);
     return (WIFEXITED(status) && WEXITSTATUS(status) == 0) ? 0 : -1;
+}
+
+static Msg execute_delete(const char *path, int is_dir)
+{
+    if (is_dir) {
+        char errbuf[256] = { 0 };
+        char *argv[] = { "rm", "-rf", (char *)path, NULL };
+        if (run_argv(argv, errbuf, sizeof(errbuf)) != 0)
+            return msg_failed("delete: %s", errbuf[0] ? errbuf : "failed");
+        return (Msg){ .type = MSG_OP_SUCCEEDED };
+    }
+
+    if (unlink(path) != 0)
+        return msg_failed("delete: %s", strerror(errno));
+    return (Msg){ .type = MSG_OP_SUCCEEDED };
 }
 
 static Msg execute_copy(const char *src, const char *dst)
@@ -227,6 +235,7 @@ static Msg execute_cmd(const Cmd *cmd)
     case CMD_CREATE_FILE:   return execute_create_file(cmd->path);
     case CMD_CREATE_DIR:    return execute_create_dir(cmd->path);
     case CMD_DELETE:        return execute_delete(cmd->path, cmd->is_dir);
+    case CMD_TRASH:         return trash_item(cmd->path);
     case CMD_LAUNCH_EDITOR: return execute_launch_editor(cmd->path);
     case CMD_PREVIEW:       return execute_preview(cmd->path);
     case CMD_COPY:          return execute_copy(cmd->path, cmd->path2);
@@ -346,6 +355,8 @@ static Msg translate_event(struct tb_event ev, AppMode mode)
         msg.type = MSG_CYCLE_PAGE;
     else if (ev.ch == 'a' || ev.ch == 'A')
         msg.type = MSG_TOGGLE_HIDDEN;
+    else if (ev.ch == 'x')
+        msg.type = MSG_DELETE_PERMANENT;
     else if (ev.ch == 'q')
         msg.type = MSG_QUIT;
     else if (ev.ch != 0) {
@@ -391,7 +402,8 @@ static void print_help(void)
     printf("  d             Cycle directory grouping (first, last, mixed)\n");
     printf("  o             Jump to the next page (wraps to the first page)\n");
     printf("  a             Toggle hidden files\n");
-    printf("  Backspace     Delete selected file/directory\n");
+    printf("  Backspace     Move selected file/directory to trash (~/.trash)\n");
+    printf("  x             Permanently delete selected file/directory (bypasses trash)\n");
     printf("  q             Quit\n\n");
     printf("Build time: %s\n", BUILD_TIMESTAMP);
 

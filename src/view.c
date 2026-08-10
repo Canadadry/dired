@@ -7,7 +7,7 @@
 #define HELP_TEXT \
     "up/down: Navigate  left: Parent  right/Enter: Open  r: Rename  " \
     "n: New  space: Preview  c: Yank copy  m: Yank move  " \
-    "p: Paste  s: Sort  d: Group  o: Next page  a: Toggle hidden  Backspace: Delete  q: Quit"
+    "p: Paste  s: Sort  d: Group  o: Next page  a: Toggle hidden  Backspace: Trash  x: Delete  q: Quit"
 
 static void add_line(View *v, StyleTag style, const char *fmt, ...)
 {
@@ -30,7 +30,10 @@ static void add_prompt_line(View *v, const Model *m)
         add_line(v, STYLE_NORMAL, "Rename:");
         break;
     case MODE_CONFIRM_DELETE:
-        add_line(v, STYLE_PROMPT, "Delete '%s' ? [y/N]", m->entries[m->selected].name);
+        if (m->confirm_permanent_delete)
+            add_line(v, STYLE_PROMPT, "Delete '%s' ? [y/N]", m->entries[m->selected].name);
+        else
+            add_line(v, STYLE_PROMPT, "Move '%s' to trash? [y/N]", m->entries[m->selected].name);
         break;
     case MODE_ERROR:
         add_line(v, STYLE_ERROR, "%s", m->error_msg);

@@ -100,17 +100,32 @@ static void test_view_rename_keeps_old_name_in_row(void)
 
 static void test_view_confirm_delete_prompt(void)
 {
-    Model m = make_view_model();
-    set_entry(&m, 0, "old.txt", S_IFREG | 0644, 512);
-    m.entry_count = 1;
-    m.mode = MODE_CONFIRM_DELETE;
-    m.selected = 0;
+    typedef struct {
+        const char *label;
+        int confirm_permanent_delete;
+        const char *expected_substr;
+    } Case;
 
-    View v = view(&m);
+    Case cases[] = {
+        {"trash wording", 0, "to trash"},
+        {"permanent delete wording", 1, "Delete 'old.txt'"},
+    };
 
-    if (!strstr(v.lines[1].text, "old.txt") || v.lines[1].style != STYLE_PROMPT) {
-        TEST_ERRORF("confirm delete", "lines[1] = '%s' style=%d, want mention of old.txt, STYLE_PROMPT",
-                    v.lines[1].text, v.lines[1].style);
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model m = make_view_model();
+        set_entry(&m, 0, "old.txt", S_IFREG | 0644, 512);
+        m.entry_count = 1;
+        m.mode = MODE_CONFIRM_DELETE;
+        m.selected = 0;
+        m.confirm_permanent_delete = cases[i].confirm_permanent_delete;
+
+        View v = view(&m);
+
+        if (!strstr(v.lines[1].text, "old.txt") || v.lines[1].style != STYLE_PROMPT ||
+            !strstr(v.lines[1].text, cases[i].expected_substr)) {
+            TEST_ERRORF(cases[i].label, "lines[1] = '%s' style=%d, want mention of old.txt and '%s', STYLE_PROMPT",
+                        v.lines[1].text, v.lines[1].style, cases[i].expected_substr);
+        }
     }
 }
 
