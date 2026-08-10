@@ -75,6 +75,26 @@ static void test_view_create_virtual_row(void)
     }
 }
 
+static void test_view_run_cmd_echoes_on_prompt_line(void)
+{
+    Model m = make_view_model();
+    set_entry(&m, 0, "main.c", S_IFREG | 0644, 512);
+    m.entry_count = 1;
+    m.mode = MODE_RUN_CMD;
+    m.selected = 0;
+    strcpy(m.edit_buf, "!ls -la");
+    m.edit_len = strlen(m.edit_buf);
+
+    View v = view(&m);
+
+    if (strcmp(v.lines[1].text, ":!ls -la") != 0) {
+        TEST_ERRORF("run cmd", "lines[1] = '%s', want ':!ls -la'", v.lines[1].text);
+    }
+    if (v.line_count != 4) {
+        TEST_ERRORF("run cmd", "line_count = %d, want 4 (path, prompt, 1 entry, help - no virtual row)", v.line_count);
+    }
+}
+
 static void test_view_rename_keeps_old_name_in_row(void)
 {
     Model m = make_view_model();
@@ -350,6 +370,7 @@ void test_view(void)
     test_view_no_page_indicator_when_everything_fits();
     test_view_page_indicator_during_create_mode();
     test_view_create_virtual_row();
+    test_view_run_cmd_echoes_on_prompt_line();
     test_view_rename_keeps_old_name_in_row();
     test_view_confirm_delete_prompt();
     test_view_yank_pending();

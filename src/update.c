@@ -94,6 +94,10 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
         start_edit(out_model, MODE_CREATE);
         break;
 
+    case MSG_RUN_CMD:
+        start_edit(out_model, MODE_RUN_CMD);
+        break;
+
     case MSG_DELETE:
     case MSG_DELETE_PERMANENT:
         if (out_model->selected < out_model->entry_count &&
@@ -267,6 +271,19 @@ static void handle_edit(const Msg *msg, Model *out_model, Cmd *out_cmd)
                 out_cmd->type = CMD_CREATE_FILE;
                 join_path(out_model->current_path, name, out_cmd->path, sizeof(out_cmd->path));
             }
+        } else if (out_model->mode == MODE_RUN_CMD) {
+            if (out_model->edit_buf[0] == '!' && out_model->edit_buf[1] != '\0') {
+                out_cmd->type = CMD_RUN;
+                strncpy(out_cmd->path, out_model->current_path, sizeof(out_cmd->path) - 1);
+                out_cmd->path[sizeof(out_cmd->path) - 1] = '\0';
+                strncpy(out_cmd->cmd_text, out_model->edit_buf + 1, sizeof(out_cmd->cmd_text) - 1);
+                out_cmd->cmd_text[sizeof(out_cmd->cmd_text) - 1] = '\0';
+                if (out_model->selected < out_model->entry_count)
+                    join_path(out_model->current_path, out_model->entries[out_model->selected].name,
+                              out_cmd->selected_path, sizeof(out_cmd->selected_path));
+                else
+                    out_cmd->selected_path[0] = '\0';
+            }
         }
 
         cancel_edit(out_model);
@@ -340,7 +357,7 @@ void update(const Msg *msg, const Model *model, Model *out_model, Cmd *out_cmd)
 
     if (model->mode == MODE_NAV)
         handle_nav(msg, out_model, out_cmd);
-    else if (model->mode == MODE_RENAME || model->mode == MODE_CREATE)
+    else if (model->mode == MODE_RENAME || model->mode == MODE_CREATE || model->mode == MODE_RUN_CMD)
         handle_edit(msg, out_model, out_cmd);
     else if (model->mode == MODE_CONFIRM_DELETE)
         handle_confirm_delete(msg, out_model, out_cmd);

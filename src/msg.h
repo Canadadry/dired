@@ -22,6 +22,7 @@ typedef enum {
     MSG_DELETE_PERMANENT,
     MSG_RENAME,
     MSG_NEW,
+    MSG_RUN_CMD,
     MSG_PREVIEW,
     MSG_YANK_COPY,
     MSG_YANK_MOVE,

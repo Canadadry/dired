@@ -295,6 +295,7 @@ static void test_start_edit(void)
         {"rename is a no-op on '.'", ".", MSG_RENAME, MODE_NAV, 1},
         {"rename is a no-op on '..'", "..", MSG_RENAME, MODE_NAV, 1},
         {"new appends a virtual row", "file.txt", MSG_NEW, MODE_CREATE, 3},
+        {"run cmd enters prompt unconditionally", "file.txt", MSG_RUN_CMD, MODE_RUN_CMD, 1},
     };
 
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
@@ -314,6 +315,9 @@ static void test_start_edit(void)
         }
         if (out.mode != MODE_NAV && out.edit_len != 0) {
             TEST_ERRORF(cases[i].label, "edit_len = %zu, want 0", out.edit_len);
+        }
+        if (cmd.type != CMD_NONE) {
+            TEST_ERRORF(cases[i].label, "cmd.type = %d, want CMD_NONE", cmd.type);
         }
     }
 }
@@ -474,6 +478,87 @@ static void test_validate_create(void)
         }
         if (out.mode != MODE_NAV) {
             TEST_ERRORF(cases[i].label, "mode = %d, want MODE_NAV", out.mode);
+        }
+    }
+}
+
+static void test_validate_run_cmd(void)
+{
+    typedef struct {
+        const char *label;
+        const char *edit_buf;
+        CmdType expected_cmd_type;
+        const char *expected_cmd_text;
+    } Case;
+
+    Case cases[] = {
+        {"empty buffer cancels", "", CMD_NONE, NULL},
+        {"missing ! prefix cancels", "ls", CMD_NONE, NULL},
+        {"bare ! cancels", "!", CMD_NONE, NULL},
+        {"valid command runs", "!ls -la", CMD_RUN, "ls -la"},
+        {"prefix plus whitespace-only remainder still runs", "! ", CMD_RUN, " "},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model in = make_edit_model(MODE_RUN_CMD, cases[i].edit_buf, 1, 3);
+        strcpy(in.current_path, "/tmp");
+        Msg msg = { .type = MSG_ACTIVATE };
+        Model out;
+        Cmd cmd;
+
+        update(&msg, &in, &out, &cmd);
+
+        if (cmd.type != cases[i].expected_cmd_type) {
+            TEST_ERRORF(cases[i].label, "cmd.type = %d, want %d", cmd.type, cases[i].expected_cmd_type);
+            continue;
+        }
+        if (cases[i].expected_cmd_type == CMD_RUN) {
+            if (strcmp(cmd.cmd_text, cases[i].expected_cmd_text) != 0) {
+                TEST_ERRORF(cases[i].label, "cmd.cmd_text = '%s', want '%s'", cmd.cmd_text, cases[i].expected_cmd_text);
+            }
+            if (strcmp(cmd.path, "/tmp") != 0) {
+                TEST_ERRORF(cases[i].label, "cmd.path = '%s', want '/tmp' (cwd)", cmd.path);
+            }
+        }
+        if (out.mode != MODE_NAV) {
+            TEST_ERRORF(cases[i].label, "mode = %d, want MODE_NAV", out.mode);
+        }
+    }
+}
+
+static void test_validate_run_cmd_carries_selected_path(void)
+{
+    typedef struct {
+        const char *label;
+        const char *entry_name;
+        int entry_count;
+        int selected;
+        const char *expected_selected_path;
+    } Case;
+
+    Case cases[] = {
+        {"selected entry becomes $FILE candidate", "photo.zip", 3, 1, "/tmp/photo.zip"},
+        {"empty directory carries no selected path", "", 0, 0, ""},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model in = make_edit_model(MODE_RUN_CMD, "!unzip $FILE", cases[i].selected, cases[i].entry_count);
+        strcpy(in.current_path, "/tmp");
+        if (cases[i].entry_count > 0)
+            strcpy(in.entries[cases[i].selected].name, cases[i].entry_name);
+        Msg msg = { .type = MSG_ACTIVATE };
+        Model out;
+        Cmd cmd;
+
+        update(&msg, &in, &out, &cmd);
+
+        if (cmd.type != CMD_RUN) {
+            TEST_ERRORF(cases[i].label, "cmd.type = %d, want CMD_RUN", cmd.type);
+            continue;
+        }
+        if (strcmp(cmd.selected_path, cases[i].expected_selected_path) != 0) {
+            TEST_ERRORF(cases[i].label, "cmd.selected_path = '%s', want '%s'",
+                        cmd.selected_path, cases[i].expected_selected_path);
         }
     }
 }
@@ -1076,6 +1161,8 @@ void test_update(void)
     test_edit_cancel();
     test_validate_empty_cancels();
     test_validate_create();
+    test_validate_run_cmd();
+    test_validate_run_cmd_carries_selected_path();
     test_validate_rename();
     test_delete_requests_confirmation();
     test_confirm_delete_yes_deletes();

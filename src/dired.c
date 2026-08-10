@@ -159,7 +159,7 @@ static Msg execute_launch_editor(const char *path)
 /* Runs argv1 piped into argv2 (e.g. a hex dump piped into a pager), never
  * via a shell. Waits on both children so quitting the reader early can't
  * leave the writer as a zombie once it hits SIGPIPE. */
-static void run_piped(char *const argv1[], char *const argv2[])
+static void run_piped(char *const argv1[], char *const argv2[], const char *cwd)
 {
     int fd[2];
     if (pipe(fd) != 0)
@@ -169,7 +169,10 @@ static void run_piped(char *const argv1[], char *const argv2[])
     if (pid1 == 0) {
         close(fd[0]);
         dup2(fd[1], STDOUT_FILENO);
+        dup2(fd[1], STDERR_FILENO);
         close(fd[1]);
+        if (cwd)
+            chdir(cwd);
         execvp(argv1[0], argv1);
         _exit(EXIT_FAILURE);
     }
@@ -209,7 +212,7 @@ static Msg execute_preview(const char *path)
     if (is_binary_content(sniff, n)) {
         char *dump_argv[] = { "hexdump", "-C", (char *)path, NULL };
         char *pager_argv[] = { "more", NULL };
-        run_piped(dump_argv, pager_argv);
+        run_piped(dump_argv, pager_argv, NULL);
     } else {
         pid_t pid = fork();
         if (pid == 0) {
@@ -222,6 +225,23 @@ static Msg execute_preview(const char *path)
             wait(NULL);
         }
     }
+
+    tb_init();
+    return (Msg){ .type = MSG_OP_SUCCEEDED };
+}
+
+static Msg execute_run_cmd(const char *cwd, const char *cmd_text, const char *selected_path)
+{
+    tb_shutdown();
+
+    if (selected_path[0] != '\0')
+        setenv("FILE", selected_path, 1);
+    else
+        unsetenv("FILE");
+
+    char *sh_argv[] = { "/bin/sh", "-c", (char *)cmd_text, NULL };
+    char *pager_argv[] = { "more", NULL };
+    run_piped(sh_argv, pager_argv, cwd);
 
     tb_init();
     return (Msg){ .type = MSG_OP_SUCCEEDED };
@@ -240,6 +260,7 @@ static Msg execute_cmd(const Cmd *cmd)
     case CMD_PREVIEW:       return execute_preview(cmd->path);
     case CMD_COPY:          return execute_copy(cmd->path, cmd->path2);
     case CMD_MOVE:          return execute_move(cmd->path, cmd->path2);
+    case CMD_RUN:           return execute_run_cmd(cmd->path, cmd->cmd_text, cmd->selected_path);
     default:                return (Msg){ .type = MSG_NONE };
     }
 }
@@ -293,7 +314,7 @@ static Msg translate_event(struct tb_event ev, AppMode mode)
     if (ev.type != TB_EVENT_KEY)
         return msg;
 
-    int text_entry = (mode == MODE_RENAME || mode == MODE_CREATE);
+    int text_entry = (mode == MODE_RENAME || mode == MODE_CREATE || mode == MODE_RUN_CMD);
 
     if (text_entry) {
         if (ev.key == TB_KEY_ESC)
@@ -339,6 +360,8 @@ static Msg translate_event(struct tb_event ev, AppMode mode)
         msg.type = MSG_RENAME;
     else if (ev.ch == 'n')
         msg.type = MSG_NEW;
+    else if (ev.ch == ':')
+        msg.type = MSG_RUN_CMD;
     else if (ev.ch == ' ')
         msg.type = MSG_PREVIEW;
     else if (ev.ch == 'c')
@@ -394,6 +417,7 @@ static void print_help(void)
     printf("  right/Enter   Open file or enter directory\n");
     printf("  r             Rename selected file/directory\n");
     printf("  n             Create a new file or directory (trailing / for a directory)\n");
+    printf("  :             Run a shell command (prefix with !, e.g. !unzip $FILE); $FILE is the selected entry\n");
     printf("  space         Preview selected file (text pages, binary is hex-dumped)\n");
     printf("  c             Yank copy\n");
     printf("  m             Yank move\n");

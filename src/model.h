@@ -14,6 +14,7 @@ typedef enum {
     MODE_CREATE,
     MODE_CONFIRM_DELETE,
     MODE_ERROR,
+    MODE_RUN_CMD,
 } AppMode;
 
 /* Fixed 8-state cycle order for the `s` key: name -> date -> size -> ext,

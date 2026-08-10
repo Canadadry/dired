@@ -7,7 +7,8 @@
 #define HELP_TEXT \
     "up/down: Navigate  left: Parent  right/Enter: Open  r: Rename  " \
     "n: New  space: Preview  c: Yank copy  m: Yank move  " \
-    "p: Paste  s: Sort  d: Group  o: Next page  a: Toggle hidden  Backspace: Trash  x: Delete  q: Quit"
+    "p: Paste  s: Sort  d: Group  o: Next page  a: Toggle hidden  Backspace: Trash  x: Delete  " \
+    ": Run command  q: Quit"
 
 static void add_line(View *v, StyleTag style, const char *fmt, ...)
 {
@@ -28,6 +29,9 @@ static void add_prompt_line(View *v, const Model *m)
         break;
     case MODE_RENAME:
         add_line(v, STYLE_NORMAL, "Rename:");
+        break;
+    case MODE_RUN_CMD:
+        add_line(v, STYLE_NORMAL, ":%s", m->edit_buf);
         break;
     case MODE_CONFIRM_DELETE:
         if (m->confirm_permanent_delete)
