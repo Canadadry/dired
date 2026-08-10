@@ -1,7 +1,7 @@
 ---
 title: "Paginate the entry list when it's taller than the terminal"
 description: "view() draws every entry unconditionally and render() paints them at sequential rows with no bound, so a directory with more entries than terminal rows overflows off-screen with no way to scroll to the rest."
-status: needs-triage
+status: done
 ---
 
 ## Problem Statement
