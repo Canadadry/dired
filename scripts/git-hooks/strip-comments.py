@@ -14,6 +14,7 @@ whole rather than left half-eaten.
 
 Installed via scripts/git-hooks/install.sh -> .git/hooks/pre-commit.
 """
+import argparse
 import re
 import subprocess
 import sys
@@ -23,6 +24,19 @@ COMMENT_EXTENSIONS = (".c", ".h")
 
 def run(*args):
     return subprocess.run(args, capture_output=True, text=True, check=True).stdout
+
+
+def all_source_files():
+    """Every tracked .c/.h file in the repo, regardless of git status."""
+    out = run("git", "ls-files", "--", *[f"*{ext}" for ext in COMMENT_EXTENSIONS])
+    return [p for p in out.splitlines() if p]
+
+
+def all_line_numbers(path):
+    """Every line number (1-indexed) in `path`, treated as an eligible target."""
+    with open(path, "r", encoding="utf-8") as f:
+        n = f.read().count("\n") + 1
+    return set(range(1, n + 1))
 
 
 def added_line_numbers(path):
@@ -172,8 +186,9 @@ def strip_comments(text, targets):
     return "".join(out), True
 
 
-def process_file(path):
-    targets = added_line_numbers(path)
+def process_file(path, targets=None):
+    if targets is None:
+        targets = added_line_numbers(path)
     if not targets:
         return False
 
@@ -190,20 +205,36 @@ def process_file(path):
 
 
 def main():
-    staged = run(
-        "git", "diff", "--cached", "--name-only", "--diff-filter=ACM"
-    ).splitlines()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-all", "--all", dest="all", action="store_true",
+        help=(
+            "process every tracked .c/.h file in the repo, ignoring git "
+            "status, and strip disposable comments from the whole file "
+            "(not just newly added lines)"
+        ),
+    )
+    args = parser.parse_args()
+
     any_changed = False
-    for path in staged:
-        if not path.endswith(COMMENT_EXTENSIONS):
-            continue
-        if process_file(path):
-            any_changed = True
+    if args.all:
+        for path in all_source_files():
+            if process_file(path, targets=all_line_numbers(path)):
+                any_changed = True
+        message = "strip-comments --all: stripped disposable comments across the repo"
+    else:
+        staged = run(
+            "git", "diff", "--cached", "--name-only", "--diff-filter=ACM"
+        ).splitlines()
+        for path in staged:
+            if not path.endswith(COMMENT_EXTENSIONS):
+                continue
+            if process_file(path):
+                any_changed = True
+        message = "pre-commit: stripped disposable comments from newly added lines"
+
     if any_changed:
-        print(
-            "pre-commit: stripped disposable comments from newly added lines",
-            file=sys.stderr,
-        )
+        print(message, file=sys.stderr)
     return 0
 
 
