@@ -9,6 +9,8 @@ static Model make_view_model(void)
     memset(&m, 0, sizeof(m));
     m.mode = MODE_NAV;
     strcpy(m.current_path, "/tmp/proj");
+    m.term_height = 24;
+    m.term_width = 80;
     return m;
 }
 
@@ -153,9 +155,185 @@ static void test_view_error_message(void)
     }
 }
 
+static void test_view_paginates_long_list(void)
+{
+    Model m = make_view_model();
+    m.entry_count = 25;
+    for (int i = 0; i < m.entry_count; i++) {
+        char name[16];
+        snprintf(name, sizeof(name), "file%d", i);
+        set_entry(&m, i, name, S_IFREG | 0644, 100);
+    }
+    m.selected = 0;
+    m.scroll_offset = 0;
+
+    View v = view(&m);
+
+    int entry_lines = v.line_count - 3;
+    if (entry_lines != 21) {
+        TEST_ERRORF("paginate long list", "entry line count = %d, want 21", entry_lines);
+        return;
+    }
+    for (int i = 0; i < 21; i++) {
+        char name[16];
+        snprintf(name, sizeof(name), "file%d", i);
+        if (!strstr(v.lines[2 + i].text, name)) {
+            TEST_ERRORF("paginate long list", "lines[%d] = '%s', want it to contain '%s'",
+                        2 + i, v.lines[2 + i].text, name);
+        }
+    }
+    for (int i = 21; i < 25; i++) {
+        char name[16];
+        snprintf(name, sizeof(name), "file%d", i);
+        for (int l = 0; l < v.line_count; l++) {
+            if (strstr(v.lines[l].text, name)) {
+                TEST_ERRORF("paginate long list", "lines[%d] = '%s' should not contain off-page '%s'",
+                            l, v.lines[l].text, name);
+            }
+        }
+    }
+}
+
+static int ends_with_marker(const char *text, int term_width, const char *marker)
+{
+    size_t marker_len = strlen(marker);
+    size_t len = strlen(text);
+    if (len != (size_t)term_width)
+        return 0;
+    return strcmp(text + (term_width - (int)marker_len), marker) == 0;
+}
+
+static void set_paged_entries(Model *m, int count)
+{
+    m->entry_count = count;
+    for (int i = 0; i < count; i++) {
+        char name[16];
+        snprintf(name, sizeof(name), "file%d", i);
+        set_entry(m, i, name, S_IFREG | 0644, 100);
+    }
+}
+
+static void assert_no_entry_row_has_marker(View *v, const char *label)
+{
+    for (int i = 2; i < v->line_count - 1; i++) {
+        if (strstr(v->lines[i].text, "<-") || strstr(v->lines[i].text, "->")) {
+            TEST_ERRORF(label, "lines[%d] = '%s', want no marker on an entry/virtual row", i, v->lines[i].text);
+        }
+    }
+}
+
+static void test_view_page_indicator_first_page(void)
+{
+    Model m = make_view_model();
+    set_paged_entries(&m, 50);
+    m.scroll_offset = 0;
+
+    View v = view(&m);
+
+    if (!ends_with_marker(v.lines[1].text, m.term_width, "->")) {
+        TEST_ERRORF("first page", "status line = '%s', want it padded to %d cols and end with '->'",
+                    v.lines[1].text, m.term_width);
+    }
+    assert_no_entry_row_has_marker(&v, "first page");
+}
+
+static void test_view_page_indicator_middle_page(void)
+{
+    Model m = make_view_model();
+    set_paged_entries(&m, 50);
+    m.scroll_offset = 21;
+
+    View v = view(&m);
+
+    if (!ends_with_marker(v.lines[1].text, m.term_width, "<- ->")) {
+        TEST_ERRORF("middle page", "status line = '%s', want it padded to %d cols and end with '<- ->'",
+                    v.lines[1].text, m.term_width);
+    }
+    assert_no_entry_row_has_marker(&v, "middle page");
+}
+
+static void test_view_page_indicator_last_page(void)
+{
+    Model m = make_view_model();
+    set_paged_entries(&m, 50);
+    m.scroll_offset = 42;
+
+    View v = view(&m);
+
+    if (!ends_with_marker(v.lines[1].text, m.term_width, "<-")) {
+        TEST_ERRORF("last page", "status line = '%s', want it padded to %d cols and end with '<-'",
+                    v.lines[1].text, m.term_width);
+    }
+    if (strstr(v.lines[1].text, "->")) {
+        TEST_ERRORF("last page", "status line = '%s', want no '->' (nothing more below)", v.lines[1].text);
+    }
+    assert_no_entry_row_has_marker(&v, "last page");
+}
+
+static void test_view_page_indicator_survives_long_status_text(void)
+{
+    Model m = make_view_model();
+    set_paged_entries(&m, 50);
+    m.scroll_offset = 21;
+
+    char long_path[101];
+    memset(long_path, 'x', sizeof(long_path) - 1);
+    long_path[sizeof(long_path) - 1] = '\0';
+    strcpy(m.yank_path, long_path);
+    m.yank_is_move = 0;
+
+    View v = view(&m);
+
+    if (!ends_with_marker(v.lines[1].text, m.term_width, "<- ->")) {
+        TEST_ERRORF("long status text", "status line = '%s' (len %zu), want it truncated to %d cols and end with '<- ->'",
+                    v.lines[1].text, strlen(v.lines[1].text), m.term_width);
+    }
+}
+
+static void test_view_no_page_indicator_when_everything_fits(void)
+{
+    Model m = make_view_model();
+    set_paged_entries(&m, 5);
+
+    View v = view(&m);
+
+    if (strstr(v.lines[1].text, "<-") || strstr(v.lines[1].text, "->")) {
+        TEST_ERRORF("no indicator", "status line = '%s', want no marker (everything fits)", v.lines[1].text);
+    }
+}
+
+static void test_view_page_indicator_during_create_mode(void)
+{
+    Model m = make_view_model();
+    set_paged_entries(&m, 50);
+    m.mode = MODE_CREATE;
+    m.scroll_offset = 21;
+    m.selected = m.entry_count;
+    strcpy(m.edit_buf, "new.txt");
+    m.edit_len = strlen(m.edit_buf);
+
+    View v = view(&m);
+
+    if (!ends_with_marker(v.lines[1].text, m.term_width, "<- ->")) {
+        TEST_ERRORF("create mode indicator", "status line = '%s', want it padded to %d cols and end with '<- ->'",
+                    v.lines[1].text, m.term_width);
+    }
+    if (strncmp(v.lines[1].text, "Create:", strlen("Create:")) != 0) {
+        TEST_ERRORF("create mode indicator", "status line = '%s', want it to still start with 'Create:'", v.lines[1].text);
+    }
+    assert_no_entry_row_has_marker(&v, "create mode indicator");
+}
+
 void test_view(void)
 {
     test_view_nav_listing();
+    test_view_paginates_long_list();
+    test_view_page_indicator_first_page();
+    test_view_page_indicator_middle_page();
+    test_view_page_indicator_last_page();
+    test_view_page_indicator_survives_long_status_text();
+    test_view_no_page_indicator_when_everything_fits();
+    test_view_page_indicator_during_create_mode();
     test_view_create_virtual_row();
     test_view_rename_keeps_old_name_in_row();
     test_view_confirm_delete_prompt();

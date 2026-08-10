@@ -27,9 +27,11 @@ typedef enum {
     MSG_PASTE,
     MSG_CYCLE_SORT,
     MSG_CYCLE_GROUP,
+    MSG_CYCLE_PAGE,
     MSG_TOGGLE_HIDDEN,
     MSG_QUIT,
     MSG_TEXT_INPUT,
+    MSG_RESIZE,
 
     /* Cmd-completion messages: main() executes the Cmd update() returned,
      * then feeds the outcome back in as one of these. */
@@ -49,11 +51,17 @@ typedef struct {
 } MsgDirLoaded;
 
 typedef struct {
+    int width;
+    int height;
+} MsgResize;
+
+typedef struct {
     MsgType type;
     union {
         char ch;                  /* MSG_TEXT_INPUT */
         MsgDirLoaded dir_loaded;  /* MSG_DIR_LOADED */
         char error[256];          /* MSG_OP_FAILED */
+        MsgResize resize;
     };
 } Msg;
 

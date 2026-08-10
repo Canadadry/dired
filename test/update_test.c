@@ -12,6 +12,8 @@ static Model make_nav_model(int entry_count, int selected)
     m.mode = MODE_NAV;
     m.entry_count = entry_count;
     m.selected = selected;
+    m.term_height = 24;
+    m.term_width = 80;
     strcpy(m.current_path, "/tmp");
     return m;
 }
@@ -738,6 +740,66 @@ static void test_paste_pending(void)
     }
 }
 
+static void test_cycle_page_advances_to_next_page(void)
+{
+    Model in = make_nav_model(50, 5);
+    in.scroll_offset = 0;
+
+    Msg msg = { .type = MSG_CYCLE_PAGE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.selected != 21) {
+        TEST_ERRORF("cycle page advances", "selected = %d, want 21", out.selected);
+    }
+    if (out.scroll_offset != 21) {
+        TEST_ERRORF("cycle page advances", "scroll_offset = %d, want 21", out.scroll_offset);
+    }
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("cycle page advances", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+}
+
+static void test_cycle_page_wraps_from_last_page(void)
+{
+    Model in = make_nav_model(50, 45);
+    in.scroll_offset = 42;
+
+    Msg msg = { .type = MSG_CYCLE_PAGE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.selected != 0) {
+        TEST_ERRORF("cycle page wraps", "selected = %d, want 0", out.selected);
+    }
+    if (out.scroll_offset != 0) {
+        TEST_ERRORF("cycle page wraps", "scroll_offset = %d, want 0", out.scroll_offset);
+    }
+}
+
+static void test_cycle_page_noop_when_everything_fits(void)
+{
+    Model in = make_nav_model(5, 2);
+    in.scroll_offset = 0;
+
+    Msg msg = { .type = MSG_CYCLE_PAGE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.selected != 2) {
+        TEST_ERRORF("cycle page noop", "selected = %d, want 2 (unchanged)", out.selected);
+    }
+    if (out.scroll_offset != 0) {
+        TEST_ERRORF("cycle page noop", "scroll_offset = %d, want 0 (unchanged)", out.scroll_offset);
+    }
+}
+
 static void test_cycle_sort_wraps_through_all_eight_states(void)
 {
     SortMode expected[] = {
@@ -898,9 +960,94 @@ static void test_error_dismissed_by_any_key(void)
     }
 }
 
+static void test_resize_updates_size_and_recomputes_scroll(void)
+{
+    Model in = make_nav_model(50, 25);
+    in.scroll_offset = 0;
+
+    Msg msg = { .type = MSG_RESIZE };
+    msg.resize.width = 100;
+    msg.resize.height = 40;
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.term_height != 40 || out.term_width != 100) {
+        TEST_ERRORF("resize", "term_height/term_width = %d/%d, want 40/100", out.term_height, out.term_width);
+    }
+    if (out.scroll_offset != 0) {
+        TEST_ERRORF("resize", "scroll_offset = %d, want 0", out.scroll_offset);
+    }
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("resize", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+}
+
+static void test_move_down_crosses_page_boundary(void)
+{
+    Model in = make_nav_model(50, 20);
+    in.scroll_offset = 0;
+
+    Msg msg = { .type = MSG_MOVE_DOWN };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.selected != 21) {
+        TEST_ERRORF("move down crosses page", "selected = %d, want 21", out.selected);
+    }
+    if (out.scroll_offset != 21) {
+        TEST_ERRORF("move down crosses page", "scroll_offset = %d, want 21", out.scroll_offset);
+    }
+}
+
+static void test_move_up_crosses_page_boundary_back(void)
+{
+    Model in = make_nav_model(50, 21);
+    in.scroll_offset = 21;
+
+    Msg msg = { .type = MSG_MOVE_UP };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.selected != 20) {
+        TEST_ERRORF("move up crosses page back", "selected = %d, want 20", out.selected);
+    }
+    if (out.scroll_offset != 0) {
+        TEST_ERRORF("move up crosses page back", "scroll_offset = %d, want 0", out.scroll_offset);
+    }
+}
+
+static void test_new_leaves_scroll_offset_untouched(void)
+{
+    Model in = make_nav_model(50, 25);
+    in.scroll_offset = 21;
+
+    Msg msg = { .type = MSG_NEW };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.mode != MODE_CREATE) {
+        TEST_ERRORF("new leaves scroll", "mode = %d, want MODE_CREATE", out.mode);
+    }
+    if (out.scroll_offset != 21) {
+        TEST_ERRORF("new leaves scroll", "scroll_offset = %d, want 21 (untouched)", out.scroll_offset);
+    }
+}
+
 void test_update(void)
 {
     test_move_selection();
+    test_resize_updates_size_and_recomputes_scroll();
+    test_move_down_crosses_page_boundary();
+    test_move_up_crosses_page_boundary_back();
+    test_new_leaves_scroll_offset_untouched();
     test_go_parent();
     test_activate();
     test_preview();
@@ -923,6 +1070,9 @@ void test_update(void)
     test_yank_replaces_pending();
     test_paste_nothing_pending_is_noop();
     test_paste_pending();
+    test_cycle_page_advances_to_next_page();
+    test_cycle_page_wraps_from_last_page();
+    test_cycle_page_noop_when_everything_fits();
     test_cycle_sort_wraps_through_all_eight_states();
     test_cycle_group_wraps_through_all_three_states();
     test_toggle_hidden();

@@ -57,6 +57,10 @@ typedef struct {
     GroupMode group_mode;
     int show_hidden;
 
+    int term_height;
+    int term_width;
+    int scroll_offset;
+
     AppMode mode;
     char edit_buf[NAME_MAX_LEN + 1];
     size_t edit_len;

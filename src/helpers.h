@@ -19,6 +19,10 @@ void find_available_name(const char *base_name, const Entry *entries, int entry_
                           char *out_name, size_t out_size);
 NameKind classify_new_name(const char *raw, char *out_name, size_t out_size);
 
+int visible_entry_rows(int term_height, int has_virtual_line);
+
+int page_snap_offset(int selected, int entry_count, int visible_rows);
+
 /* Relative order of two entries under the given sort key/direction and
  * directory-grouping mode. Returns <0, 0, >0 like strcmp/qsort. Any tie
  * (including the extension key's no-extension bucket) breaks by name,

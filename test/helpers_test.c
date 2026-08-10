@@ -262,6 +262,61 @@ static void test_entry_compare(void)
     }
 }
 
+static void test_visible_entry_rows(void)
+{
+    typedef struct {
+        const char *label;
+        int term_height;
+        int has_virtual_line;
+        int expected;
+    } Case;
+
+    Case cases[] = {
+        {"typical terminal, no virtual line", 24, 0, 21},
+        {"typical terminal, with virtual line", 24, 1, 20},
+        {"short terminal, no virtual line", 10, 0, 7},
+        {"minimum chrome-only terminal", 3, 0, 0},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        int got = visible_entry_rows(cases[i].term_height, cases[i].has_virtual_line);
+        if (got != cases[i].expected) {
+            TEST_ERRORF(cases[i].label, "visible_entry_rows(%d, %d) = %d, want %d",
+                        cases[i].term_height, cases[i].has_virtual_line, got, cases[i].expected);
+        }
+    }
+}
+
+static void test_page_snap_offset(void)
+{
+    typedef struct {
+        const char *label;
+        int selected;
+        int entry_count;
+        int visible_rows;
+        int expected;
+    } Case;
+
+    Case cases[] = {
+        {"exact fit, everything on one page", 5, 10, 10, 0},
+        {"more entries than fit, first page", 3, 50, 20, 0},
+        {"more entries than fit, crosses into second page", 20, 50, 20, 20},
+        {"more entries than fit, last row of a page stays on that page", 19, 50, 20, 0},
+        {"fewer entries than fit, single page", 2, 5, 20, 0},
+        {"last page shorter than a full page", 44, 45, 20, 40},
+        {"selected past entry_count clamps offset to entry_count", 50, 40, 25, 40},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        int got = page_snap_offset(cases[i].selected, cases[i].entry_count, cases[i].visible_rows);
+        if (got != cases[i].expected) {
+            TEST_ERRORF(cases[i].label, "page_snap_offset(%d, %d, %d) = %d, want %d",
+                        cases[i].selected, cases[i].entry_count, cases[i].visible_rows,
+                        got, cases[i].expected);
+        }
+    }
+}
+
 void test_helpers(void)
 {
     test_is_protected_name();
@@ -271,4 +326,6 @@ void test_helpers(void)
     test_find_available_name();
     test_classify_new_name();
     test_entry_compare();
+    test_visible_entry_rows();
+    test_page_snap_offset();
 }

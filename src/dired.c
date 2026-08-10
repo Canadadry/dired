@@ -14,11 +14,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
 #define PREVIEW_SNIFF_LEN 512
+#define BUILD_TIMESTAMP __DATE__ " " __TIME__
 
 /* main() is the only impure code in the program: the only place that calls
  * a tb_* function, and the only place that touches the filesystem or spawns
@@ -272,6 +274,13 @@ static Msg translate_event(struct tb_event ev, AppMode mode)
 {
     Msg msg = { .type = MSG_NONE };
 
+    if (ev.type == TB_EVENT_RESIZE) {
+        msg.type = MSG_RESIZE;
+        msg.resize.width = ev.w;
+        msg.resize.height = ev.h;
+        return msg;
+    }
+
     if (ev.type != TB_EVENT_KEY)
         return msg;
 
@@ -333,6 +342,8 @@ static Msg translate_event(struct tb_event ev, AppMode mode)
         msg.type = MSG_CYCLE_SORT;
     else if (ev.ch == 'd')
         msg.type = MSG_CYCLE_GROUP;
+    else if (ev.ch == 'o')
+        msg.type = MSG_CYCLE_PAGE;
     else if (ev.ch == 'a' || ev.ch == 'A')
         msg.type = MSG_TOGGLE_HIDDEN;
     else if (ev.ch == 'q')
@@ -345,17 +356,72 @@ static Msg translate_event(struct tb_event ev, AppMode mode)
     return msg;
 }
 
-int main(void)
+static int detect_window_size(int *cols, int *rows)
 {
+    int fd = open("/dev/tty", O_RDONLY);
+    if (fd < 0)
+        return -1;
+
+    struct winsize ws;
+    int rc = ioctl(fd, TIOCGWINSZ, &ws);
+    close(fd);
+    if (rc != 0)
+        return -1;
+
+    *cols = ws.ws_col;
+    *rows = ws.ws_row;
+    return 0;
+}
+
+static void print_help(void)
+{
+    printf("dired - terminal file explorer\n\n");
+    printf("Usage: dired [-help]\n\n");
+    printf("Controls:\n");
+    printf("  up/down       Navigate\n");
+    printf("  left          Go to parent directory\n");
+    printf("  right/Enter   Open file or enter directory\n");
+    printf("  r             Rename selected file/directory\n");
+    printf("  n             Create a new file or directory (trailing / for a directory)\n");
+    printf("  space         Preview selected file (text pages, binary is hex-dumped)\n");
+    printf("  c             Yank copy\n");
+    printf("  m             Yank move\n");
+    printf("  p             Paste\n");
+    printf("  s             Cycle sort key/direction (name, date, size, extension)\n");
+    printf("  d             Cycle directory grouping (first, last, mixed)\n");
+    printf("  o             Jump to the next page (wraps to the first page)\n");
+    printf("  a             Toggle hidden files\n");
+    printf("  Backspace     Delete selected file/directory\n");
+    printf("  q             Quit\n\n");
+    printf("Build time: %s\n", BUILD_TIMESTAMP);
+
+    int cols, rows;
+    if (detect_window_size(&cols, &rows) == 0)
+        printf("Detected window size: %d cols x %d rows\n", cols, rows);
+    else
+        printf("Detected window size: unavailable (%s)\n", strerror(errno));
+}
+
+int main(int argc, char **argv)
+{
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-help") == 0 || strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+            print_help();
+            return EXIT_SUCCESS;
+        }
+    }
+
     tb_init();
 
     Model model;
     memset(&model, 0, sizeof(model));
     model.mode = MODE_NAV;
     getcwd(model.current_path, sizeof(model.current_path));
+    model.term_height = tb_height();
+    model.term_width = tb_width();
 
     Cmd cmd = { .type = CMD_LOAD_DIR, .show_hidden = model.show_hidden };
-    strncpy(cmd.path, model.current_path, sizeof(cmd.path) - 1);
+    snprintf(cmd.path, sizeof(cmd.path), "%s", model.current_path);
 
     while (!model.should_quit) {
         if (cmd.type != CMD_NONE) {

@@ -86,6 +86,19 @@ static const char *entry_ext(const char *name)
     return dot;
 }
 
+int visible_entry_rows(int term_height, int has_virtual_line)
+{
+    return term_height - 3 - (has_virtual_line ? 1 : 0);
+}
+
+int page_snap_offset(int selected, int entry_count, int visible_rows)
+{
+    int offset = (selected / visible_rows) * visible_rows;
+    if (offset > entry_count)
+        offset = entry_count;
+    return offset;
+}
+
 int entry_compare(const Entry *a, const Entry *b, SortMode sort_mode, GroupMode group_mode)
 {
     if (group_mode != GROUP_MIXED) {

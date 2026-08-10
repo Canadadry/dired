@@ -5,13 +5,15 @@
 
 static void join_path(const char *dir, const char *name, char *out, size_t out_size)
 {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
     snprintf(out, out_size, "%s/%s", dir, name);
+#pragma GCC diagnostic pop
 }
 
 static void parent_path(const char *path, char *out, size_t out_size)
 {
-    strncpy(out, path, out_size - 1);
-    out[out_size - 1] = '\0';
+    snprintf(out, out_size, "%s", path);
 
     if (strcmp(out, "/") == 0)
         return;
@@ -24,6 +26,12 @@ static void parent_path(const char *path, char *out, size_t out_size)
         out[1] = '\0';
     else
         *slash = '\0';
+}
+
+static void recompute_scroll(Model *out_model)
+{
+    int visible_rows = visible_entry_rows(out_model->term_height, model_has_virtual_line(out_model));
+    out_model->scroll_offset = page_snap_offset(out_model->selected, out_model->entry_count, visible_rows);
 }
 
 static void start_edit(Model *out_model, AppMode new_mode)
@@ -60,16 +68,17 @@ static void resort_and_relocate(Model *out_model, const char *prev_name)
 {
     sort_entries(out_model->entries, out_model->entry_count, out_model->sort_mode, out_model->group_mode);
 
+    out_model->selected = 0;
     if (prev_name && prev_name[0] != '\0') {
         for (int i = 0; i < out_model->entry_count; i++) {
             if (strcmp(out_model->entries[i].name, prev_name) == 0) {
                 out_model->selected = i;
-                return;
+                break;
             }
         }
     }
 
-    out_model->selected = 0;
+    recompute_scroll(out_model);
 }
 
 static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
@@ -137,6 +146,18 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
         break;
     }
 
+    case MSG_CYCLE_PAGE: {
+        int visible_rows = visible_entry_rows(out_model->term_height, model_has_virtual_line(out_model));
+        if (visible_rows > 0 && out_model->entry_count > visible_rows) {
+            int next_start = out_model->scroll_offset + visible_rows;
+            if (next_start >= out_model->entry_count)
+                next_start = 0;
+            out_model->selected = next_start;
+            recompute_scroll(out_model);
+        }
+        break;
+    }
+
     case MSG_TOGGLE_HIDDEN:
         out_model->show_hidden = !out_model->show_hidden;
         out_cmd->type = CMD_LOAD_DIR;
@@ -152,11 +173,13 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
     case MSG_MOVE_UP:
         if (out_model->selected > 0)
             out_model->selected--;
+        recompute_scroll(out_model);
         break;
 
     case MSG_MOVE_DOWN:
         if (out_model->selected < out_model->entry_count - 1)
             out_model->selected++;
+        recompute_scroll(out_model);
         break;
 
     case MSG_GO_PARENT:
@@ -300,6 +323,12 @@ void update(const Msg *msg, const Model *model, Model *out_model, Cmd *out_cmd)
         out_model->mode = MODE_ERROR;
         strncpy(out_model->error_msg, msg->error, sizeof(out_model->error_msg) - 1);
         out_model->error_msg[sizeof(out_model->error_msg) - 1] = '\0';
+        return;
+
+    case MSG_RESIZE:
+        out_model->term_height = msg->resize.height;
+        out_model->term_width = msg->resize.width;
+        recompute_scroll(out_model);
         return;
 
     default:

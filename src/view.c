@@ -7,7 +7,7 @@
 #define HELP_TEXT \
     "up/down: Navigate  left: Parent  right/Enter: Open  r: Rename  " \
     "n: New  space: Preview  c: Yank copy  m: Yank move  " \
-    "p: Paste  s: Sort  d: Group  a: Toggle hidden  Backspace: Delete  q: Quit"
+    "p: Paste  s: Sort  d: Group  o: Next page  a: Toggle hidden  Backspace: Delete  q: Quit"
 
 static void add_line(View *v, StyleTag style, const char *fmt, ...)
 {
@@ -55,6 +55,24 @@ static void add_entry_line(View *v, const Model *m, int i)
     add_line(v, style, "%s %8ld %s", perms, (long)m->entries[i].st.st_size, m->entries[i].name);
 }
 
+static void append_scroll_marker(Line *line, int term_width, const char *marker)
+{
+    int pad_to = term_width - (int)strlen(marker);
+    if (pad_to < 0)
+        pad_to = 0;
+    if ((size_t)pad_to >= sizeof(line->text))
+        pad_to = (int)sizeof(line->text) - 1;
+
+    size_t len = strlen(line->text);
+    if ((int)len != pad_to) {
+        if ((int)len < pad_to)
+            memset(line->text + len, ' ', (size_t)pad_to - len);
+        line->text[pad_to] = '\0';
+        len = (size_t)pad_to;
+    }
+    strncat(line->text, marker, sizeof(line->text) - len - 1);
+}
+
 static void add_virtual_line(View *v, const Model *m)
 {
     StyleTag style = (m->entry_count == m->selected) ? STYLE_SELECTED : STYLE_NORMAL;
@@ -68,9 +86,24 @@ View view(const Model *model)
 
     add_line(&v, STYLE_NORMAL, "Path: %s", model->current_path);
     add_prompt_line(&v, model);
+    Line *status_line = &v.lines[v.line_count - 1];
 
-    for (int i = 0; i < model->entry_count; i++)
+    int visible_rows = visible_entry_rows(model->term_height, model_has_virtual_line(model));
+    int end = model->scroll_offset + visible_rows;
+    if (end > model->entry_count)
+        end = model->entry_count;
+
+    for (int i = model->scroll_offset; i < end; i++)
         add_entry_line(&v, model, i);
+
+    int more_above = model->scroll_offset > 0;
+    int more_below = end < model->entry_count;
+    if (more_above && more_below)
+        append_scroll_marker(status_line, model->term_width, "<- ->");
+    else if (more_above)
+        append_scroll_marker(status_line, model->term_width, "<-");
+    else if (more_below)
+        append_scroll_marker(status_line, model->term_width, "->");
 
     if (model_has_virtual_line(model))
         add_virtual_line(&v, model);
