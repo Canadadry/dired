@@ -782,8 +782,9 @@ static void test_glob_commit_keeps_last_live_entries(void)
     Entry candidates[3];
     glob_fixture(candidates);
     Model in = make_glob_compose_model(GLOB_PLAIN, "report", candidates, 3);
+    int truncated;
     apply_filter(in.glob_candidates, in.glob_candidate_count, FILTER_PLAIN, "report", 0,
-                 in.sort_mode, in.group_mode, in.entries, &in.entry_count);
+                 in.sort_mode, in.group_mode, in.entries, MAX_ENTRIES, &in.entry_count, &truncated);
 
     Msg msg = { .type = MSG_ACTIVATE };
     Model out;
@@ -896,6 +897,39 @@ static void test_glob_built_truncated_enters_error_with_candidates_populated(voi
     }
     if (out.error_msg[0] == '\0') {
         TEST_ERRORF("glob built truncated", "error_msg is empty, want a message");
+    }
+}
+
+static void test_glob_built_match_overflow_enters_error_with_distinct_message(void)
+{
+    static Entry loaded[MAX_ENTRIES + 10];
+    for (int i = 0; i < MAX_ENTRIES + 10; i++)
+        snprintf(loaded[i].name, sizeof(loaded[i].name), "match%d.txt", i);
+
+    static Entry storage[MAX_ENTRIES + 10];
+    Model in = make_edit_model(MODE_GLOB, ".txt", 0, 0);
+    in.glob_type = GLOB_PLAIN;
+    in.glob_candidates = storage;
+
+    Msg msg = { .type = MSG_GLOB_BUILT };
+    msg.glob_built.entries = loaded;
+    msg.glob_built.entry_count = MAX_ENTRIES + 10;
+    msg.glob_built.truncated = 0;
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.entry_count != MAX_ENTRIES) {
+        TEST_ERRORF("glob built match overflow", "entry_count = %d, want %d", out.entry_count, MAX_ENTRIES);
+    }
+    if (out.mode != MODE_ERROR || !out.error_reenter_glob) {
+        TEST_ERRORF("glob built match overflow", "mode/error_reenter_glob = %d/%d, want MODE_ERROR/1",
+                    out.mode, out.error_reenter_glob);
+    }
+    if (strstr(out.error_msg, "narrow your pattern") == NULL) {
+        TEST_ERRORF("glob built match overflow", "error_msg = '%s', want it to mention narrowing the pattern",
+                    out.error_msg);
     }
 }
 
@@ -1078,8 +1112,9 @@ static void test_filter_commit_on_activate(void)
 static void test_filter_commit_keeps_last_live_entries(void)
 {
     Model in = make_filter_compose_model(FILTER_PLAIN, "report", 0);
+    int truncated;
     apply_filter(in.unfiltered_entries, in.unfiltered_count, FILTER_PLAIN, "report", 1,
-                 in.sort_mode, in.group_mode, in.entries, &in.entry_count);
+                 in.sort_mode, in.group_mode, in.entries, MAX_ENTRIES, &in.entry_count, &truncated);
 
     Msg msg = { .type = MSG_ACTIVATE };
     Model out;
@@ -1098,8 +1133,9 @@ static void test_filter_cancel_fully_clears(void)
 {
     Model in = make_filter_compose_model(FILTER_PLAIN, "repor", 0);
     strcpy(in.filter_pattern, "\\.(c|h)$");
+    int truncated;
     apply_filter(in.unfiltered_entries, in.unfiltered_count, FILTER_PLAIN, "repor", 1,
-                 in.sort_mode, in.group_mode, in.entries, &in.entry_count);
+                 in.sort_mode, in.group_mode, in.entries, MAX_ENTRIES, &in.entry_count, &truncated);
 
     Msg msg = { .type = MSG_CANCEL };
     Model out;
@@ -1303,6 +1339,44 @@ static void test_validate_rename(void)
     }
 }
 
+static void test_rename_clears_yank_when_source_matches(void)
+{
+    Model in = make_edit_model(MODE_RENAME, "new.txt", 1, 3);
+    strcpy(in.current_path, "/tmp");
+    strcpy(in.entries[1].name, "old.txt");
+    strcpy(in.yank_path, "/tmp/old.txt");
+    in.yank_is_move = 1;
+
+    Msg msg = { .type = MSG_ACTIVATE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.yank_path[0] != '\0') {
+        TEST_ERRORF("rename clears matching yank", "yank_path = '%s', want cleared", out.yank_path);
+    }
+}
+
+static void test_rename_leaves_yank_for_different_entry(void)
+{
+    Model in = make_edit_model(MODE_RENAME, "new.txt", 1, 3);
+    strcpy(in.current_path, "/tmp");
+    strcpy(in.entries[1].name, "old.txt");
+    strcpy(in.yank_path, "/tmp/other.txt");
+    in.yank_is_move = 1;
+
+    Msg msg = { .type = MSG_ACTIVATE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (strcmp(out.yank_path, "/tmp/other.txt") != 0) {
+        TEST_ERRORF("rename leaves unrelated yank", "yank_path = '%s', want unchanged '/tmp/other.txt'", out.yank_path);
+    }
+}
+
 static void test_delete_requests_confirmation(void)
 {
     typedef struct {
@@ -1396,6 +1470,41 @@ static void test_confirm_delete_yes_deletes(void)
         if (out.mode != MODE_NAV) {
             TEST_ERRORF(cases[i].label, "mode = %d, want MODE_NAV", out.mode);
         }
+    }
+}
+
+static void test_confirm_delete_clears_yank_when_target_matches(void)
+{
+    Model in = make_confirm_delete_model("target", S_IFREG | 0644, 1, 3, 0);
+    strcpy(in.yank_path, "/tmp/target");
+    in.yank_is_move = 1;
+
+    Msg msg = { .type = MSG_TEXT_INPUT, .ch = 'y' };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.yank_path[0] != '\0') {
+        TEST_ERRORF("confirm delete clears matching yank", "yank_path = '%s', want cleared", out.yank_path);
+    }
+}
+
+static void test_confirm_delete_leaves_yank_for_different_entry(void)
+{
+    Model in = make_confirm_delete_model("target", S_IFREG | 0644, 1, 3, 0);
+    strcpy(in.yank_path, "/tmp/other.txt");
+    in.yank_is_move = 1;
+
+    Msg msg = { .type = MSG_TEXT_INPUT, .ch = 'y' };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (strcmp(out.yank_path, "/tmp/other.txt") != 0) {
+        TEST_ERRORF("confirm delete leaves unrelated yank", "yank_path = '%s', want unchanged '/tmp/other.txt'",
+                    out.yank_path);
     }
 }
 
@@ -1556,24 +1665,30 @@ static void test_paste_pending(void)
         const char *label;
         const char *yank_path;
         int yank_is_move;
-        const char *existing_entry;
+        const char *existing_unfiltered_entry;
+        const char *narrowed_entry;
         CmdType expected_cmd_type;
         const char *expected_path2;
     } Case;
 
     Case cases[] = {
-        {"paste copy with no collision", "/src/file.txt", 0, "other.txt",
+        {"paste copy with no collision", "/src/file.txt", 0, "other.txt", "other.txt",
          CMD_COPY, "/tmp/file.txt"},
-        {"paste move with no collision", "/src/file.txt", 1, "other.txt",
+        {"paste move with no collision", "/src/file.txt", 1, "other.txt", "other.txt",
          CMD_MOVE, "/tmp/file.txt"},
-        {"paste with name collision gets a numbered duplicate", "/src/file.txt", 0, "file.txt",
+        {"paste with name collision gets a numbered duplicate", "/src/file.txt", 0, "file.txt", "file.txt",
+         CMD_COPY, "/tmp/file (1).txt"},
+        {"paste while filtered/globbed still checks the real directory contents",
+         "/src/file.txt", 0, "file.txt", "unrelated.log",
          CMD_COPY, "/tmp/file (1).txt"},
     };
 
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
         Model in = make_nav_model(1, 0);
         strcpy(in.current_path, "/tmp");
-        strcpy(in.entries[0].name, cases[i].existing_entry);
+        strcpy(in.entries[0].name, cases[i].narrowed_entry);
+        strcpy(in.unfiltered_entries[0].name, cases[i].existing_unfiltered_entry);
+        in.unfiltered_count = 1;
         strcpy(in.yank_path, cases[i].yank_path);
         in.yank_is_move = cases[i].yank_is_move;
 
@@ -1969,6 +2084,7 @@ void test_update(void)
     test_glob_cancel_fully_clears();
     test_glob_built_populates_and_recomputes();
     test_glob_built_truncated_enters_error_with_candidates_populated();
+    test_glob_built_match_overflow_enters_error_with_distinct_message();
     test_glob_truncation_error_dismiss_reenters_glob_composing();
     test_ordinary_error_dismiss_returns_to_nav_even_with_glob_active();
     test_edit_text_entry();
@@ -1984,8 +2100,12 @@ void test_update(void)
     test_validate_run_cmd();
     test_validate_run_cmd_carries_selected_path();
     test_validate_rename();
+    test_rename_clears_yank_when_source_matches();
+    test_rename_leaves_yank_for_different_entry();
     test_delete_requests_confirmation();
     test_confirm_delete_yes_deletes();
+    test_confirm_delete_clears_yank_when_target_matches();
+    test_confirm_delete_leaves_yank_for_different_entry();
     test_confirm_delete_anything_else_cancels();
     test_yank();
     test_yank_replaces_pending();

@@ -20,7 +20,8 @@ void apply_filter(const Entry *unfiltered_entries, int unfiltered_count,
                    FilterType filter_type, const char *filter_pattern,
                    int empty_matches_all,
                    SortMode sort_mode, GroupMode group_mode,
-                   Entry *out_entries, int *out_entry_count);
+                   Entry *out_entries, int out_capacity, int *out_entry_count,
+                   int *out_truncated);
 void split_nul_delimited(const char *buf, size_t len, const char *cwd,
                           int max_count, Entry *out_entries,
                           int *out_count, int *out_truncated);

@@ -94,6 +94,9 @@ int visible_entry_rows(int term_height, int has_virtual_line)
 
 int page_snap_offset(int selected, int entry_count, int visible_rows)
 {
+    if (visible_rows <= 0)
+        return 0;
+
     int offset = (selected / visible_rows) * visible_rows;
     if (offset > entry_count)
         offset = entry_count;
@@ -186,8 +189,11 @@ void apply_filter(const Entry *unfiltered_entries, int unfiltered_count,
                    FilterType filter_type, const char *filter_pattern,
                    int empty_matches_all,
                    SortMode sort_mode, GroupMode group_mode,
-                   Entry *out_entries, int *out_entry_count)
+                   Entry *out_entries, int out_capacity, int *out_entry_count,
+                   int *out_truncated)
 {
+    *out_truncated = 0;
+
     if (filter_type != FILTER_NONE && filter_pattern[0] == '\0' && !empty_matches_all) {
         *out_entry_count = 0;
         return;
@@ -195,8 +201,13 @@ void apply_filter(const Entry *unfiltered_entries, int unfiltered_count,
 
     int count = 0;
     for (int i = 0; i < unfiltered_count; i++) {
-        if (filter_matches(unfiltered_entries[i].name, filter_type, filter_pattern))
-            out_entries[count++] = unfiltered_entries[i];
+        if (!filter_matches(unfiltered_entries[i].name, filter_type, filter_pattern))
+            continue;
+        if (count >= out_capacity) {
+            *out_truncated = 1;
+            continue;
+        }
+        out_entries[count++] = unfiltered_entries[i];
     }
 
     sort_entries(out_entries, count, sort_mode, group_mode);

@@ -159,7 +159,7 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
         const char *base_name = slash ? slash + 1 : out_model->yank_path;
 
         char resolved_name[NAME_MAX_LEN + 1];
-        find_available_name(base_name, out_model->entries, out_model->entry_count,
+        find_available_name(base_name, out_model->unfiltered_entries, out_model->unfiltered_count,
                              resolved_name, sizeof(resolved_name));
 
         out_cmd->type = out_model->yank_is_move ? CMD_MOVE : CMD_COPY;
@@ -274,10 +274,11 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
 
 static void recompute_filter_live(Model *out_model)
 {
+    int truncated;
     apply_filter(out_model->unfiltered_entries, out_model->unfiltered_count,
                  out_model->filter_type, out_model->edit_buf, 1,
                  out_model->sort_mode, out_model->group_mode,
-                 out_model->entries, &out_model->entry_count);
+                 out_model->entries, MAX_ENTRIES, &out_model->entry_count, &truncated);
     out_model->selected = 0;
     recompute_scroll(out_model);
 }
@@ -287,14 +288,26 @@ static FilterType glob_as_filter_type(GlobType t)
     return (t == GLOB_REGEX) ? FILTER_REGEX : FILTER_PLAIN;
 }
 
+static void enter_glob_match_truncated_error(Model *out_model)
+{
+    out_model->mode = MODE_ERROR;
+    out_model->error_reenter_glob = 1;
+    snprintf(out_model->error_msg, sizeof(out_model->error_msg),
+             "too many matches (%d+) - narrow your pattern", MAX_ENTRIES);
+}
+
 static void recompute_glob_live(Model *out_model)
 {
+    int truncated;
     apply_filter(out_model->glob_candidates, out_model->glob_candidate_count,
                  glob_as_filter_type(out_model->glob_type), out_model->edit_buf, 0,
                  out_model->sort_mode, out_model->group_mode,
-                 out_model->entries, &out_model->entry_count);
+                 out_model->entries, MAX_ENTRIES, &out_model->entry_count, &truncated);
     out_model->selected = 0;
     recompute_scroll(out_model);
+
+    if (truncated)
+        enter_glob_match_truncated_error(out_model);
 }
 
 static void handle_edit(const Msg *msg, Model *out_model, Cmd *out_cmd)
@@ -362,6 +375,9 @@ static void handle_edit(const Msg *msg, Model *out_model, Cmd *out_cmd)
             dirname_of(out_model->entries[out_model->selected].name, out_model->current_path,
                        rename_dir, sizeof(rename_dir));
             join_path(rename_dir, out_model->edit_buf, out_cmd->path2, sizeof(out_cmd->path2));
+
+            if (strcmp(out_cmd->path, out_model->yank_path) == 0)
+                out_model->yank_path[0] = '\0';
         } else if (out_model->mode == MODE_CREATE) {
             char name[NAME_MAX_LEN + 1];
             NameKind kind = classify_new_name(out_model->edit_buf, name, sizeof(name));
@@ -406,6 +422,9 @@ static void handle_confirm_delete(const Msg *msg, Model *out_model, Cmd *out_cmd
     out_cmd->type = out_model->confirm_permanent_delete ? CMD_DELETE : CMD_TRASH;
     out_cmd->is_dir = S_ISDIR(e->st.st_mode);
     join_path(out_model->current_path, e->name, out_cmd->path, sizeof(out_cmd->path));
+
+    if (strcmp(out_cmd->path, out_model->yank_path) == 0)
+        out_model->yank_path[0] = '\0';
 }
 
 static void handle_glob_built(const Msg *msg, Model *out_model)
@@ -418,12 +437,16 @@ static void handle_glob_built(const Msg *msg, Model *out_model)
     if (out_model->mode == MODE_GLOB) {
         recompute_glob_live(out_model);
     } else {
+        int truncated;
         apply_filter(out_model->glob_candidates, out_model->glob_candidate_count,
                      glob_as_filter_type(out_model->glob_type), out_model->glob_pattern, 0,
                      out_model->sort_mode, out_model->group_mode,
-                     out_model->entries, &out_model->entry_count);
+                     out_model->entries, MAX_ENTRIES, &out_model->entry_count, &truncated);
         out_model->selected = 0;
         recompute_scroll(out_model);
+
+        if (truncated)
+            enter_glob_match_truncated_error(out_model);
     }
 
     if (out_model->glob_truncated) {
@@ -446,10 +469,11 @@ static void handle_dir_loaded(const Msg *msg, Model *out_model)
             sizeof(out_model->current_path) - 1);
     out_model->current_path[sizeof(out_model->current_path) - 1] = '\0';
 
+    int truncated;
     apply_filter(out_model->unfiltered_entries, out_model->unfiltered_count,
                  out_model->filter_type, out_model->filter_pattern, 1,
                  out_model->sort_mode, out_model->group_mode,
-                 out_model->entries, &out_model->entry_count);
+                 out_model->entries, MAX_ENTRIES, &out_model->entry_count, &truncated);
     relocate_selected(out_model, prev_name);
 }
 

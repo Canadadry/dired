@@ -305,6 +305,8 @@ static void test_page_snap_offset(void)
         {"fewer entries than fit, single page", 2, 5, 20, 0},
         {"last page shorter than a full page", 44, 45, 20, 40},
         {"selected past entry_count clamps offset to entry_count", 50, 40, 25, 40},
+        {"zero visible rows stays at top instead of dividing by zero", 5, 10, 0, 0},
+        {"negative visible rows stays at top instead of dividing by zero", 5, 10, -1, 0},
     };
 
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
@@ -412,18 +414,61 @@ static void test_apply_filter(void)
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
         Entry out[4];
         int out_count = -1;
+        int out_truncated = -1;
         apply_filter(unfiltered, 4, cases[i].type, cases[i].pattern, cases[i].empty_matches_all,
-                     SORT_NAME_ASC, GROUP_MIXED, out, &out_count);
+                     SORT_NAME_ASC, GROUP_MIXED, out, 4, &out_count, &out_truncated);
 
         if (out_count != cases[i].expected_count) {
             TEST_ERRORF(cases[i].label, "out_count = %d, want %d", out_count, cases[i].expected_count);
             continue;
+        }
+        if (out_truncated != 0) {
+            TEST_ERRORF(cases[i].label, "out_truncated = %d, want 0 (matches fit within capacity)", out_truncated);
         }
         for (int j = 0; j < out_count; j++) {
             if (strcmp(out[j].name, cases[i].expected_order[j]) != 0) {
                 TEST_ERRORF(cases[i].label, "out[%d].name = %s, want %s",
                             j, out[j].name, cases[i].expected_order[j]);
             }
+        }
+    }
+}
+
+static void test_apply_filter_truncation(void)
+{
+    Entry source[6];
+    for (int i = 0; i < 6; i++) {
+        char name[16];
+        snprintf(name, sizeof(name), "file%d.txt", i);
+        source[i] = make_entry(name);
+    }
+
+    typedef struct {
+        const char *label;
+        int source_count;
+        int capacity;
+        int expected_count;
+        int expected_truncated;
+    } Case;
+
+    Case cases[] = {
+        {"matches exceed capacity, output capped and flagged", 6, 4, 4, 1},
+        {"matches exactly fill capacity, not truncated", 4, 4, 4, 0},
+        {"matches fit under capacity, not truncated", 2, 4, 2, 0},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Entry out[4];
+        int out_count = -1;
+        int out_truncated = -1;
+        apply_filter(source, cases[i].source_count, FILTER_NONE, "", 1,
+                     SORT_NAME_ASC, GROUP_MIXED, out, 4, &out_count, &out_truncated);
+
+        if (out_count != cases[i].expected_count) {
+            TEST_ERRORF(cases[i].label, "out_count = %d, want %d", out_count, cases[i].expected_count);
+        }
+        if (out_truncated != cases[i].expected_truncated) {
+            TEST_ERRORF(cases[i].label, "out_truncated = %d, want %d", out_truncated, cases[i].expected_truncated);
         }
     }
 }
@@ -537,6 +582,7 @@ void test_helpers(void)
     test_filter_matches();
     test_filter_is_valid();
     test_apply_filter();
+    test_apply_filter_truncation();
     test_split_nul_delimited();
     test_dirname_of();
 }
