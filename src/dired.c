@@ -230,6 +230,73 @@ static Msg execute_preview(const char *path)
     return (Msg){ .type = MSG_OP_SUCCEEDED };
 }
 
+static Msg execute_build_glob(const char *cwd)
+{
+    static Entry scratch[GLOB_MAX_CANDIDATES];
+
+    int fd[2];
+    if (pipe(fd) != 0)
+        return msg_failed("glob: %s", strerror(errno));
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        close(fd[0]);
+        dup2(fd[1], STDOUT_FILENO);
+        close(fd[1]);
+
+        int devnull = open("/dev/null", O_WRONLY);
+        if (devnull >= 0) {
+            dup2(devnull, STDERR_FILENO);
+            close(devnull);
+        }
+
+        char *argv[] = { "find", (char *)cwd, "-mindepth", "1", "-print0", NULL };
+        execvp(argv[0], argv);
+        _exit(EXIT_FAILURE);
+    }
+
+    close(fd[1]);
+
+    size_t cap = 1 << 16;
+    size_t len = 0;
+    char *buf = malloc(cap);
+    if (!buf) {
+        close(fd[0]);
+        waitpid(pid, NULL, 0);
+        return msg_failed("glob: out of memory");
+    }
+
+    char chunk[4096];
+    ssize_t n;
+    while ((n = read(fd[0], chunk, sizeof(chunk))) > 0) {
+        if (len + (size_t)n > cap) {
+            cap *= 2;
+            char *grown = realloc(buf, cap);
+            if (!grown) {
+                free(buf);
+                close(fd[0]);
+                waitpid(pid, NULL, 0);
+                return msg_failed("glob: out of memory");
+            }
+            buf = grown;
+        }
+        memcpy(buf + len, chunk, (size_t)n);
+        len += (size_t)n;
+    }
+    close(fd[0]);
+    waitpid(pid, NULL, 0);
+
+    int count, truncated;
+    split_nul_delimited(buf, len, cwd, GLOB_MAX_CANDIDATES, scratch, &count, &truncated);
+    free(buf);
+
+    Msg msg = { .type = MSG_GLOB_BUILT };
+    msg.glob_built.entries = scratch;
+    msg.glob_built.entry_count = count;
+    msg.glob_built.truncated = truncated;
+    return msg;
+}
+
 static Msg execute_run_cmd(const char *cwd, const char *cmd_text, const char *selected_path)
 {
     tb_shutdown();
@@ -251,6 +318,7 @@ static Msg execute_cmd(const Cmd *cmd)
 {
     switch (cmd->type) {
     case CMD_LOAD_DIR:      return load_directory(cmd->path, cmd->show_hidden);
+    case CMD_BUILD_GLOB:    return execute_build_glob(cmd->path);
     case CMD_RENAME:        return execute_rename(cmd->path, cmd->path2);
     case CMD_CREATE_FILE:   return execute_create_file(cmd->path);
     case CMD_CREATE_DIR:    return execute_create_dir(cmd->path);
@@ -322,7 +390,8 @@ static Msg translate_event(struct tb_event ev, AppMode mode)
     if (ev.type != TB_EVENT_KEY)
         return msg;
 
-    int text_entry = (mode == MODE_RENAME || mode == MODE_CREATE || mode == MODE_RUN_CMD || mode == MODE_FILTER);
+    int text_entry = (mode == MODE_RENAME || mode == MODE_CREATE || mode == MODE_RUN_CMD ||
+                       mode == MODE_FILTER || mode == MODE_GLOB);
 
     if (text_entry) {
         if (ev.key == TB_KEY_ESC)
@@ -374,6 +443,10 @@ static Msg translate_event(struct tb_event ev, AppMode mode)
         msg.type = MSG_FILTER_PLAIN;
     else if (ev.ch == 'F')
         msg.type = MSG_FILTER_REGEX;
+    else if (ev.ch == 'g')
+        msg.type = MSG_GLOB_PLAIN;
+    else if (ev.ch == 'G')
+        msg.type = MSG_GLOB_REGEX;
     else if (ev.ch == ' ')
         msg.type = MSG_PREVIEW;
     else if (ev.ch == 'c')
@@ -432,6 +505,8 @@ static void print_help(void)
     printf("  :             Run a shell command (prefix with !, e.g. !unzip $FILE); $FILE is the selected entry\n");
     printf("  f             Filter listing by filename (plain substring)\n");
     printf("  F             Filter listing by filename (extended regex)\n");
+    printf("  g             Recursively glob the current directory tree by filename (plain substring)\n");
+    printf("  G             Recursively glob the current directory tree by filename (extended regex)\n");
     printf("  Esc           Cancel a pending yank (nav); cancel composing (Rename/Create/Filter/Run command)\n");
     printf("  space         Preview selected file (text pages, binary is hex-dumped)\n");
     printf("  c             Yank copy\n");
@@ -470,6 +545,13 @@ int main(int argc, char **argv)
     getcwd(model.current_path, sizeof(model.current_path));
     model.term_height = tb_height();
     model.term_width = tb_width();
+
+    model.glob_candidates = malloc(sizeof(Entry) * GLOB_MAX_CANDIDATES);
+    if (!model.glob_candidates) {
+        tb_shutdown();
+        fprintf(stderr, "dired: out of memory\n");
+        return EXIT_FAILURE;
+    }
 
     Cmd cmd = { .type = CMD_LOAD_DIR, .show_hidden = model.show_hidden };
     snprintf(cmd.path, sizeof(cmd.path), "%s", model.current_path);

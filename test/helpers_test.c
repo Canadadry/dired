@@ -383,27 +383,36 @@ static void test_apply_filter(void)
         const char *label;
         FilterType type;
         const char *pattern;
+        int empty_matches_all;
         int expected_count;
         const char *expected_order[4];
     } Case;
 
     Case cases[] = {
-        {"no filter keeps everything, sorted", FILTER_NONE, "",
+        {"no filter keeps everything, sorted", FILTER_NONE, "", 1,
          4, {"alpha_report.txt", "beta_report.csv", "middle.log", "zeta.txt"}},
-        {"plain filter narrows and sorts survivors", FILTER_PLAIN, "report",
+        {"plain filter narrows and sorts survivors", FILTER_PLAIN, "report", 1,
          2, {"alpha_report.txt", "beta_report.csv"}},
-        {"regex filter narrows and sorts survivors", FILTER_REGEX, "\\.(txt|csv)$",
+        {"regex filter narrows and sorts survivors", FILTER_REGEX, "\\.(txt|csv)$", 1,
          3, {"alpha_report.txt", "beta_report.csv", "zeta.txt"}},
-        {"pattern matching nothing yields empty output", FILTER_PLAIN, "nonexistent",
+        {"pattern matching nothing yields empty output", FILTER_PLAIN, "nonexistent", 1,
          0, {0}},
-        {"malformed regex yields empty output", FILTER_REGEX, "[unterminated",
+        {"malformed regex yields empty output", FILTER_REGEX, "[unterminated", 1,
          0, {0}},
+        {"empty_matches_all=true, empty plain pattern shows everything", FILTER_PLAIN, "", 1,
+         4, {"alpha_report.txt", "beta_report.csv", "middle.log", "zeta.txt"}},
+        {"empty_matches_all=false, empty plain pattern shows nothing", FILTER_PLAIN, "", 0,
+         0, {0}},
+        {"empty_matches_all=false, empty regex pattern shows nothing", FILTER_REGEX, "", 0,
+         0, {0}},
+        {"empty_matches_all=false, non-empty pattern still matches normally", FILTER_PLAIN, "report", 0,
+         2, {"alpha_report.txt", "beta_report.csv"}},
     };
 
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
         Entry out[4];
         int out_count = -1;
-        apply_filter(unfiltered, 4, cases[i].type, cases[i].pattern,
+        apply_filter(unfiltered, 4, cases[i].type, cases[i].pattern, cases[i].empty_matches_all,
                      SORT_NAME_ASC, GROUP_MIXED, out, &out_count);
 
         if (out_count != cases[i].expected_count) {
@@ -415,6 +424,101 @@ static void test_apply_filter(void)
                 TEST_ERRORF(cases[i].label, "out[%d].name = %s, want %s",
                             j, out[j].name, cases[i].expected_order[j]);
             }
+        }
+    }
+}
+
+static size_t build_nul_buf(char *out, const char *segments[], int n)
+{
+    size_t pos = 0;
+    for (int i = 0; i < n; i++) {
+        size_t l = strlen(segments[i]);
+        memcpy(out + pos, segments[i], l);
+        pos += l;
+        out[pos++] = '\0';
+    }
+    return pos;
+}
+
+static void test_split_nul_delimited(void)
+{
+    const char *cwd = "/tmp/globtest";
+
+    typedef struct {
+        const char *label;
+        const char *segments[4];
+        int segment_count;
+        int max_count;
+        int expected_count;
+        int expected_truncated;
+        const char *expected_names[4];
+    } Case;
+
+    Case cases[] = {
+        {"under the cap parses everything, not truncated",
+         {"/tmp/globtest/foo.txt", "/tmp/globtest/sub/bar.txt"}, 2, 10,
+         2, 0, {"foo.txt", "sub/bar.txt"}},
+        {"exactly at the cap is not truncated",
+         {"/tmp/globtest/foo.txt", "/tmp/globtest/sub/bar.txt"}, 2, 2,
+         2, 0, {"foo.txt", "sub/bar.txt"}},
+        {"over the cap parses only the first N and flags truncated",
+         {"/tmp/globtest/foo.txt", "/tmp/globtest/sub/bar.txt"}, 2, 1,
+         1, 1, {"foo.txt"}},
+        {"empty buffer yields zero entries",
+         {0}, 0, 10,
+         0, 0, {0}},
+        {"leading and trailing NUL produce no empty-string entries",
+         {"", "/tmp/globtest/foo.txt", ""}, 3, 10,
+         1, 0, {"foo.txt"}},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        char buf[512];
+        size_t len = build_nul_buf(buf, cases[i].segments, cases[i].segment_count);
+
+        Entry out[4];
+        int out_count = -1, out_truncated = -1;
+        split_nul_delimited(buf, len, cwd, cases[i].max_count, out, &out_count, &out_truncated);
+
+        if (out_count != cases[i].expected_count) {
+            TEST_ERRORF(cases[i].label, "out_count = %d, want %d", out_count, cases[i].expected_count);
+            continue;
+        }
+        if (out_truncated != cases[i].expected_truncated) {
+            TEST_ERRORF(cases[i].label, "out_truncated = %d, want %d", out_truncated, cases[i].expected_truncated);
+        }
+        for (int j = 0; j < out_count; j++) {
+            if (strcmp(out[j].name, cases[i].expected_names[j]) != 0) {
+                TEST_ERRORF(cases[i].label, "out[%d].name = %s, want %s",
+                            j, out[j].name, cases[i].expected_names[j]);
+            }
+        }
+    }
+}
+
+static void test_dirname_of(void)
+{
+    typedef struct {
+        const char *label;
+        const char *name;
+        const char *current_path;
+        const char *expected;
+    } Case;
+
+    Case cases[] = {
+        {"bare name returns current_path unchanged", "foo.c", "/home/user", "/home/user"},
+        {"one-level nested name", "src/foo.c", "/home/user", "/home/user/src"},
+        {"multi-level nested name", "a/b/c.txt", "/home/user", "/home/user/a/b"},
+        {"leading-slash-only oddity returns current_path unchanged", "/oddly.txt", "/home/user", "/home/user"},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        char out[PATH_MAX_LEN];
+        dirname_of(cases[i].name, cases[i].current_path, out, sizeof(out));
+
+        if (strcmp(out, cases[i].expected) != 0) {
+            TEST_ERRORF(cases[i].label, "dirname_of(%s, %s) = %s, want %s",
+                        cases[i].name, cases[i].current_path, out, cases[i].expected);
         }
     }
 }
@@ -433,4 +537,6 @@ void test_helpers(void)
     test_filter_matches();
     test_filter_is_valid();
     test_apply_filter();
+    test_split_nul_delimited();
+    test_dirname_of();
 }

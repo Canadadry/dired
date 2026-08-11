@@ -1,7 +1,7 @@
 ---
 title: "Recursive glob filter (plain / regex, across the directory tree)"
 description: "Filter mode (g/G... now f/F) only narrows the current, single directory's listing — there's no way to find a file by name/pattern anywhere beneath the current directory without leaving dired."
-status: needs-triage
+status: done
 ---
 
 ## Problem Statement

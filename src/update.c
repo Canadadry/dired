@@ -106,10 +106,31 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
     case MSG_FILTER_REGEX:
         out_model->mode = MODE_FILTER;
         out_model->filter_type = (msg->type == MSG_FILTER_PLAIN) ? FILTER_PLAIN : FILTER_REGEX;
+        out_model->glob_type = GLOB_NONE;
+        out_model->glob_pattern[0] = '\0';
         strncpy(out_model->edit_buf, out_model->filter_pattern, sizeof(out_model->edit_buf) - 1);
         out_model->edit_buf[sizeof(out_model->edit_buf) - 1] = '\0';
         out_model->edit_len = strlen(out_model->edit_buf);
         break;
+
+    case MSG_GLOB_PLAIN:
+    case MSG_GLOB_REGEX: {
+        int need_build = (out_model->glob_type == GLOB_NONE);
+        out_model->mode = MODE_GLOB;
+        out_model->glob_type = (msg->type == MSG_GLOB_PLAIN) ? GLOB_PLAIN : GLOB_REGEX;
+        out_model->filter_type = FILTER_NONE;
+        out_model->filter_pattern[0] = '\0';
+        strncpy(out_model->edit_buf, out_model->glob_pattern, sizeof(out_model->edit_buf) - 1);
+        out_model->edit_buf[sizeof(out_model->edit_buf) - 1] = '\0';
+        out_model->edit_len = strlen(out_model->edit_buf);
+
+        if (need_build) {
+            out_cmd->type = CMD_BUILD_GLOB;
+            strncpy(out_cmd->path, out_model->current_path, sizeof(out_cmd->path) - 1);
+            out_cmd->path[sizeof(out_cmd->path) - 1] = '\0';
+        }
+        break;
+    }
 
     case MSG_DELETE:
     case MSG_DELETE_PERMANENT:
@@ -205,6 +226,8 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
     case MSG_GO_PARENT:
         out_model->filter_type = FILTER_NONE;
         out_model->filter_pattern[0] = '\0';
+        out_model->glob_type = GLOB_NONE;
+        out_model->glob_pattern[0] = '\0';
         out_cmd->type = CMD_LOAD_DIR;
         out_cmd->show_hidden = out_model->show_hidden;
         parent_path(out_model->current_path, out_cmd->path, sizeof(out_cmd->path));
@@ -232,6 +255,8 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
                 break;
             out_model->filter_type = FILTER_NONE;
             out_model->filter_pattern[0] = '\0';
+            out_model->glob_type = GLOB_NONE;
+            out_model->glob_pattern[0] = '\0';
             out_cmd->type = CMD_LOAD_DIR;
             out_cmd->show_hidden = out_model->show_hidden;
             join_path(out_model->current_path, e->name, out_cmd->path, sizeof(out_cmd->path));
@@ -250,7 +275,22 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
 static void recompute_filter_live(Model *out_model)
 {
     apply_filter(out_model->unfiltered_entries, out_model->unfiltered_count,
-                 out_model->filter_type, out_model->edit_buf,
+                 out_model->filter_type, out_model->edit_buf, 1,
+                 out_model->sort_mode, out_model->group_mode,
+                 out_model->entries, &out_model->entry_count);
+    out_model->selected = 0;
+    recompute_scroll(out_model);
+}
+
+static FilterType glob_as_filter_type(GlobType t)
+{
+    return (t == GLOB_REGEX) ? FILTER_REGEX : FILTER_PLAIN;
+}
+
+static void recompute_glob_live(Model *out_model)
+{
+    apply_filter(out_model->glob_candidates, out_model->glob_candidate_count,
+                 glob_as_filter_type(out_model->glob_type), out_model->edit_buf, 0,
                  out_model->sort_mode, out_model->group_mode,
                  out_model->entries, &out_model->entry_count);
     out_model->selected = 0;
@@ -265,6 +305,10 @@ static void handle_edit(const Msg *msg, Model *out_model, Cmd *out_cmd)
             out_model->filter_type = FILTER_NONE;
             out_model->filter_pattern[0] = '\0';
             recompute_filter_live(out_model);
+        } else if (out_model->mode == MODE_GLOB) {
+            out_model->glob_type = GLOB_NONE;
+            out_model->glob_pattern[0] = '\0';
+            recompute_filter_live(out_model);
         }
         cancel_edit(out_model);
         break;
@@ -274,6 +318,8 @@ static void handle_edit(const Msg *msg, Model *out_model, Cmd *out_cmd)
             out_model->edit_buf[--out_model->edit_len] = '\0';
         if (out_model->mode == MODE_FILTER)
             recompute_filter_live(out_model);
+        else if (out_model->mode == MODE_GLOB)
+            recompute_glob_live(out_model);
         break;
 
     case MSG_TEXT_INPUT:
@@ -283,12 +329,21 @@ static void handle_edit(const Msg *msg, Model *out_model, Cmd *out_cmd)
         }
         if (out_model->mode == MODE_FILTER)
             recompute_filter_live(out_model);
+        else if (out_model->mode == MODE_GLOB)
+            recompute_glob_live(out_model);
         break;
 
     case MSG_ACTIVATE:
         if (out_model->mode == MODE_FILTER) {
             strncpy(out_model->filter_pattern, out_model->edit_buf, sizeof(out_model->filter_pattern) - 1);
             out_model->filter_pattern[sizeof(out_model->filter_pattern) - 1] = '\0';
+            cancel_edit(out_model);
+            break;
+        }
+
+        if (out_model->mode == MODE_GLOB) {
+            strncpy(out_model->glob_pattern, out_model->edit_buf, sizeof(out_model->glob_pattern) - 1);
+            out_model->glob_pattern[sizeof(out_model->glob_pattern) - 1] = '\0';
             cancel_edit(out_model);
             break;
         }
@@ -302,8 +357,11 @@ static void handle_edit(const Msg *msg, Model *out_model, Cmd *out_cmd)
             out_cmd->type = CMD_RENAME;
             join_path(out_model->current_path, out_model->entries[out_model->selected].name,
                       out_cmd->path, sizeof(out_cmd->path));
-            join_path(out_model->current_path, out_model->edit_buf,
-                      out_cmd->path2, sizeof(out_cmd->path2));
+
+            char rename_dir[PATH_MAX_LEN];
+            dirname_of(out_model->entries[out_model->selected].name, out_model->current_path,
+                       rename_dir, sizeof(rename_dir));
+            join_path(rename_dir, out_model->edit_buf, out_cmd->path2, sizeof(out_cmd->path2));
         } else if (out_model->mode == MODE_CREATE) {
             char name[NAME_MAX_LEN + 1];
             NameKind kind = classify_new_name(out_model->edit_buf, name, sizeof(name));
@@ -350,6 +408,32 @@ static void handle_confirm_delete(const Msg *msg, Model *out_model, Cmd *out_cmd
     join_path(out_model->current_path, e->name, out_cmd->path, sizeof(out_cmd->path));
 }
 
+static void handle_glob_built(const Msg *msg, Model *out_model)
+{
+    out_model->glob_candidate_count = msg->glob_built.entry_count;
+    memcpy(out_model->glob_candidates, msg->glob_built.entries,
+           sizeof(Entry) * msg->glob_built.entry_count);
+    out_model->glob_truncated = msg->glob_built.truncated;
+
+    if (out_model->mode == MODE_GLOB) {
+        recompute_glob_live(out_model);
+    } else {
+        apply_filter(out_model->glob_candidates, out_model->glob_candidate_count,
+                     glob_as_filter_type(out_model->glob_type), out_model->glob_pattern, 0,
+                     out_model->sort_mode, out_model->group_mode,
+                     out_model->entries, &out_model->entry_count);
+        out_model->selected = 0;
+        recompute_scroll(out_model);
+    }
+
+    if (out_model->glob_truncated) {
+        out_model->mode = MODE_ERROR;
+        out_model->error_reenter_glob = 1;
+        snprintf(out_model->error_msg, sizeof(out_model->error_msg),
+                 "results incomplete (%d+ matches) - try a subfolder", GLOB_MAX_CANDIDATES);
+    }
+}
+
 static void handle_dir_loaded(const Msg *msg, Model *out_model)
 {
     char prev_name[NAME_MAX_LEN + 1];
@@ -363,7 +447,7 @@ static void handle_dir_loaded(const Msg *msg, Model *out_model)
     out_model->current_path[sizeof(out_model->current_path) - 1] = '\0';
 
     apply_filter(out_model->unfiltered_entries, out_model->unfiltered_count,
-                 out_model->filter_type, out_model->filter_pattern,
+                 out_model->filter_type, out_model->filter_pattern, 1,
                  out_model->sort_mode, out_model->group_mode,
                  out_model->entries, &out_model->entry_count);
     relocate_selected(out_model, prev_name);
@@ -379,7 +463,17 @@ void update(const Msg *msg, const Model *model, Model *out_model, Cmd *out_cmd)
         handle_dir_loaded(msg, out_model);
         return;
 
+    case MSG_GLOB_BUILT:
+        handle_glob_built(msg, out_model);
+        return;
+
     case MSG_OP_SUCCEEDED:
+        if (out_model->glob_type != GLOB_NONE) {
+            out_cmd->type = CMD_BUILD_GLOB;
+            strncpy(out_cmd->path, out_model->current_path, sizeof(out_cmd->path) - 1);
+            out_cmd->path[sizeof(out_cmd->path) - 1] = '\0';
+            return;
+        }
         out_cmd->type = CMD_LOAD_DIR;
         out_cmd->show_hidden = out_model->show_hidden;
         strncpy(out_cmd->path, out_model->current_path, sizeof(out_cmd->path) - 1);
@@ -388,6 +482,7 @@ void update(const Msg *msg, const Model *model, Model *out_model, Cmd *out_cmd)
 
     case MSG_OP_FAILED:
         out_model->mode = MODE_ERROR;
+        out_model->error_reenter_glob = 0;
         strncpy(out_model->error_msg, msg->error, sizeof(out_model->error_msg) - 1);
         out_model->error_msg[sizeof(out_model->error_msg) - 1] = '\0';
         return;
@@ -405,10 +500,20 @@ void update(const Msg *msg, const Model *model, Model *out_model, Cmd *out_cmd)
     if (model->mode == MODE_NAV)
         handle_nav(msg, out_model, out_cmd);
     else if (model->mode == MODE_RENAME || model->mode == MODE_CREATE ||
-             model->mode == MODE_RUN_CMD || model->mode == MODE_FILTER)
+             model->mode == MODE_RUN_CMD || model->mode == MODE_FILTER ||
+             model->mode == MODE_GLOB)
         handle_edit(msg, out_model, out_cmd);
     else if (model->mode == MODE_CONFIRM_DELETE)
         handle_confirm_delete(msg, out_model, out_cmd);
-    else if (model->mode == MODE_ERROR)
-        out_model->mode = MODE_NAV;
+    else if (model->mode == MODE_ERROR) {
+        if (model->error_reenter_glob) {
+            out_model->mode = MODE_GLOB;
+            out_model->error_reenter_glob = 0;
+            strncpy(out_model->edit_buf, out_model->glob_pattern, sizeof(out_model->edit_buf) - 1);
+            out_model->edit_buf[sizeof(out_model->edit_buf) - 1] = '\0';
+            out_model->edit_len = strlen(out_model->edit_buf);
+        } else {
+            out_model->mode = MODE_NAV;
+        }
+    }
 }

@@ -184,9 +184,15 @@ int filter_is_valid(FilterType type, const char *pattern)
 
 void apply_filter(const Entry *unfiltered_entries, int unfiltered_count,
                    FilterType filter_type, const char *filter_pattern,
+                   int empty_matches_all,
                    SortMode sort_mode, GroupMode group_mode,
                    Entry *out_entries, int *out_entry_count)
 {
+    if (filter_type != FILTER_NONE && filter_pattern[0] == '\0' && !empty_matches_all) {
+        *out_entry_count = 0;
+        return;
+    }
+
     int count = 0;
     for (int i = 0; i < unfiltered_count; i++) {
         if (filter_matches(unfiltered_entries[i].name, filter_type, filter_pattern))
@@ -195,6 +201,71 @@ void apply_filter(const Entry *unfiltered_entries, int unfiltered_count,
 
     sort_entries(out_entries, count, sort_mode, group_mode);
     *out_entry_count = count;
+}
+
+void split_nul_delimited(const char *buf, size_t len, const char *cwd,
+                          int max_count, Entry *out_entries,
+                          int *out_count, int *out_truncated)
+{
+    size_t cwd_len = strlen(cwd);
+    int cwd_is_root = (cwd_len == 1 && cwd[0] == '/');
+    size_t strip_len = cwd_is_root ? 1 : cwd_len + 1;
+
+    int count = 0;
+    int truncated = 0;
+    size_t i = 0;
+
+    while (i < len) {
+        size_t start = i;
+        while (i < len && buf[i] != '\0')
+            i++;
+        size_t seg_len = i - start;
+        if (i < len)
+            i++;
+
+        if (seg_len == 0)
+            continue;
+
+        if (count >= max_count) {
+            truncated = 1;
+            continue;
+        }
+
+        char full_path[PATH_MAX_LEN];
+        size_t copy_len = seg_len < sizeof(full_path) - 1 ? seg_len : sizeof(full_path) - 1;
+        memcpy(full_path, buf + start, copy_len);
+        full_path[copy_len] = '\0';
+
+        int has_prefix = cwd_is_root
+            ? copy_len >= 1 && full_path[0] == '/'
+            : copy_len > cwd_len && strncmp(full_path, cwd, cwd_len) == 0 && full_path[cwd_len] == '/';
+        const char *rel = has_prefix ? full_path + strip_len : full_path;
+
+        strncpy(out_entries[count].name, rel, NAME_MAX_LEN);
+        out_entries[count].name[NAME_MAX_LEN] = '\0';
+
+        if (lstat(full_path, &out_entries[count].st) != 0)
+            memset(&out_entries[count].st, 0, sizeof(out_entries[count].st));
+
+        count++;
+    }
+
+    *out_count = count;
+    *out_truncated = truncated;
+}
+
+void dirname_of(const char *name, const char *current_path, char *out, size_t out_size)
+{
+    const char *slash = strrchr(name, '/');
+    if (!slash || slash == name) {
+        snprintf(out, out_size, "%s", current_path);
+        return;
+    }
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+    snprintf(out, out_size, "%s/%.*s", current_path, (int)(slash - name), name);
+#pragma GCC diagnostic pop
 }
 
 int is_binary_content(const unsigned char *buf, size_t len)

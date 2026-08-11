@@ -12,6 +12,7 @@ A lightweight terminal-based file manager written in C using termbox2 (vendored 
 * Preview a file's contents (paged as text, or hex-dumped if binary) without leaving the app.
 * Run an ad-hoc shell command against the current directory without leaving the app.
 * Filter the listing live by filename, either a plain substring or an extended regex.
+* Recursively glob the current directory tree by filename, either a plain substring or an extended regex.
 * Sort by name, date, size, or extension, with independent directory grouping.
 * Minimal, fast, and works entirely in the terminal.
 * Simple modal interface: navigation mode and edit mode.
@@ -49,6 +50,8 @@ Space: Preview selected file (text pages, binary is hex-dumped)
 :: Run a shell command (prefix with !, e.g. !unzip $FILE), output paged. $FILE is the selected entry's path
 f: Filter listing by filename (plain substring)
 F: Filter listing by filename (extended regex)
+g: Recursively glob the current directory tree by filename (plain substring)
+G: Recursively glob the current directory tree by filename (extended regex)
 Esc: Cancel a pending yank (nav); cancel composing (Rename/Create/Filter/Run command)
 s: Cycle sort key/direction (name, date, size, extension — asc/desc)
 d: Cycle directory grouping (first, last, mixed)

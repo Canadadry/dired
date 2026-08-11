@@ -113,6 +113,27 @@ static void test_go_parent_resets_active_filter(void)
     }
 }
 
+static void test_go_parent_resets_active_glob(void)
+{
+    Model in = make_nav_model(0, 0);
+    strcpy(in.current_path, "/home/user/project");
+    in.glob_type = GLOB_PLAIN;
+    strcpy(in.glob_pattern, "report");
+    Msg msg = { .type = MSG_GO_PARENT };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.glob_type != GLOB_NONE || out.glob_pattern[0] != '\0') {
+        TEST_ERRORF("go parent resets glob", "glob = {%d, '%s'}, want {GLOB_NONE, ''}",
+                    out.glob_type, out.glob_pattern);
+    }
+    if (cmd.type != CMD_LOAD_DIR) {
+        TEST_ERRORF("go parent resets glob", "cmd.type = %d, want CMD_LOAD_DIR", cmd.type);
+    }
+}
+
 static Model make_model_with_entry(const char *current_path, const char *name, mode_t st_mode, int selected)
 {
     Model m = make_nav_model(1, selected);
@@ -200,6 +221,38 @@ static void test_activate_into_directory_resets_filter_but_opening_a_file_does_n
         if (out.filter_type != cases[i].expected_type || strcmp(out.filter_pattern, cases[i].expected_pattern) != 0) {
             TEST_ERRORF(cases[i].label, "filter = {%d, '%s'}, want {%d, '%s'}",
                         out.filter_type, out.filter_pattern, cases[i].expected_type, cases[i].expected_pattern);
+        }
+    }
+}
+
+static void test_activate_into_directory_resets_active_glob_but_opening_a_file_does_not(void)
+{
+    typedef struct {
+        const char *label;
+        const char *name;
+        mode_t st_mode;
+        GlobType expected_type;
+        const char *expected_pattern;
+    } Case;
+
+    Case cases[] = {
+        {"activating into a directory resets an active glob", "sub", S_IFDIR | 0755, GLOB_NONE, ""},
+        {"opening a file leaves an active glob untouched", "main.c", S_IFREG | 0644, GLOB_PLAIN, "report"},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model in = make_model_with_entry("/home/user", cases[i].name, cases[i].st_mode, 0);
+        in.glob_type = GLOB_PLAIN;
+        strcpy(in.glob_pattern, "report");
+        Msg msg = { .type = MSG_ACTIVATE };
+        Model out;
+        Cmd cmd;
+
+        update(&msg, &in, &out, &cmd);
+
+        if (out.glob_type != cases[i].expected_type || strcmp(out.glob_pattern, cases[i].expected_pattern) != 0) {
+            TEST_ERRORF(cases[i].label, "glob = {%d, '%s'}, want {%d, '%s'}",
+                        out.glob_type, out.glob_pattern, cases[i].expected_type, cases[i].expected_pattern);
         }
     }
 }
@@ -316,6 +369,26 @@ static void test_op_succeeded(void)
     }
 }
 
+static void test_op_succeeded_rebuilds_glob_when_active(void)
+{
+    Model in = make_nav_model(3, 1);
+    strcpy(in.current_path, "/home/user");
+    in.glob_type = GLOB_PLAIN;
+    strcpy(in.glob_pattern, "report");
+    Msg msg = { .type = MSG_OP_SUCCEEDED };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_BUILD_GLOB) {
+        TEST_ERRORF("op succeeded rebuilds glob", "cmd.type = %d, want CMD_BUILD_GLOB", cmd.type);
+    }
+    if (strcmp(cmd.path, "/home/user") != 0) {
+        TEST_ERRORF("op succeeded rebuilds glob", "cmd.path = %s, want /home/user", cmd.path);
+    }
+}
+
 static void test_op_failed(void)
 {
     Model in = make_nav_model(3, 1);
@@ -426,6 +499,88 @@ static void test_enter_filter_mode(void)
     }
 }
 
+static void test_enter_glob_mode(void)
+{
+    typedef struct {
+        const char *label;
+        MsgType msg_type;
+        GlobType prior_type;
+        const char *prior_pattern;
+        int prior_candidate_count;
+        GlobType expected_type;
+        const char *expected_edit_buf;
+        CmdType expected_cmd_type;
+    } Case;
+
+    Case cases[] = {
+        {"g with no prior glob starts empty plain composition and builds candidates",
+         MSG_GLOB_PLAIN, GLOB_NONE, "", 0, GLOB_PLAIN, "", CMD_BUILD_GLOB},
+        {"G with no prior glob starts empty regex composition and builds candidates",
+         MSG_GLOB_REGEX, GLOB_NONE, "", 0, GLOB_REGEX, "", CMD_BUILD_GLOB},
+        {"g on an active regex glob prefills pattern, switches type to plain, reuses candidates",
+         MSG_GLOB_PLAIN, GLOB_REGEX, "\\.(c|h)$", 5, GLOB_PLAIN, "\\.(c|h)$", CMD_NONE},
+        {"G on an active plain glob prefills pattern, switches type to regex, reuses candidates",
+         MSG_GLOB_REGEX, GLOB_PLAIN, "report", 5, GLOB_REGEX, "report", CMD_NONE},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model in = make_nav_model(3, 1);
+        in.glob_type = cases[i].prior_type;
+        strcpy(in.glob_pattern, cases[i].prior_pattern);
+        in.glob_candidate_count = cases[i].prior_candidate_count;
+        Msg msg = { .type = cases[i].msg_type };
+        Model out;
+        Cmd cmd;
+
+        update(&msg, &in, &out, &cmd);
+
+        if (out.mode != MODE_GLOB) {
+            TEST_ERRORF(cases[i].label, "mode = %d, want MODE_GLOB", out.mode);
+        }
+        if (out.glob_type != cases[i].expected_type) {
+            TEST_ERRORF(cases[i].label, "glob_type = %d, want %d", out.glob_type, cases[i].expected_type);
+        }
+        if (strcmp(out.edit_buf, cases[i].expected_edit_buf) != 0) {
+            TEST_ERRORF(cases[i].label, "edit_buf = '%s', want '%s'", out.edit_buf, cases[i].expected_edit_buf);
+        }
+        if (cmd.type != cases[i].expected_cmd_type) {
+            TEST_ERRORF(cases[i].label, "cmd.type = %d, want %d", cmd.type, cases[i].expected_cmd_type);
+        }
+        if (cases[i].expected_cmd_type == CMD_BUILD_GLOB && strcmp(cmd.path, in.current_path) != 0) {
+            TEST_ERRORF(cases[i].label, "cmd.path = %s, want %s", cmd.path, in.current_path);
+        }
+    }
+}
+
+static void test_glob_filter_mutual_exclusion(void)
+{
+    Model in1 = make_nav_model(3, 1);
+    in1.filter_type = FILTER_PLAIN;
+    strcpy(in1.filter_pattern, "report");
+    Msg msg1 = { .type = MSG_GLOB_PLAIN };
+    Model out1;
+    Cmd cmd1;
+    update(&msg1, &in1, &out1, &cmd1);
+
+    if (out1.filter_type != FILTER_NONE || out1.filter_pattern[0] != '\0') {
+        TEST_ERRORF("entering glob clears active flat filter", "filter = {%d, '%s'}, want {FILTER_NONE, ''}",
+                    out1.filter_type, out1.filter_pattern);
+    }
+
+    Model in2 = make_nav_model(3, 1);
+    in2.glob_type = GLOB_PLAIN;
+    strcpy(in2.glob_pattern, "report");
+    Msg msg2 = { .type = MSG_FILTER_PLAIN };
+    Model out2;
+    Cmd cmd2;
+    update(&msg2, &in2, &out2, &cmd2);
+
+    if (out2.glob_type != GLOB_NONE || out2.glob_pattern[0] != '\0') {
+        TEST_ERRORF("entering flat filter clears active glob", "glob = {%d, '%s'}, want {GLOB_NONE, ''}",
+                    out2.glob_type, out2.glob_pattern);
+    }
+}
+
 static Model make_edit_model(AppMode mode, const char *edit_buf, int selected, int entry_count)
 {
     Model m = make_nav_model(entry_count, selected);
@@ -518,6 +673,273 @@ static void test_filter_live_recompute_malformed_regex_is_empty(void)
 
     if (out.entry_count != 0) {
         TEST_ERRORF("malformed regex is empty", "entry_count = %d, want 0", out.entry_count);
+    }
+}
+
+static void glob_fixture(Entry *candidates)
+{
+    strcpy(candidates[0].name, "report.txt");
+    strcpy(candidates[1].name, "other.txt");
+    strcpy(candidates[2].name, "sub/reporter.log");
+}
+
+static Model make_glob_compose_model(GlobType type, const char *edit_buf, Entry *candidates, int candidate_count)
+{
+    Model m = make_edit_model(MODE_GLOB, edit_buf, 0, 0);
+    m.glob_type = type;
+    m.glob_candidates = candidates;
+    m.glob_candidate_count = candidate_count;
+    return m;
+}
+
+static void test_glob_live_recompute_on_text_input(void)
+{
+    Entry candidates[3];
+    glob_fixture(candidates);
+    Model in = make_glob_compose_model(GLOB_PLAIN, "repor", candidates, 3);
+    Msg msg = { .type = MSG_TEXT_INPUT, .ch = 't' };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (strcmp(out.edit_buf, "report") != 0) {
+        TEST_ERRORF("glob live recompute on text input", "edit_buf = '%s', want 'report'", out.edit_buf);
+    }
+    if (out.entry_count != 2 || strcmp(out.entries[0].name, "report.txt") != 0 ||
+        strcmp(out.entries[1].name, "sub/reporter.log") != 0) {
+        TEST_ERRORF("glob live recompute on text input", "entries = [%s, %s] (%d), want [report.txt, sub/reporter.log] (2)",
+                    out.entries[0].name, out.entries[1].name, out.entry_count);
+    }
+    if (out.selected != 0) {
+        TEST_ERRORF("glob live recompute on text input", "selected = %d, want 0", out.selected);
+    }
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("glob live recompute on text input", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+}
+
+static void test_glob_live_recompute_on_delete(void)
+{
+    Entry candidates[3];
+    glob_fixture(candidates);
+    Model in = make_glob_compose_model(GLOB_PLAIN, "reporter", candidates, 3);
+    Msg msg = { .type = MSG_DELETE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (strcmp(out.edit_buf, "reporte") != 0) {
+        TEST_ERRORF("glob live recompute on delete", "edit_buf = '%s', want 'reporte'", out.edit_buf);
+    }
+    if (out.entry_count != 1 || strcmp(out.entries[0].name, "sub/reporter.log") != 0) {
+        TEST_ERRORF("glob live recompute on delete", "entries = [%s] (%d), want [sub/reporter.log] (1)",
+                    out.entries[0].name, out.entry_count);
+    }
+}
+
+static void test_glob_live_recompute_empty_pattern_is_empty(void)
+{
+    Entry candidates[3];
+    glob_fixture(candidates);
+    Model in = make_glob_compose_model(GLOB_PLAIN, "x", candidates, 3);
+    Msg msg = { .type = MSG_DELETE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.entry_count != 0) {
+        TEST_ERRORF("glob empty pattern is empty", "entry_count = %d, want 0", out.entry_count);
+    }
+}
+
+static void test_glob_commit_on_activate(void)
+{
+    Entry candidates[3];
+    glob_fixture(candidates);
+    Model in = make_glob_compose_model(GLOB_REGEX, "\\.log$", candidates, 3);
+    Msg msg = { .type = MSG_ACTIVATE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.mode != MODE_NAV) {
+        TEST_ERRORF("glob commit", "mode = %d, want MODE_NAV", out.mode);
+    }
+    if (out.glob_type != GLOB_REGEX || strcmp(out.glob_pattern, "\\.log$") != 0) {
+        TEST_ERRORF("glob commit", "glob = {%d, '%s'}, want {GLOB_REGEX, '\\.log$'}", out.glob_type, out.glob_pattern);
+    }
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("glob commit", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+}
+
+static void test_glob_commit_keeps_last_live_entries(void)
+{
+    Entry candidates[3];
+    glob_fixture(candidates);
+    Model in = make_glob_compose_model(GLOB_PLAIN, "report", candidates, 3);
+    apply_filter(in.glob_candidates, in.glob_candidate_count, FILTER_PLAIN, "report", 0,
+                 in.sort_mode, in.group_mode, in.entries, &in.entry_count);
+
+    Msg msg = { .type = MSG_ACTIVATE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.entry_count != 2 || strcmp(out.entries[0].name, "report.txt") != 0 ||
+        strcmp(out.entries[1].name, "sub/reporter.log") != 0) {
+        TEST_ERRORF("glob commit keeps last live entries", "entries = [%s, %s] (%d), want [report.txt, sub/reporter.log] (2)",
+                    out.entries[0].name, out.entries[1].name, out.entry_count);
+    }
+}
+
+static void test_glob_cancel_fully_clears(void)
+{
+    Model in = make_edit_model(MODE_GLOB, "repor", 0, 0);
+    in.glob_type = GLOB_PLAIN;
+    strcpy(in.glob_pattern, "\\.(c|h)$");
+    strcpy(in.unfiltered_entries[0].name, "other.txt");
+    strcpy(in.unfiltered_entries[1].name, "report.txt");
+    strcpy(in.unfiltered_entries[2].name, "reporter.log");
+    in.unfiltered_count = 3;
+
+    Msg msg = { .type = MSG_CANCEL };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.mode != MODE_NAV) {
+        TEST_ERRORF("glob cancel clears", "mode = %d, want MODE_NAV", out.mode);
+    }
+    if (out.glob_type != GLOB_NONE) {
+        TEST_ERRORF("glob cancel clears", "glob_type = %d, want GLOB_NONE", out.glob_type);
+    }
+    if (out.glob_pattern[0] != '\0') {
+        TEST_ERRORF("glob cancel clears", "glob_pattern = '%s', want empty", out.glob_pattern);
+    }
+    if (out.entry_count != 3 || strcmp(out.entries[0].name, "other.txt") != 0 ||
+        strcmp(out.entries[1].name, "report.txt") != 0 || strcmp(out.entries[2].name, "reporter.log") != 0) {
+        TEST_ERRORF("glob cancel clears", "entries = [%s, %s, %s] (%d), want full sorted listing (3)",
+                    out.entries[0].name, out.entries[1].name, out.entries[2].name, out.entry_count);
+    }
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("glob cancel clears", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+}
+
+static void test_glob_built_populates_and_recomputes(void)
+{
+    Entry loaded[3];
+    strcpy(loaded[0].name, "report.txt");
+    strcpy(loaded[1].name, "other.txt");
+    strcpy(loaded[2].name, "sub/reporter.log");
+
+    Entry storage[8];
+    Model in = make_edit_model(MODE_GLOB, "report", 0, 0);
+    in.glob_type = GLOB_PLAIN;
+    in.glob_candidates = storage;
+
+    Msg msg = { .type = MSG_GLOB_BUILT };
+    msg.glob_built.entries = loaded;
+    msg.glob_built.entry_count = 3;
+    msg.glob_built.truncated = 0;
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.glob_candidate_count != 3) {
+        TEST_ERRORF("glob built", "glob_candidate_count = %d, want 3", out.glob_candidate_count);
+    }
+    if (out.entry_count != 2 || strcmp(out.entries[0].name, "report.txt") != 0 ||
+        strcmp(out.entries[1].name, "sub/reporter.log") != 0) {
+        TEST_ERRORF("glob built", "entries = [%s, %s] (%d), want [report.txt, sub/reporter.log] (2)",
+                    out.entries[0].name, out.entries[1].name, out.entry_count);
+    }
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("glob built", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+}
+
+static void test_glob_built_truncated_enters_error_with_candidates_populated(void)
+{
+    Entry loaded[2];
+    strcpy(loaded[0].name, "a.txt");
+    strcpy(loaded[1].name, "b.txt");
+
+    Entry storage[8];
+    Model in = make_edit_model(MODE_GLOB, "", 0, 0);
+    in.glob_type = GLOB_PLAIN;
+    in.glob_candidates = storage;
+
+    Msg msg = { .type = MSG_GLOB_BUILT };
+    msg.glob_built.entries = loaded;
+    msg.glob_built.entry_count = 2;
+    msg.glob_built.truncated = 1;
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.mode != MODE_ERROR) {
+        TEST_ERRORF("glob built truncated", "mode = %d, want MODE_ERROR", out.mode);
+    }
+    if (out.glob_candidate_count != 2 || out.glob_truncated != 1) {
+        TEST_ERRORF("glob built truncated", "glob_candidate_count/truncated = %d/%d, want 2/1",
+                    out.glob_candidate_count, out.glob_truncated);
+    }
+    if (out.error_msg[0] == '\0') {
+        TEST_ERRORF("glob built truncated", "error_msg is empty, want a message");
+    }
+}
+
+static void test_glob_truncation_error_dismiss_reenters_glob_composing(void)
+{
+    Model in = make_nav_model(0, 0);
+    in.mode = MODE_ERROR;
+    in.error_reenter_glob = 1;
+    in.glob_type = GLOB_PLAIN;
+    strcpy(in.glob_pattern, "report");
+    strcpy(in.error_msg, "results incomplete");
+    Msg msg = { .type = MSG_TEXT_INPUT, .ch = 'x' };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.mode != MODE_GLOB) {
+        TEST_ERRORF("truncation error dismiss reenters glob", "mode = %d, want MODE_GLOB", out.mode);
+    }
+    if (strcmp(out.edit_buf, "report") != 0) {
+        TEST_ERRORF("truncation error dismiss reenters glob", "edit_buf = '%s', want 'report'", out.edit_buf);
+    }
+    if (out.error_reenter_glob) {
+        TEST_ERRORF("truncation error dismiss reenters glob", "error_reenter_glob still set, want cleared");
+    }
+}
+
+static void test_ordinary_error_dismiss_returns_to_nav_even_with_glob_active(void)
+{
+    Model in = make_nav_model(3, 1);
+    in.mode = MODE_ERROR;
+    in.error_reenter_glob = 0;
+    in.glob_type = GLOB_PLAIN;
+    strcpy(in.glob_pattern, "report");
+    strcpy(in.error_msg, "rename: Permission denied");
+    Msg msg = { .type = MSG_TEXT_INPUT, .ch = 'x' };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.mode != MODE_NAV) {
+        TEST_ERRORF("ordinary error dismiss ignores unrelated active glob", "mode = %d, want MODE_NAV", out.mode);
     }
 }
 
@@ -656,7 +1078,7 @@ static void test_filter_commit_on_activate(void)
 static void test_filter_commit_keeps_last_live_entries(void)
 {
     Model in = make_filter_compose_model(FILTER_PLAIN, "report", 0);
-    apply_filter(in.unfiltered_entries, in.unfiltered_count, FILTER_PLAIN, "report",
+    apply_filter(in.unfiltered_entries, in.unfiltered_count, FILTER_PLAIN, "report", 1,
                  in.sort_mode, in.group_mode, in.entries, &in.entry_count);
 
     Msg msg = { .type = MSG_ACTIVATE };
@@ -676,7 +1098,7 @@ static void test_filter_cancel_fully_clears(void)
 {
     Model in = make_filter_compose_model(FILTER_PLAIN, "repor", 0);
     strcpy(in.filter_pattern, "\\.(c|h)$");
-    apply_filter(in.unfiltered_entries, in.unfiltered_count, FILTER_PLAIN, "repor",
+    apply_filter(in.unfiltered_entries, in.unfiltered_count, FILTER_PLAIN, "repor", 1,
                  in.sort_mode, in.group_mode, in.entries, &in.entry_count);
 
     Msg msg = { .type = MSG_CANCEL };
@@ -843,22 +1265,41 @@ static void test_validate_run_cmd_carries_selected_path(void)
 
 static void test_validate_rename(void)
 {
-    Model in = make_edit_model(MODE_RENAME, "new.txt", 1, 3);
-    strcpy(in.current_path, "/tmp");
-    strcpy(in.entries[1].name, "old.txt");
-    Msg msg = { .type = MSG_ACTIVATE };
-    Model out;
-    Cmd cmd;
+    typedef struct {
+        const char *label;
+        const char *entry_name;
+        const char *edit_buf;
+        const char *expected_path;
+        const char *expected_path2;
+    } Case;
 
-    update(&msg, &in, &out, &cmd);
+    Case cases[] = {
+        {"flat entry renames in current_path", "old.txt", "new.txt",
+         "/tmp/old.txt", "/tmp/new.txt"},
+        {"nested glob-match entry renames in its own directory, not current_path",
+         "src/old.c", "new.c", "/tmp/src/old.c", "/tmp/src/new.c"},
+        {"multi-level nested entry renames in its own directory", "a/b/old.c", "new.c",
+         "/tmp/a/b/old.c", "/tmp/a/b/new.c"},
+    };
 
-    if (cmd.type != CMD_RENAME || strcmp(cmd.path, "/tmp/old.txt") != 0 ||
-        strcmp(cmd.path2, "/tmp/new.txt") != 0) {
-        TEST_ERRORF("validate rename", "cmd = {%d, %s, %s}, want {CMD_RENAME, /tmp/old.txt, /tmp/new.txt}",
-                    cmd.type, cmd.path, cmd.path2);
-    }
-    if (out.mode != MODE_NAV || out.selected != 1) {
-        TEST_ERRORF("validate rename", "mode/selected = %d/%d, want MODE_NAV/1", out.mode, out.selected);
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model in = make_edit_model(MODE_RENAME, cases[i].edit_buf, 1, 3);
+        strcpy(in.current_path, "/tmp");
+        strcpy(in.entries[1].name, cases[i].entry_name);
+        Msg msg = { .type = MSG_ACTIVATE };
+        Model out;
+        Cmd cmd;
+
+        update(&msg, &in, &out, &cmd);
+
+        if (cmd.type != CMD_RENAME || strcmp(cmd.path, cases[i].expected_path) != 0 ||
+            strcmp(cmd.path2, cases[i].expected_path2) != 0) {
+            TEST_ERRORF(cases[i].label, "cmd = {%d, %s, %s}, want {CMD_RENAME, %s, %s}",
+                        cmd.type, cmd.path, cmd.path2, cases[i].expected_path, cases[i].expected_path2);
+        }
+        if (out.mode != MODE_NAV || out.selected != 1) {
+            TEST_ERRORF(cases[i].label, "mode/selected = %d/%d, want MODE_NAV/1", out.mode, out.selected);
+        }
     }
 }
 
@@ -1503,18 +1944,33 @@ void test_update(void)
     test_new_leaves_scroll_offset_untouched();
     test_go_parent();
     test_go_parent_resets_active_filter();
+    test_go_parent_resets_active_glob();
     test_activate_into_directory_resets_filter_but_opening_a_file_does_not();
+    test_activate_into_directory_resets_active_glob_but_opening_a_file_does_not();
     test_activate();
     test_preview();
     test_dir_loaded();
     test_op_succeeded();
+    test_op_succeeded_rebuilds_glob_when_active();
     test_op_failed();
     test_start_edit();
     test_enter_filter_mode();
+    test_enter_glob_mode();
+    test_glob_filter_mutual_exclusion();
     test_filter_live_recompute_on_text_input();
     test_filter_live_recompute_on_delete();
     test_filter_live_recompute_no_matches_is_empty();
     test_filter_live_recompute_malformed_regex_is_empty();
+    test_glob_live_recompute_on_text_input();
+    test_glob_live_recompute_on_delete();
+    test_glob_live_recompute_empty_pattern_is_empty();
+    test_glob_commit_on_activate();
+    test_glob_commit_keeps_last_live_entries();
+    test_glob_cancel_fully_clears();
+    test_glob_built_populates_and_recomputes();
+    test_glob_built_truncated_enters_error_with_candidates_populated();
+    test_glob_truncation_error_dismiss_reenters_glob_composing();
+    test_ordinary_error_dismiss_returns_to_nav_even_with_glob_active();
     test_edit_text_entry();
     test_edit_text_entry_full_buffer_is_noop();
     test_edit_backspace();

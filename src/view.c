@@ -8,7 +8,7 @@
     "up/down: Navigate  left: Parent  right/Enter: Open  r: Rename  " \
     "n: New  space: Preview  c: Yank copy  m: Yank move  " \
     "p: Paste  s: Sort  d: Group  o: Next page  a: Toggle hidden  Backspace: Trash  x: Delete  " \
-    ": Run command  f: Filter  F: Filter (regex)  Esc: Cancel yank  q: Quit"
+    ": Run command  f: Filter  F: Filter (regex)  g: Glob  G: Glob (regex)  Esc: Cancel yank  q: Quit"
 
 static void add_line(View *v, StyleTag style, const char *fmt, ...)
 {
@@ -39,6 +39,13 @@ static void add_prompt_line(View *v, const Model *m)
         add_line(v, style, "%s%s", prefix, m->edit_buf);
         break;
     }
+    case MODE_GLOB: {
+        const char *prefix = (m->glob_type == GLOB_REGEX) ? "G:" : "g:";
+        FilterType ft = (m->glob_type == GLOB_REGEX) ? FILTER_REGEX : FILTER_PLAIN;
+        StyleTag style = filter_is_valid(ft, m->edit_buf) ? STYLE_VALID : STYLE_ERROR;
+        add_line(v, style, "%s%s", prefix, m->edit_buf);
+        break;
+    }
     case MODE_CONFIRM_DELETE:
         if (m->confirm_permanent_delete)
             add_line(v, STYLE_PROMPT, "Delete '%s' ? [y/N]", m->entries[m->selected].name);
@@ -55,6 +62,8 @@ static void add_prompt_line(View *v, const Model *m)
             add_line(v, STYLE_NORMAL, "Yanked: %s (%s)", name, m->yank_is_move ? "move" : "copy");
         } else if (m->filter_type != FILTER_NONE) {
             add_line(v, STYLE_NORMAL, "Filter: %s", m->filter_pattern);
+        } else if (m->glob_type != GLOB_NONE) {
+            add_line(v, STYLE_NORMAL, "Glob: %s", m->glob_pattern);
         } else {
             add_line(v, STYLE_NORMAL, "");
         }

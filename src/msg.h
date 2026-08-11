@@ -25,6 +25,8 @@ typedef enum {
     MSG_RUN_CMD,
     MSG_FILTER_PLAIN,
     MSG_FILTER_REGEX,
+    MSG_GLOB_PLAIN,
+    MSG_GLOB_REGEX,
     MSG_PREVIEW,
     MSG_YANK_COPY,
     MSG_YANK_MOVE,
@@ -40,6 +42,7 @@ typedef enum {
     /* Cmd-completion messages: main() executes the Cmd update() returned,
      * then feeds the outcome back in as one of these. */
     MSG_DIR_LOADED,
+    MSG_GLOB_BUILT,
     MSG_OP_SUCCEEDED,
     MSG_OP_FAILED,
 } MsgType;
@@ -60,10 +63,17 @@ typedef struct {
 } MsgResize;
 
 typedef struct {
+    const Entry *entries;
+    int entry_count;
+    int truncated;
+} MsgGlobBuilt;
+
+typedef struct {
     MsgType type;
     union {
         char ch;                  /* MSG_TEXT_INPUT */
         MsgDirLoaded dir_loaded;  /* MSG_DIR_LOADED */
+        MsgGlobBuilt glob_built;
         char error[256];          /* MSG_OP_FAILED */
         MsgResize resize;
     };

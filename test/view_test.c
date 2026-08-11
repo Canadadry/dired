@@ -129,6 +129,73 @@ static void test_view_filter_echoes_on_prompt_line(void)
     }
 }
 
+static void test_view_glob_echoes_on_prompt_line(void)
+{
+    typedef struct {
+        const char *label;
+        GlobType type;
+        const char *pattern;
+        const char *expected_text;
+        StyleTag expected_style;
+    } Case;
+
+    Case cases[] = {
+        {"plain glob always shows valid style", GLOB_PLAIN, "report", "g:report", STYLE_VALID},
+        {"valid regex shows valid style", GLOB_REGEX, "\\.(c|h)$", "G:\\.(c|h)$", STYLE_VALID},
+        {"invalid regex shows error style", GLOB_REGEX, "[unterminated", "G:[unterminated", STYLE_ERROR},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model m = make_view_model();
+        m.mode = MODE_GLOB;
+        m.glob_type = cases[i].type;
+        strcpy(m.edit_buf, cases[i].pattern);
+        m.edit_len = strlen(cases[i].pattern);
+
+        View v = view(&m);
+
+        if (strcmp(v.lines[1].text, cases[i].expected_text) != 0) {
+            TEST_ERRORF(cases[i].label, "lines[1] = '%s', want '%s'", v.lines[1].text, cases[i].expected_text);
+        }
+        if (v.lines[1].style != cases[i].expected_style) {
+            TEST_ERRORF(cases[i].label, "lines[1].style = %d, want %d", v.lines[1].style, cases[i].expected_style);
+        }
+    }
+}
+
+static void test_view_glob_status_shown_when_active_and_no_yank(void)
+{
+    Model m = make_view_model();
+    m.glob_type = GLOB_PLAIN;
+    strcpy(m.glob_pattern, "report");
+
+    View v = view(&m);
+
+    if (!strstr(v.lines[1].text, "report")) {
+        TEST_ERRORF("glob status", "lines[1] = '%s', want it to mention the active pattern 'report'", v.lines[1].text);
+    }
+}
+
+static void test_view_yank_status_takes_priority_over_glob(void)
+{
+    Model m = make_view_model();
+    set_entry(&m, 0, "main.c", S_IFREG | 0644, 512);
+    m.entry_count = 1;
+    strcpy(m.yank_path, "/tmp/other/main.c");
+    m.yank_is_move = 1;
+    m.glob_type = GLOB_PLAIN;
+    strcpy(m.glob_pattern, "report");
+
+    View v = view(&m);
+
+    if (!strstr(v.lines[1].text, "main.c") || !strstr(v.lines[1].text, "move")) {
+        TEST_ERRORF("yank priority", "lines[1] = '%s', want yank status, not glob status", v.lines[1].text);
+    }
+    if (strstr(v.lines[1].text, "report")) {
+        TEST_ERRORF("yank priority", "lines[1] = '%s', should not mention glob pattern while yank is pending", v.lines[1].text);
+    }
+}
+
 static void test_view_filter_status_shown_when_active_and_no_yank(void)
 {
     Model m = make_view_model();
@@ -441,6 +508,9 @@ void test_view(void)
     test_view_filter_echoes_on_prompt_line();
     test_view_filter_status_shown_when_active_and_no_yank();
     test_view_yank_status_takes_priority_over_filter();
+    test_view_glob_echoes_on_prompt_line();
+    test_view_glob_status_shown_when_active_and_no_yank();
+    test_view_yank_status_takes_priority_over_glob();
     test_view_rename_keeps_old_name_in_row();
     test_view_confirm_delete_prompt();
     test_view_yank_pending();

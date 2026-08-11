@@ -9,6 +9,7 @@
 typedef enum {
     CMD_NONE = 0,
     CMD_LOAD_DIR,
+    CMD_BUILD_GLOB,
     CMD_RENAME,
     CMD_CREATE_FILE,
     CMD_CREATE_DIR,

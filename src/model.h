@@ -7,6 +7,7 @@
 #define MAX_ENTRIES 1024
 #define NAME_MAX_LEN 1024
 #define PATH_MAX_LEN 1024
+#define GLOB_MAX_CANDIDATES 4096
 
 typedef enum {
     MODE_NAV = 0,
@@ -16,6 +17,7 @@ typedef enum {
     MODE_ERROR,
     MODE_RUN_CMD,
     MODE_FILTER,
+    MODE_GLOB,
 } AppMode;
 
 typedef enum {
@@ -23,6 +25,12 @@ typedef enum {
     FILTER_PLAIN,
     FILTER_REGEX,
 } FilterType;
+
+typedef enum {
+    GLOB_NONE = 0,
+    GLOB_PLAIN,
+    GLOB_REGEX,
+} GlobType;
 
 /* Fixed 8-state cycle order for the `s` key: name -> date -> size -> ext,
  * ascending before descending within each key, wrapping back to name-asc. */
@@ -62,6 +70,12 @@ typedef struct {
     FilterType filter_type;
     char filter_pattern[NAME_MAX_LEN + 1];
 
+    GlobType glob_type;
+    char glob_pattern[NAME_MAX_LEN + 1];
+    Entry *glob_candidates;
+    int glob_candidate_count;
+    int glob_truncated;
+
     char current_path[PATH_MAX_LEN];
 
     /* Session-scoped: survive directory navigation like yank_path does, but
@@ -86,6 +100,7 @@ typedef struct {
     int yank_is_move;
 
     char error_msg[256];
+    int error_reenter_glob;
 
     int should_quit;
 } Model;
