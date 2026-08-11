@@ -275,6 +275,14 @@ static void style_colors(StyleTag style, uintattr_t *fg, uintattr_t *bg)
         *fg = TB_BLACK;
         *bg = TB_WHITE;
         break;
+    case STYLE_ERROR:
+        *fg = TB_RED;
+        *bg = TB_DEFAULT;
+        break;
+    case STYLE_VALID:
+        *fg = TB_GREEN;
+        *bg = TB_DEFAULT;
+        break;
     default:
         *fg = TB_DEFAULT;
         *bg = TB_DEFAULT;
@@ -314,7 +322,7 @@ static Msg translate_event(struct tb_event ev, AppMode mode)
     if (ev.type != TB_EVENT_KEY)
         return msg;
 
-    int text_entry = (mode == MODE_RENAME || mode == MODE_CREATE || mode == MODE_RUN_CMD);
+    int text_entry = (mode == MODE_RENAME || mode == MODE_CREATE || mode == MODE_RUN_CMD || mode == MODE_FILTER);
 
     if (text_entry) {
         if (ev.key == TB_KEY_ESC)
@@ -362,6 +370,10 @@ static Msg translate_event(struct tb_event ev, AppMode mode)
         msg.type = MSG_NEW;
     else if (ev.ch == ':')
         msg.type = MSG_RUN_CMD;
+    else if (ev.ch == 'f')
+        msg.type = MSG_FILTER_PLAIN;
+    else if (ev.ch == 'F')
+        msg.type = MSG_FILTER_REGEX;
     else if (ev.ch == ' ')
         msg.type = MSG_PREVIEW;
     else if (ev.ch == 'c')
@@ -418,6 +430,9 @@ static void print_help(void)
     printf("  r             Rename selected file/directory\n");
     printf("  n             Create a new file or directory (trailing / for a directory)\n");
     printf("  :             Run a shell command (prefix with !, e.g. !unzip $FILE); $FILE is the selected entry\n");
+    printf("  f             Filter listing by filename (plain substring)\n");
+    printf("  F             Filter listing by filename (extended regex)\n");
+    printf("  Esc           Cancel a pending yank (nav); cancel composing (Rename/Create/Filter/Run command)\n");
     printf("  space         Preview selected file (text pages, binary is hex-dumped)\n");
     printf("  c             Yank copy\n");
     printf("  m             Yank move\n");

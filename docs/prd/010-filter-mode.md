@@ -1,7 +1,7 @@
 ---
 title: "Filter listing by filename (plain / regex)"
 description: "Finding a file in a large directory means scanning the whole listing by eye or paginating through it, with no way to narrow the view to only the entries you care about."
-status: needs-triage
+status: done
 ---
 
 ## Problem Statement

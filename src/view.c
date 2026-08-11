@@ -8,7 +8,7 @@
     "up/down: Navigate  left: Parent  right/Enter: Open  r: Rename  " \
     "n: New  space: Preview  c: Yank copy  m: Yank move  " \
     "p: Paste  s: Sort  d: Group  o: Next page  a: Toggle hidden  Backspace: Trash  x: Delete  " \
-    ": Run command  q: Quit"
+    ": Run command  f: Filter  F: Filter (regex)  Esc: Cancel yank  q: Quit"
 
 static void add_line(View *v, StyleTag style, const char *fmt, ...)
 {
@@ -33,6 +33,12 @@ static void add_prompt_line(View *v, const Model *m)
     case MODE_RUN_CMD:
         add_line(v, STYLE_NORMAL, ":%s", m->edit_buf);
         break;
+    case MODE_FILTER: {
+        const char *prefix = (m->filter_type == FILTER_REGEX) ? "F:" : "f:";
+        StyleTag style = filter_is_valid(m->filter_type, m->edit_buf) ? STYLE_VALID : STYLE_ERROR;
+        add_line(v, style, "%s%s", prefix, m->edit_buf);
+        break;
+    }
     case MODE_CONFIRM_DELETE:
         if (m->confirm_permanent_delete)
             add_line(v, STYLE_PROMPT, "Delete '%s' ? [y/N]", m->entries[m->selected].name);
@@ -47,6 +53,8 @@ static void add_prompt_line(View *v, const Model *m)
             const char *slash = strrchr(m->yank_path, '/');
             const char *name = slash ? slash + 1 : m->yank_path;
             add_line(v, STYLE_NORMAL, "Yanked: %s (%s)", name, m->yank_is_move ? "move" : "copy");
+        } else if (m->filter_type != FILTER_NONE) {
+            add_line(v, STYLE_NORMAL, "Filter: %s", m->filter_pattern);
         } else {
             add_line(v, STYLE_NORMAL, "");
         }

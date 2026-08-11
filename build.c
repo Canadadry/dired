@@ -50,7 +50,7 @@ int main(int argc, char **argv) {
     build_lib(build_has_arg(argc, argv,  "debug","test"));
     if (build_has_arg(argc, argv,  "test")){
         build_test();
-        BUILD_RUN_CMD("./build/tests/run_tests");
+        BUILD_RUN_CMD("ulimit -s 65536 &&", "./build/tests/run_tests");
     }
 
     if (build_has_arg(argc, argv,  TARGET_DIRED)){

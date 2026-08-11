@@ -3,6 +3,7 @@
 #include "../src/msg.h"
 #include "../src/cmd.h"
 #include "../src/update.h"
+#include "../src/helpers.h"
 #include <string.h>
 
 static Model make_nav_model(int entry_count, int selected)
@@ -91,6 +92,27 @@ static void test_go_parent(void)
     }
 }
 
+static void test_go_parent_resets_active_filter(void)
+{
+    Model in = make_nav_model(0, 0);
+    strcpy(in.current_path, "/home/user/project");
+    in.filter_type = FILTER_PLAIN;
+    strcpy(in.filter_pattern, "report");
+    Msg msg = { .type = MSG_GO_PARENT };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.filter_type != FILTER_NONE || out.filter_pattern[0] != '\0') {
+        TEST_ERRORF("go parent resets filter", "filter = {%d, '%s'}, want {FILTER_NONE, ''}",
+                    out.filter_type, out.filter_pattern);
+    }
+    if (cmd.type != CMD_LOAD_DIR) {
+        TEST_ERRORF("go parent resets filter", "cmd.type = %d, want CMD_LOAD_DIR", cmd.type);
+    }
+}
+
 static Model make_model_with_entry(const char *current_path, const char *name, mode_t st_mode, int selected)
 {
     Model m = make_nav_model(1, selected);
@@ -146,6 +168,38 @@ static void test_activate(void)
         }
         if (cases[i].expected_cmd_type == CMD_LOAD_DIR && !cmd.show_hidden) {
             TEST_ERRORF(cases[i].label, "cmd.show_hidden = %d, want 1 (carried from model)", cmd.show_hidden);
+        }
+    }
+}
+
+static void test_activate_into_directory_resets_filter_but_opening_a_file_does_not(void)
+{
+    typedef struct {
+        const char *label;
+        const char *name;
+        mode_t st_mode;
+        FilterType expected_type;
+        const char *expected_pattern;
+    } Case;
+
+    Case cases[] = {
+        {"activating into a directory resets the filter", "sub", S_IFDIR | 0755, FILTER_NONE, ""},
+        {"opening a file leaves an active filter untouched", "main.c", S_IFREG | 0644, FILTER_PLAIN, "report"},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model in = make_model_with_entry("/home/user", cases[i].name, cases[i].st_mode, 0);
+        in.filter_type = FILTER_PLAIN;
+        strcpy(in.filter_pattern, "report");
+        Msg msg = { .type = MSG_ACTIVATE };
+        Model out;
+        Cmd cmd;
+
+        update(&msg, &in, &out, &cmd);
+
+        if (out.filter_type != cases[i].expected_type || strcmp(out.filter_pattern, cases[i].expected_pattern) != 0) {
+            TEST_ERRORF(cases[i].label, "filter = {%d, '%s'}, want {%d, '%s'}",
+                        out.filter_type, out.filter_pattern, cases[i].expected_type, cases[i].expected_pattern);
         }
     }
 }
@@ -322,6 +376,56 @@ static void test_start_edit(void)
     }
 }
 
+static void test_enter_filter_mode(void)
+{
+    typedef struct {
+        const char *label;
+        MsgType msg_type;
+        FilterType prior_type;
+        const char *prior_pattern;
+        FilterType expected_type;
+        const char *expected_edit_buf;
+    } Case;
+
+    Case cases[] = {
+        {"f with no prior filter starts empty plain composition",
+         MSG_FILTER_PLAIN, FILTER_NONE, "", FILTER_PLAIN, ""},
+        {"F with no prior filter starts empty regex composition",
+         MSG_FILTER_REGEX, FILTER_NONE, "", FILTER_REGEX, ""},
+        {"f on an active regex filter prefills pattern and switches type to plain",
+         MSG_FILTER_PLAIN, FILTER_REGEX, "\\.(c|h)$", FILTER_PLAIN, "\\.(c|h)$"},
+        {"F on an active plain filter prefills pattern and switches type to regex",
+         MSG_FILTER_REGEX, FILTER_PLAIN, "report", FILTER_REGEX, "report"},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model in = make_nav_model(3, 1);
+        in.filter_type = cases[i].prior_type;
+        strcpy(in.filter_pattern, cases[i].prior_pattern);
+        Msg msg = { .type = cases[i].msg_type };
+        Model out;
+        Cmd cmd;
+
+        update(&msg, &in, &out, &cmd);
+
+        if (out.mode != MODE_FILTER) {
+            TEST_ERRORF(cases[i].label, "mode = %d, want MODE_FILTER", out.mode);
+        }
+        if (out.filter_type != cases[i].expected_type) {
+            TEST_ERRORF(cases[i].label, "filter_type = %d, want %d", out.filter_type, cases[i].expected_type);
+        }
+        if (strcmp(out.edit_buf, cases[i].expected_edit_buf) != 0) {
+            TEST_ERRORF(cases[i].label, "edit_buf = '%s', want '%s'", out.edit_buf, cases[i].expected_edit_buf);
+        }
+        if (out.edit_len != strlen(cases[i].expected_edit_buf)) {
+            TEST_ERRORF(cases[i].label, "edit_len = %zu, want %zu", out.edit_len, strlen(cases[i].expected_edit_buf));
+        }
+        if (cmd.type != CMD_NONE) {
+            TEST_ERRORF(cases[i].label, "cmd.type = %d, want CMD_NONE", cmd.type);
+        }
+    }
+}
+
 static Model make_edit_model(AppMode mode, const char *edit_buf, int selected, int entry_count)
 {
     Model m = make_nav_model(entry_count, selected);
@@ -329,6 +433,92 @@ static Model make_edit_model(AppMode mode, const char *edit_buf, int selected, i
     strcpy(m.edit_buf, edit_buf);
     m.edit_len = strlen(edit_buf);
     return m;
+}
+
+static Model make_filter_compose_model(FilterType type, const char *edit_buf, int selected)
+{
+    Model m = make_edit_model(MODE_FILTER, edit_buf, selected, 0);
+    m.filter_type = type;
+
+    strcpy(m.unfiltered_entries[0].name, "report.txt");
+    strcpy(m.unfiltered_entries[1].name, "other.txt");
+    strcpy(m.unfiltered_entries[2].name, "reporter.log");
+    m.unfiltered_count = 3;
+    return m;
+}
+
+static void test_filter_live_recompute_on_text_input(void)
+{
+    Model in = make_filter_compose_model(FILTER_PLAIN, "repor", 2);
+    Msg msg = { .type = MSG_TEXT_INPUT, .ch = 't' };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (strcmp(out.edit_buf, "report") != 0) {
+        TEST_ERRORF("live recompute on text input", "edit_buf = '%s', want 'report'", out.edit_buf);
+    }
+    if (out.entry_count != 2 || strcmp(out.entries[0].name, "report.txt") != 0 ||
+        strcmp(out.entries[1].name, "reporter.log") != 0) {
+        TEST_ERRORF("live recompute on text input", "entries = [%s, %s] (%d), want [report.txt, reporter.log] (2)",
+                    out.entries[0].name, out.entries[1].name, out.entry_count);
+    }
+    if (out.selected != 0) {
+        TEST_ERRORF("live recompute on text input", "selected = %d, want 0", out.selected);
+    }
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("live recompute on text input", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+}
+
+static void test_filter_live_recompute_on_delete(void)
+{
+    Model in = make_filter_compose_model(FILTER_PLAIN, "reporter", 1);
+    Msg msg = { .type = MSG_DELETE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (strcmp(out.edit_buf, "reporte") != 0) {
+        TEST_ERRORF("live recompute on delete", "edit_buf = '%s', want 'reporte'", out.edit_buf);
+    }
+    if (out.entry_count != 1 || strcmp(out.entries[0].name, "reporter.log") != 0) {
+        TEST_ERRORF("live recompute on delete", "entries = [%s] (%d), want [reporter.log] (1)",
+                    out.entries[0].name, out.entry_count);
+    }
+    if (out.selected != 0) {
+        TEST_ERRORF("live recompute on delete", "selected = %d, want 0", out.selected);
+    }
+}
+
+static void test_filter_live_recompute_no_matches_is_empty(void)
+{
+    Model in = make_filter_compose_model(FILTER_PLAIN, "nonexistent", 0);
+    Msg msg = { .type = MSG_TEXT_INPUT, .ch = 'x' };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.entry_count != 0) {
+        TEST_ERRORF("no matches is empty", "entry_count = %d, want 0", out.entry_count);
+    }
+}
+
+static void test_filter_live_recompute_malformed_regex_is_empty(void)
+{
+    Model in = make_filter_compose_model(FILTER_REGEX, "[unterminated", 0);
+    Msg msg = { .type = MSG_TEXT_INPUT, .ch = 'x' };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.entry_count != 0) {
+        TEST_ERRORF("malformed regex is empty", "entry_count = %d, want 0", out.entry_count);
+    }
 }
 
 static void test_edit_text_entry(void)
@@ -423,6 +613,94 @@ static void test_edit_cancel(void)
         if (cmd.type != CMD_NONE) {
             TEST_ERRORF(cases[i].label, "cmd.type = %d, want CMD_NONE", cmd.type);
         }
+    }
+}
+
+static void test_filter_commit_on_activate(void)
+{
+    typedef struct {
+        const char *label;
+        FilterType type;
+        const char *edit_buf;
+    } Case;
+
+    Case cases[] = {
+        {"commit a non-empty plain pattern", FILTER_PLAIN, "report"},
+        {"commit a non-empty regex pattern", FILTER_REGEX, "\\.(c|h)$"},
+        {"commit an emptied-out pattern clears the filter to show everything", FILTER_PLAIN, ""},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model in = make_filter_compose_model(cases[i].type, cases[i].edit_buf, 0);
+        Msg msg = { .type = MSG_ACTIVATE };
+        Model out;
+        Cmd cmd;
+
+        update(&msg, &in, &out, &cmd);
+
+        if (out.mode != MODE_NAV) {
+            TEST_ERRORF(cases[i].label, "mode = %d, want MODE_NAV", out.mode);
+        }
+        if (out.filter_type != cases[i].type) {
+            TEST_ERRORF(cases[i].label, "filter_type = %d, want %d", out.filter_type, cases[i].type);
+        }
+        if (strcmp(out.filter_pattern, cases[i].edit_buf) != 0) {
+            TEST_ERRORF(cases[i].label, "filter_pattern = '%s', want '%s'", out.filter_pattern, cases[i].edit_buf);
+        }
+        if (cmd.type != CMD_NONE) {
+            TEST_ERRORF(cases[i].label, "cmd.type = %d, want CMD_NONE", cmd.type);
+        }
+    }
+}
+
+static void test_filter_commit_keeps_last_live_entries(void)
+{
+    Model in = make_filter_compose_model(FILTER_PLAIN, "report", 0);
+    apply_filter(in.unfiltered_entries, in.unfiltered_count, FILTER_PLAIN, "report",
+                 in.sort_mode, in.group_mode, in.entries, &in.entry_count);
+
+    Msg msg = { .type = MSG_ACTIVATE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.entry_count != 2 || strcmp(out.entries[0].name, "report.txt") != 0 ||
+        strcmp(out.entries[1].name, "reporter.log") != 0) {
+        TEST_ERRORF("commit keeps last live entries", "entries = [%s, %s] (%d), want [report.txt, reporter.log] (2)",
+                    out.entries[0].name, out.entries[1].name, out.entry_count);
+    }
+}
+
+static void test_filter_cancel_fully_clears(void)
+{
+    Model in = make_filter_compose_model(FILTER_PLAIN, "repor", 0);
+    strcpy(in.filter_pattern, "\\.(c|h)$");
+    apply_filter(in.unfiltered_entries, in.unfiltered_count, FILTER_PLAIN, "repor",
+                 in.sort_mode, in.group_mode, in.entries, &in.entry_count);
+
+    Msg msg = { .type = MSG_CANCEL };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.mode != MODE_NAV) {
+        TEST_ERRORF("filter cancel clears", "mode = %d, want MODE_NAV", out.mode);
+    }
+    if (out.filter_type != FILTER_NONE) {
+        TEST_ERRORF("filter cancel clears", "filter_type = %d, want FILTER_NONE", out.filter_type);
+    }
+    if (out.filter_pattern[0] != '\0') {
+        TEST_ERRORF("filter cancel clears", "filter_pattern = '%s', want empty", out.filter_pattern);
+    }
+    if (out.entry_count != 3 || strcmp(out.entries[0].name, "other.txt") != 0 ||
+        strcmp(out.entries[1].name, "report.txt") != 0 || strcmp(out.entries[2].name, "reporter.log") != 0) {
+        TEST_ERRORF("filter cancel clears", "entries = [%s, %s, %s] (%d), want full sorted listing (3)",
+                    out.entries[0].name, out.entries[1].name, out.entries[2].name, out.entry_count);
+    }
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("filter cancel clears", "cmd.type = %d, want CMD_NONE", cmd.type);
     }
 }
 
@@ -773,6 +1051,47 @@ static void test_yank_replaces_pending(void)
     }
 }
 
+static void test_nav_cancel_clears_pending_yank(void)
+{
+    Model in = make_nav_model(3, 1);
+    strcpy(in.yank_path, "/tmp/first.txt");
+    in.yank_is_move = 1;
+
+    Msg msg = { .type = MSG_CANCEL };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.yank_path[0] != '\0') {
+        TEST_ERRORF("nav cancel clears yank", "yank_path = '%s', want cleared", out.yank_path);
+    }
+    if (out.mode != MODE_NAV) {
+        TEST_ERRORF("nav cancel clears yank", "mode = %d, want MODE_NAV", out.mode);
+    }
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("nav cancel clears yank", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+}
+
+static void test_nav_cancel_with_no_pending_yank_is_noop(void)
+{
+    Model in = make_nav_model(3, 1);
+
+    Msg msg = { .type = MSG_CANCEL };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.yank_path[0] != '\0') {
+        TEST_ERRORF("nav cancel noop", "yank_path = '%s', want still empty", out.yank_path);
+    }
+    if (out.selected != in.selected || out.entry_count != in.entry_count) {
+        TEST_ERRORF("nav cancel noop", "model changed unexpectedly");
+    }
+}
+
 static void test_paste_nothing_pending_is_noop(void)
 {
     Model in = make_nav_model(1, 0);
@@ -1017,6 +1336,41 @@ static void test_dir_loaded_sorts_entries(void)
     }
 }
 
+static void test_dir_loaded_reapplies_committed_filter(void)
+{
+    Model in = make_nav_model(0, 0);
+    in.filter_type = FILTER_PLAIN;
+    strcpy(in.filter_pattern, "report");
+
+    static Entry loaded[4];
+    strcpy(loaded[0].name, "report.txt");
+    strcpy(loaded[1].name, "other.txt");
+    strcpy(loaded[2].name, "reporter.log");
+    strcpy(loaded[3].name, "notes.md");
+
+    Msg msg = { .type = MSG_DIR_LOADED };
+    msg.dir_loaded.entries = loaded;
+    msg.dir_loaded.entry_count = 4;
+    strcpy(msg.dir_loaded.path, "/loaded");
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.unfiltered_count != 4) {
+        TEST_ERRORF("dir loaded reapplies filter", "unfiltered_count = %d, want 4", out.unfiltered_count);
+    }
+    if (out.entry_count != 2 || strcmp(out.entries[0].name, "report.txt") != 0 ||
+        strcmp(out.entries[1].name, "reporter.log") != 0) {
+        TEST_ERRORF("dir loaded reapplies filter", "entries = [%s, %s] (%d), want [report.txt, reporter.log] (2)",
+                    out.entries[0].name, out.entries[1].name, out.entry_count);
+    }
+    if (out.filter_type != FILTER_PLAIN || strcmp(out.filter_pattern, "report") != 0) {
+        TEST_ERRORF("dir loaded reapplies filter", "filter = {%d, %s}, want {FILTER_PLAIN, report} (unchanged)",
+                    out.filter_type, out.filter_pattern);
+    }
+}
+
 static void test_quit(void)
 {
     Model in = make_nav_model(3, 1);
@@ -1148,17 +1502,27 @@ void test_update(void)
     test_move_up_crosses_page_boundary_back();
     test_new_leaves_scroll_offset_untouched();
     test_go_parent();
+    test_go_parent_resets_active_filter();
+    test_activate_into_directory_resets_filter_but_opening_a_file_does_not();
     test_activate();
     test_preview();
     test_dir_loaded();
     test_op_succeeded();
     test_op_failed();
     test_start_edit();
+    test_enter_filter_mode();
+    test_filter_live_recompute_on_text_input();
+    test_filter_live_recompute_on_delete();
+    test_filter_live_recompute_no_matches_is_empty();
+    test_filter_live_recompute_malformed_regex_is_empty();
     test_edit_text_entry();
     test_edit_text_entry_full_buffer_is_noop();
     test_edit_backspace();
     test_edit_backspace_on_empty_is_noop();
     test_edit_cancel();
+    test_filter_commit_on_activate();
+    test_filter_commit_keeps_last_live_entries();
+    test_filter_cancel_fully_clears();
     test_validate_empty_cancels();
     test_validate_create();
     test_validate_run_cmd();
@@ -1169,6 +1533,8 @@ void test_update(void)
     test_confirm_delete_anything_else_cancels();
     test_yank();
     test_yank_replaces_pending();
+    test_nav_cancel_clears_pending_yank();
+    test_nav_cancel_with_no_pending_yank_is_noop();
     test_paste_nothing_pending_is_noop();
     test_paste_pending();
     test_cycle_page_advances_to_next_page();
@@ -1179,6 +1545,7 @@ void test_update(void)
     test_toggle_hidden();
     test_resort_keeps_selection_on_same_file();
     test_dir_loaded_sorts_entries();
+    test_dir_loaded_reapplies_committed_filter();
     test_quit();
     test_error_dismissed_by_any_key();
 }

@@ -15,7 +15,14 @@ typedef enum {
     MODE_CONFIRM_DELETE,
     MODE_ERROR,
     MODE_RUN_CMD,
+    MODE_FILTER,
 } AppMode;
+
+typedef enum {
+    FILTER_NONE = 0,
+    FILTER_PLAIN,
+    FILTER_REGEX,
+} FilterType;
 
 /* Fixed 8-state cycle order for the `s` key: name -> date -> size -> ext,
  * ascending before descending within each key, wrapping back to name-asc. */
@@ -48,6 +55,12 @@ typedef struct {
     Entry entries[MAX_ENTRIES];
     int entry_count;
     int selected;
+
+    Entry unfiltered_entries[MAX_ENTRIES];
+    int unfiltered_count;
+
+    FilterType filter_type;
+    char filter_pattern[NAME_MAX_LEN + 1];
 
     char current_path[PATH_MAX_LEN];
 

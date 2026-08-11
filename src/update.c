@@ -60,14 +60,8 @@ static void selected_name(const Model *m, char *out, size_t out_size)
     out[out_size - 1] = '\0';
 }
 
-/* Sorts out_model->entries per its current sort_mode/group_mode, then
- * re-locates prev_name in the new order so the cursor stays on the same
- * file across a resort. Falls back to the usual entry_count clamp if
- * prev_name isn't found (not expected in normal operation). */
-static void resort_and_relocate(Model *out_model, const char *prev_name)
+static void relocate_selected(Model *out_model, const char *prev_name)
 {
-    sort_entries(out_model->entries, out_model->entry_count, out_model->sort_mode, out_model->group_mode);
-
     out_model->selected = 0;
     if (prev_name && prev_name[0] != '\0') {
         for (int i = 0; i < out_model->entry_count; i++) {
@@ -79,6 +73,12 @@ static void resort_and_relocate(Model *out_model, const char *prev_name)
     }
 
     recompute_scroll(out_model);
+}
+
+static void resort_and_relocate(Model *out_model, const char *prev_name)
+{
+    sort_entries(out_model->entries, out_model->entry_count, out_model->sort_mode, out_model->group_mode);
+    relocate_selected(out_model, prev_name);
 }
 
 static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
@@ -96,6 +96,19 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
 
     case MSG_RUN_CMD:
         start_edit(out_model, MODE_RUN_CMD);
+        break;
+
+    case MSG_CANCEL:
+        out_model->yank_path[0] = '\0';
+        break;
+
+    case MSG_FILTER_PLAIN:
+    case MSG_FILTER_REGEX:
+        out_model->mode = MODE_FILTER;
+        out_model->filter_type = (msg->type == MSG_FILTER_PLAIN) ? FILTER_PLAIN : FILTER_REGEX;
+        strncpy(out_model->edit_buf, out_model->filter_pattern, sizeof(out_model->edit_buf) - 1);
+        out_model->edit_buf[sizeof(out_model->edit_buf) - 1] = '\0';
+        out_model->edit_len = strlen(out_model->edit_buf);
         break;
 
     case MSG_DELETE:
@@ -190,6 +203,8 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
         break;
 
     case MSG_GO_PARENT:
+        out_model->filter_type = FILTER_NONE;
+        out_model->filter_pattern[0] = '\0';
         out_cmd->type = CMD_LOAD_DIR;
         out_cmd->show_hidden = out_model->show_hidden;
         parent_path(out_model->current_path, out_cmd->path, sizeof(out_cmd->path));
@@ -215,6 +230,8 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
         if (S_ISDIR(e->st.st_mode)) {
             if (is_protected_name(e->name))
                 break;
+            out_model->filter_type = FILTER_NONE;
+            out_model->filter_pattern[0] = '\0';
             out_cmd->type = CMD_LOAD_DIR;
             out_cmd->show_hidden = out_model->show_hidden;
             join_path(out_model->current_path, e->name, out_cmd->path, sizeof(out_cmd->path));
@@ -230,16 +247,33 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
     }
 }
 
+static void recompute_filter_live(Model *out_model)
+{
+    apply_filter(out_model->unfiltered_entries, out_model->unfiltered_count,
+                 out_model->filter_type, out_model->edit_buf,
+                 out_model->sort_mode, out_model->group_mode,
+                 out_model->entries, &out_model->entry_count);
+    out_model->selected = 0;
+    recompute_scroll(out_model);
+}
+
 static void handle_edit(const Msg *msg, Model *out_model, Cmd *out_cmd)
 {
     switch (msg->type) {
     case MSG_CANCEL:
+        if (out_model->mode == MODE_FILTER) {
+            out_model->filter_type = FILTER_NONE;
+            out_model->filter_pattern[0] = '\0';
+            recompute_filter_live(out_model);
+        }
         cancel_edit(out_model);
         break;
 
     case MSG_DELETE:
         if (out_model->edit_len > 0)
             out_model->edit_buf[--out_model->edit_len] = '\0';
+        if (out_model->mode == MODE_FILTER)
+            recompute_filter_live(out_model);
         break;
 
     case MSG_TEXT_INPUT:
@@ -247,9 +281,18 @@ static void handle_edit(const Msg *msg, Model *out_model, Cmd *out_cmd)
             out_model->edit_buf[out_model->edit_len++] = msg->ch;
             out_model->edit_buf[out_model->edit_len] = '\0';
         }
+        if (out_model->mode == MODE_FILTER)
+            recompute_filter_live(out_model);
         break;
 
     case MSG_ACTIVATE:
+        if (out_model->mode == MODE_FILTER) {
+            strncpy(out_model->filter_pattern, out_model->edit_buf, sizeof(out_model->filter_pattern) - 1);
+            out_model->filter_pattern[sizeof(out_model->filter_pattern) - 1] = '\0';
+            cancel_edit(out_model);
+            break;
+        }
+
         if (out_model->edit_len == 0) {
             cancel_edit(out_model);
             break;
@@ -312,14 +355,18 @@ static void handle_dir_loaded(const Msg *msg, Model *out_model)
     char prev_name[NAME_MAX_LEN + 1];
     selected_name(out_model, prev_name, sizeof(prev_name));
 
-    out_model->entry_count = msg->dir_loaded.entry_count;
-    memcpy(out_model->entries, msg->dir_loaded.entries,
+    out_model->unfiltered_count = msg->dir_loaded.entry_count;
+    memcpy(out_model->unfiltered_entries, msg->dir_loaded.entries,
            sizeof(Entry) * msg->dir_loaded.entry_count);
     strncpy(out_model->current_path, msg->dir_loaded.path,
             sizeof(out_model->current_path) - 1);
     out_model->current_path[sizeof(out_model->current_path) - 1] = '\0';
 
-    resort_and_relocate(out_model, prev_name);
+    apply_filter(out_model->unfiltered_entries, out_model->unfiltered_count,
+                 out_model->filter_type, out_model->filter_pattern,
+                 out_model->sort_mode, out_model->group_mode,
+                 out_model->entries, &out_model->entry_count);
+    relocate_selected(out_model, prev_name);
 }
 
 void update(const Msg *msg, const Model *model, Model *out_model, Cmd *out_cmd)
@@ -357,7 +404,8 @@ void update(const Msg *msg, const Model *model, Model *out_model, Cmd *out_cmd)
 
     if (model->mode == MODE_NAV)
         handle_nav(msg, out_model, out_cmd);
-    else if (model->mode == MODE_RENAME || model->mode == MODE_CREATE || model->mode == MODE_RUN_CMD)
+    else if (model->mode == MODE_RENAME || model->mode == MODE_CREATE ||
+             model->mode == MODE_RUN_CMD || model->mode == MODE_FILTER)
         handle_edit(msg, out_model, out_cmd);
     else if (model->mode == MODE_CONFIRM_DELETE)
         handle_confirm_delete(msg, out_model, out_cmd);

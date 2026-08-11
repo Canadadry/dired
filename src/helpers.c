@@ -1,6 +1,7 @@
 #include "helpers.h"
 #include <string.h>
 #include <stdio.h>
+#include <regex.h>
 
 int is_protected_name(const char *name)
 {
@@ -149,6 +150,51 @@ void sort_entries(Entry *entries, int count, SortMode sort_mode, GroupMode group
         }
         entries[j + 1] = key;
     }
+}
+
+int filter_matches(const char *name, FilterType type, const char *pattern)
+{
+    if (type == FILTER_NONE)
+        return 1;
+
+    if (type == FILTER_PLAIN)
+        return strstr(name, pattern) != NULL;
+
+    regex_t re;
+    if (regcomp(&re, pattern, REG_EXTENDED | REG_NOSUB) != 0)
+        return 0;
+
+    int matched = regexec(&re, name, 0, NULL, 0) == 0;
+    regfree(&re);
+    return matched;
+}
+
+int filter_is_valid(FilterType type, const char *pattern)
+{
+    if (type != FILTER_REGEX)
+        return 1;
+
+    regex_t re;
+    if (regcomp(&re, pattern, REG_EXTENDED | REG_NOSUB) != 0)
+        return 0;
+
+    regfree(&re);
+    return 1;
+}
+
+void apply_filter(const Entry *unfiltered_entries, int unfiltered_count,
+                   FilterType filter_type, const char *filter_pattern,
+                   SortMode sort_mode, GroupMode group_mode,
+                   Entry *out_entries, int *out_entry_count)
+{
+    int count = 0;
+    for (int i = 0; i < unfiltered_count; i++) {
+        if (filter_matches(unfiltered_entries[i].name, filter_type, filter_pattern))
+            out_entries[count++] = unfiltered_entries[i];
+    }
+
+    sort_entries(out_entries, count, sort_mode, group_mode);
+    *out_entry_count = count;
 }
 
 int is_binary_content(const unsigned char *buf, size_t len)

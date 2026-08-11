@@ -317,6 +317,108 @@ static void test_page_snap_offset(void)
     }
 }
 
+static void test_filter_matches(void)
+{
+    typedef struct {
+        const char *label;
+        const char *name;
+        FilterType type;
+        const char *pattern;
+        int expected;
+    } Case;
+
+    Case cases[] = {
+        {"FILTER_NONE always matches", "anything.txt", FILTER_NONE, "", 1},
+        {"plain substring match", "report_final.csv", FILTER_PLAIN, "report", 1},
+        {"plain substring no-match", "notes.txt", FILTER_PLAIN, "report", 0},
+        {"regex match anchored to extension", "main.c", FILTER_REGEX, "\\.(c|h)$", 1},
+        {"regex no-match", "main.py", FILTER_REGEX, "\\.(c|h)$", 0},
+        {"regex matches mid-string, unanchored", "myfoo.txt", FILTER_REGEX, "foo", 1},
+        {"malformed regex matches nothing", "anything", FILTER_REGEX, "[unterminated", 0},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        int got = filter_matches(cases[i].name, cases[i].type, cases[i].pattern);
+        if (got != cases[i].expected) {
+            TEST_ERRORF(cases[i].label, "filter_matches(%s, %d, %s) = %d, want %d",
+                        cases[i].name, cases[i].type, cases[i].pattern, got, cases[i].expected);
+        }
+    }
+}
+
+static void test_filter_is_valid(void)
+{
+    typedef struct {
+        const char *label;
+        FilterType type;
+        const char *pattern;
+        int expected;
+    } Case;
+
+    Case cases[] = {
+        {"plain is always valid regardless of content", FILTER_PLAIN, "[unterminated", 1},
+        {"valid regex", FILTER_REGEX, "\\.(c|h)$", 1},
+        {"invalid regex, unterminated bracket expression", FILTER_REGEX, "[unterminated", 0},
+        {"empty regex is valid", FILTER_REGEX, "", 1},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        int got = filter_is_valid(cases[i].type, cases[i].pattern);
+        if (got != cases[i].expected) {
+            TEST_ERRORF(cases[i].label, "filter_is_valid(%d, %s) = %d, want %d",
+                        cases[i].type, cases[i].pattern, got, cases[i].expected);
+        }
+    }
+}
+
+static void test_apply_filter(void)
+{
+    Entry zeta = make_entry("zeta.txt");
+    Entry alpha_report = make_entry("alpha_report.txt");
+    Entry middle = make_entry("middle.log");
+    Entry beta_report = make_entry("beta_report.csv");
+    Entry unfiltered[] = { zeta, alpha_report, middle, beta_report };
+
+    typedef struct {
+        const char *label;
+        FilterType type;
+        const char *pattern;
+        int expected_count;
+        const char *expected_order[4];
+    } Case;
+
+    Case cases[] = {
+        {"no filter keeps everything, sorted", FILTER_NONE, "",
+         4, {"alpha_report.txt", "beta_report.csv", "middle.log", "zeta.txt"}},
+        {"plain filter narrows and sorts survivors", FILTER_PLAIN, "report",
+         2, {"alpha_report.txt", "beta_report.csv"}},
+        {"regex filter narrows and sorts survivors", FILTER_REGEX, "\\.(txt|csv)$",
+         3, {"alpha_report.txt", "beta_report.csv", "zeta.txt"}},
+        {"pattern matching nothing yields empty output", FILTER_PLAIN, "nonexistent",
+         0, {0}},
+        {"malformed regex yields empty output", FILTER_REGEX, "[unterminated",
+         0, {0}},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Entry out[4];
+        int out_count = -1;
+        apply_filter(unfiltered, 4, cases[i].type, cases[i].pattern,
+                     SORT_NAME_ASC, GROUP_MIXED, out, &out_count);
+
+        if (out_count != cases[i].expected_count) {
+            TEST_ERRORF(cases[i].label, "out_count = %d, want %d", out_count, cases[i].expected_count);
+            continue;
+        }
+        for (int j = 0; j < out_count; j++) {
+            if (strcmp(out[j].name, cases[i].expected_order[j]) != 0) {
+                TEST_ERRORF(cases[i].label, "out[%d].name = %s, want %s",
+                            j, out[j].name, cases[i].expected_order[j]);
+            }
+        }
+    }
+}
+
 void test_helpers(void)
 {
     test_is_protected_name();
@@ -328,4 +430,7 @@ void test_helpers(void)
     test_entry_compare();
     test_visible_entry_rows();
     test_page_snap_offset();
+    test_filter_matches();
+    test_filter_is_valid();
+    test_apply_filter();
 }

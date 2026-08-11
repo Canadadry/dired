@@ -11,6 +11,7 @@ typedef enum {
     STYLE_SELECTED,
     STYLE_PROMPT,
     STYLE_ERROR,
+    STYLE_VALID,
 } StyleTag;
 
 typedef struct {

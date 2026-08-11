@@ -13,6 +13,13 @@ typedef enum {
 
 int is_protected_name(const char *name);
 int is_hidden_name(const char *name);
+int filter_matches(const char *name, FilterType type, const char *pattern);
+int filter_is_valid(FilterType type, const char *pattern);
+
+void apply_filter(const Entry *unfiltered_entries, int unfiltered_count,
+                   FilterType filter_type, const char *filter_pattern,
+                   SortMode sort_mode, GroupMode group_mode,
+                   Entry *out_entries, int *out_entry_count);
 void mode_to_str(mode_t m, char *out);
 int is_binary_content(const unsigned char *buf, size_t len);
 void find_available_name(const char *base_name, const Entry *entries, int entry_count,
