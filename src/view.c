@@ -63,7 +63,10 @@ static void add_prompt_line(View *v, const Model *m)
         } else if (m->filter_type != FILTER_NONE) {
             add_line(v, STYLE_NORMAL, "Filter: %s", m->filter_pattern);
         } else if (m->glob_type != GLOB_NONE) {
-            add_line(v, STYLE_NORMAL, "Glob: %s", m->glob_pattern);
+            if (m->glob_capped)
+                add_line(v, STYLE_NORMAL, "Glob: %s (%d+ shown)", m->glob_pattern, MAX_ENTRIES);
+            else
+                add_line(v, STYLE_NORMAL, "Glob: %s", m->glob_pattern);
         } else {
             add_line(v, STYLE_NORMAL, "");
         }

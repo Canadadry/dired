@@ -7,7 +7,6 @@
 #define MAX_ENTRIES 1024
 #define NAME_MAX_LEN 1024
 #define PATH_MAX_LEN 1024
-#define GLOB_MAX_CANDIDATES 4096
 
 typedef enum {
     MODE_NAV = 0,
@@ -72,9 +71,7 @@ typedef struct {
 
     GlobType glob_type;
     char glob_pattern[NAME_MAX_LEN + 1];
-    Entry *glob_candidates;
-    int glob_candidate_count;
-    int glob_truncated;
+    int glob_capped;
 
     char current_path[PATH_MAX_LEN];
 
@@ -100,7 +97,6 @@ typedef struct {
     int yank_is_move;
 
     char error_msg[256];
-    int error_reenter_glob;
 
     int should_quit;
 } Model;

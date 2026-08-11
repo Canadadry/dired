@@ -176,6 +176,34 @@ static void test_view_glob_status_shown_when_active_and_no_yank(void)
     }
 }
 
+static void test_view_glob_status_shows_capped_hint(void)
+{
+    Model m = make_view_model();
+    m.glob_type = GLOB_PLAIN;
+    strcpy(m.glob_pattern, "report");
+    m.glob_capped = 1;
+
+    View v = view(&m);
+
+    if (!strstr(v.lines[1].text, "report") || !strstr(v.lines[1].text, "1024")) {
+        TEST_ERRORF("glob capped hint", "lines[1] = '%s', want it to mention 'report' and the 1024 cap", v.lines[1].text);
+    }
+}
+
+static void test_view_glob_status_no_hint_when_not_capped(void)
+{
+    Model m = make_view_model();
+    m.glob_type = GLOB_PLAIN;
+    strcpy(m.glob_pattern, "report");
+    m.glob_capped = 0;
+
+    View v = view(&m);
+
+    if (strstr(v.lines[1].text, "1024")) {
+        TEST_ERRORF("glob no capped hint", "lines[1] = '%s', should not mention the cap", v.lines[1].text);
+    }
+}
+
 static void test_view_yank_status_takes_priority_over_glob(void)
 {
     Model m = make_view_model();
@@ -510,6 +538,8 @@ void test_view(void)
     test_view_yank_status_takes_priority_over_filter();
     test_view_glob_echoes_on_prompt_line();
     test_view_glob_status_shown_when_active_and_no_yank();
+    test_view_glob_status_shows_capped_hint();
+    test_view_glob_status_no_hint_when_not_capped();
     test_view_yank_status_takes_priority_over_glob();
     test_view_rename_keeps_old_name_in_row();
     test_view_confirm_delete_prompt();

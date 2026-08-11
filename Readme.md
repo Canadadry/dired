@@ -50,8 +50,8 @@ Space: Preview selected file (text pages, binary is hex-dumped)
 :: Run a shell command (prefix with !, e.g. !unzip $FILE), output paged. $FILE is the selected entry's path
 f: Filter listing by filename (plain substring)
 F: Filter listing by filename (extended regex)
-g: Recursively glob the current directory tree by filename (plain substring)
-G: Recursively glob the current directory tree by filename (extended regex)
+g: Recursively glob the current directory tree by filename (plain substring), Enter to search
+G: Recursively glob the current directory tree by filename (extended regex), Enter to search
 Esc: Cancel a pending yank (nav); cancel composing (Rename/Create/Filter/Run command)
 s: Cycle sort key/direction (name, date, size, extension — asc/desc)
 d: Cycle directory grouping (first, last, mixed)

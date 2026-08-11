@@ -473,74 +473,6 @@ static void test_apply_filter_truncation(void)
     }
 }
 
-static size_t build_nul_buf(char *out, const char *segments[], int n)
-{
-    size_t pos = 0;
-    for (int i = 0; i < n; i++) {
-        size_t l = strlen(segments[i]);
-        memcpy(out + pos, segments[i], l);
-        pos += l;
-        out[pos++] = '\0';
-    }
-    return pos;
-}
-
-static void test_split_nul_delimited(void)
-{
-    const char *cwd = "/tmp/globtest";
-
-    typedef struct {
-        const char *label;
-        const char *segments[4];
-        int segment_count;
-        int max_count;
-        int expected_count;
-        int expected_truncated;
-        const char *expected_names[4];
-    } Case;
-
-    Case cases[] = {
-        {"under the cap parses everything, not truncated",
-         {"/tmp/globtest/foo.txt", "/tmp/globtest/sub/bar.txt"}, 2, 10,
-         2, 0, {"foo.txt", "sub/bar.txt"}},
-        {"exactly at the cap is not truncated",
-         {"/tmp/globtest/foo.txt", "/tmp/globtest/sub/bar.txt"}, 2, 2,
-         2, 0, {"foo.txt", "sub/bar.txt"}},
-        {"over the cap parses only the first N and flags truncated",
-         {"/tmp/globtest/foo.txt", "/tmp/globtest/sub/bar.txt"}, 2, 1,
-         1, 1, {"foo.txt"}},
-        {"empty buffer yields zero entries",
-         {0}, 0, 10,
-         0, 0, {0}},
-        {"leading and trailing NUL produce no empty-string entries",
-         {"", "/tmp/globtest/foo.txt", ""}, 3, 10,
-         1, 0, {"foo.txt"}},
-    };
-
-    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
-        char buf[512];
-        size_t len = build_nul_buf(buf, cases[i].segments, cases[i].segment_count);
-
-        Entry out[4];
-        int out_count = -1, out_truncated = -1;
-        split_nul_delimited(buf, len, cwd, cases[i].max_count, out, &out_count, &out_truncated);
-
-        if (out_count != cases[i].expected_count) {
-            TEST_ERRORF(cases[i].label, "out_count = %d, want %d", out_count, cases[i].expected_count);
-            continue;
-        }
-        if (out_truncated != cases[i].expected_truncated) {
-            TEST_ERRORF(cases[i].label, "out_truncated = %d, want %d", out_truncated, cases[i].expected_truncated);
-        }
-        for (int j = 0; j < out_count; j++) {
-            if (strcmp(out[j].name, cases[i].expected_names[j]) != 0) {
-                TEST_ERRORF(cases[i].label, "out[%d].name = %s, want %s",
-                            j, out[j].name, cases[i].expected_names[j]);
-            }
-        }
-    }
-}
-
 static void test_dirname_of(void)
 {
     typedef struct {
@@ -583,6 +515,5 @@ void test_helpers(void)
     test_filter_is_valid();
     test_apply_filter();
     test_apply_filter_truncation();
-    test_split_nul_delimited();
     test_dirname_of();
 }

@@ -9,6 +9,7 @@
 #include "../vendor/termbox2.h"
 
 #include <ctype.h>
+#include <dirent.h>
 #include <fcntl.h>
 #include <stdarg.h>
 #include <errno.h>
@@ -230,65 +231,69 @@ static Msg execute_preview(const char *path)
     return (Msg){ .type = MSG_OP_SUCCEEDED };
 }
 
-static Msg execute_build_glob(const char *cwd)
+static void walk_glob_matches(const char *abs_dir, const char *rel_prefix,
+                               FilterType filter_type, const char *pattern,
+                               Entry *out_entries, int *out_count, int *out_truncated)
 {
-    static Entry scratch[GLOB_MAX_CANDIDATES];
-
-    int fd[2];
-    if (pipe(fd) != 0)
-        return msg_failed("glob: %s", strerror(errno));
-
-    pid_t pid = fork();
-    if (pid == 0) {
-        close(fd[0]);
-        dup2(fd[1], STDOUT_FILENO);
-        close(fd[1]);
-
-        int devnull = open("/dev/null", O_WRONLY);
-        if (devnull >= 0) {
-            dup2(devnull, STDERR_FILENO);
-            close(devnull);
-        }
-
-        char *argv[] = { "find", (char *)cwd, "-mindepth", "1", "-print0", NULL };
-        execvp(argv[0], argv);
-        _exit(EXIT_FAILURE);
+    if (*out_count >= MAX_ENTRIES) {
+        *out_truncated = 1;
+        return;
     }
 
-    close(fd[1]);
+    DIR *dir = opendir(abs_dir);
+    if (!dir)
+        return;
 
-    size_t cap = 1 << 16;
-    size_t len = 0;
-    char *buf = malloc(cap);
-    if (!buf) {
-        close(fd[0]);
-        waitpid(pid, NULL, 0);
-        return msg_failed("glob: out of memory");
-    }
+    struct dirent *de;
+    while ((de = readdir(dir))) {
+        if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0)
+            continue;
 
-    char chunk[4096];
-    ssize_t n;
-    while ((n = read(fd[0], chunk, sizeof(chunk))) > 0) {
-        if (len + (size_t)n > cap) {
-            cap *= 2;
-            char *grown = realloc(buf, cap);
-            if (!grown) {
-                free(buf);
-                close(fd[0]);
-                waitpid(pid, NULL, 0);
-                return msg_failed("glob: out of memory");
+        char abs_child[PATH_MAX_LEN];
+        snprintf(abs_child, sizeof(abs_child), "%s/%s", abs_dir, de->d_name);
+
+        char rel_child[PATH_MAX_LEN];
+        if (rel_prefix[0] == '\0')
+            snprintf(rel_child, sizeof(rel_child), "%s", de->d_name);
+        else
+            snprintf(rel_child, sizeof(rel_child), "%s/%s", rel_prefix, de->d_name);
+
+        struct stat st;
+        if (lstat(abs_child, &st) != 0)
+            continue;
+
+        if (filter_matches(rel_child, filter_type, pattern)) {
+            if (*out_count >= MAX_ENTRIES) {
+                *out_truncated = 1;
+                break;
             }
-            buf = grown;
+            strncpy(out_entries[*out_count].name, rel_child, NAME_MAX_LEN);
+            out_entries[*out_count].name[NAME_MAX_LEN] = '\0';
+            out_entries[*out_count].st = st;
+            (*out_count)++;
         }
-        memcpy(buf + len, chunk, (size_t)n);
-        len += (size_t)n;
-    }
-    close(fd[0]);
-    waitpid(pid, NULL, 0);
 
-    int count, truncated;
-    split_nul_delimited(buf, len, cwd, GLOB_MAX_CANDIDATES, scratch, &count, &truncated);
-    free(buf);
+        if (S_ISDIR(st.st_mode)) {
+            walk_glob_matches(abs_child, rel_child, filter_type, pattern,
+                               out_entries, out_count, out_truncated);
+            if (*out_count >= MAX_ENTRIES) {
+                *out_truncated = 1;
+                break;
+            }
+        }
+    }
+    closedir(dir);
+}
+
+static Msg execute_build_glob(const char *cwd, GlobType glob_type, const char *pattern)
+{
+    static Entry scratch[MAX_ENTRIES];
+
+    int count = 0;
+    int truncated = 0;
+    FilterType filter_type = (glob_type == GLOB_REGEX) ? FILTER_REGEX : FILTER_PLAIN;
+
+    walk_glob_matches(cwd, "", filter_type, pattern, scratch, &count, &truncated);
 
     Msg msg = { .type = MSG_GLOB_BUILT };
     msg.glob_built.entries = scratch;
@@ -318,7 +323,7 @@ static Msg execute_cmd(const Cmd *cmd)
 {
     switch (cmd->type) {
     case CMD_LOAD_DIR:      return load_directory(cmd->path, cmd->show_hidden);
-    case CMD_BUILD_GLOB:    return execute_build_glob(cmd->path);
+    case CMD_BUILD_GLOB:    return execute_build_glob(cmd->path, cmd->glob_type, cmd->cmd_text);
     case CMD_RENAME:        return execute_rename(cmd->path, cmd->path2);
     case CMD_CREATE_FILE:   return execute_create_file(cmd->path);
     case CMD_CREATE_DIR:    return execute_create_dir(cmd->path);
@@ -545,13 +550,6 @@ int main(int argc, char **argv)
     getcwd(model.current_path, sizeof(model.current_path));
     model.term_height = tb_height();
     model.term_width = tb_width();
-
-    model.glob_candidates = malloc(sizeof(Entry) * GLOB_MAX_CANDIDATES);
-    if (!model.glob_candidates) {
-        tb_shutdown();
-        fprintf(stderr, "dired: out of memory\n");
-        return EXIT_FAILURE;
-    }
 
     Cmd cmd = { .type = CMD_LOAD_DIR, .show_hidden = model.show_hidden };
     snprintf(cmd.path, sizeof(cmd.path), "%s", model.current_path);

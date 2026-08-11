@@ -30,6 +30,7 @@ typedef struct {
     int show_hidden;           /* CMD_LOAD_DIR: forwarded to load_directory() */
     char cmd_text[PATH_MAX_LEN];
     char selected_path[PATH_MAX_LEN];
+    GlobType glob_type;
 } Cmd;
 
 #endif // DIRED_CMD_H

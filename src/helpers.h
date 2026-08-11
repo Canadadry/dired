@@ -22,9 +22,6 @@ void apply_filter(const Entry *unfiltered_entries, int unfiltered_count,
                    SortMode sort_mode, GroupMode group_mode,
                    Entry *out_entries, int out_capacity, int *out_entry_count,
                    int *out_truncated);
-void split_nul_delimited(const char *buf, size_t len, const char *cwd,
-                          int max_count, Entry *out_entries,
-                          int *out_count, int *out_truncated);
 void dirname_of(const char *name, const char *current_path, char *out, size_t out_size);
 void mode_to_str(mode_t m, char *out);
 int is_binary_content(const unsigned char *buf, size_t len);

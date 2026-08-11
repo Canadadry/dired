@@ -115,7 +115,7 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
 
     case MSG_GLOB_PLAIN:
     case MSG_GLOB_REGEX: {
-        int need_build = (out_model->glob_type == GLOB_NONE);
+        int had_no_prior_glob = (out_model->glob_type == GLOB_NONE);
         out_model->mode = MODE_GLOB;
         out_model->glob_type = (msg->type == MSG_GLOB_PLAIN) ? GLOB_PLAIN : GLOB_REGEX;
         out_model->filter_type = FILTER_NONE;
@@ -124,11 +124,8 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
         out_model->edit_buf[sizeof(out_model->edit_buf) - 1] = '\0';
         out_model->edit_len = strlen(out_model->edit_buf);
 
-        if (need_build) {
-            out_cmd->type = CMD_BUILD_GLOB;
-            strncpy(out_cmd->path, out_model->current_path, sizeof(out_cmd->path) - 1);
-            out_cmd->path[sizeof(out_cmd->path) - 1] = '\0';
-        }
+        if (had_no_prior_glob)
+            out_model->entry_count = 0;
         break;
     }
 
@@ -283,33 +280,6 @@ static void recompute_filter_live(Model *out_model)
     recompute_scroll(out_model);
 }
 
-static FilterType glob_as_filter_type(GlobType t)
-{
-    return (t == GLOB_REGEX) ? FILTER_REGEX : FILTER_PLAIN;
-}
-
-static void enter_glob_match_truncated_error(Model *out_model)
-{
-    out_model->mode = MODE_ERROR;
-    out_model->error_reenter_glob = 1;
-    snprintf(out_model->error_msg, sizeof(out_model->error_msg),
-             "too many matches (%d+) - narrow your pattern", MAX_ENTRIES);
-}
-
-static void recompute_glob_live(Model *out_model)
-{
-    int truncated;
-    apply_filter(out_model->glob_candidates, out_model->glob_candidate_count,
-                 glob_as_filter_type(out_model->glob_type), out_model->edit_buf, 0,
-                 out_model->sort_mode, out_model->group_mode,
-                 out_model->entries, MAX_ENTRIES, &out_model->entry_count, &truncated);
-    out_model->selected = 0;
-    recompute_scroll(out_model);
-
-    if (truncated)
-        enter_glob_match_truncated_error(out_model);
-}
-
 static void handle_edit(const Msg *msg, Model *out_model, Cmd *out_cmd)
 {
     switch (msg->type) {
@@ -331,8 +301,6 @@ static void handle_edit(const Msg *msg, Model *out_model, Cmd *out_cmd)
             out_model->edit_buf[--out_model->edit_len] = '\0';
         if (out_model->mode == MODE_FILTER)
             recompute_filter_live(out_model);
-        else if (out_model->mode == MODE_GLOB)
-            recompute_glob_live(out_model);
         break;
 
     case MSG_TEXT_INPUT:
@@ -342,8 +310,6 @@ static void handle_edit(const Msg *msg, Model *out_model, Cmd *out_cmd)
         }
         if (out_model->mode == MODE_FILTER)
             recompute_filter_live(out_model);
-        else if (out_model->mode == MODE_GLOB)
-            recompute_glob_live(out_model);
         break;
 
     case MSG_ACTIVATE:
@@ -358,6 +324,13 @@ static void handle_edit(const Msg *msg, Model *out_model, Cmd *out_cmd)
             strncpy(out_model->glob_pattern, out_model->edit_buf, sizeof(out_model->glob_pattern) - 1);
             out_model->glob_pattern[sizeof(out_model->glob_pattern) - 1] = '\0';
             cancel_edit(out_model);
+
+            out_cmd->type = CMD_BUILD_GLOB;
+            out_cmd->glob_type = out_model->glob_type;
+            strncpy(out_cmd->cmd_text, out_model->glob_pattern, sizeof(out_cmd->cmd_text) - 1);
+            out_cmd->cmd_text[sizeof(out_cmd->cmd_text) - 1] = '\0';
+            strncpy(out_cmd->path, out_model->current_path, sizeof(out_cmd->path) - 1);
+            out_cmd->path[sizeof(out_cmd->path) - 1] = '\0';
             break;
         }
 
@@ -429,32 +402,13 @@ static void handle_confirm_delete(const Msg *msg, Model *out_model, Cmd *out_cmd
 
 static void handle_glob_built(const Msg *msg, Model *out_model)
 {
-    out_model->glob_candidate_count = msg->glob_built.entry_count;
-    memcpy(out_model->glob_candidates, msg->glob_built.entries,
+    out_model->entry_count = msg->glob_built.entry_count;
+    memcpy(out_model->entries, msg->glob_built.entries,
            sizeof(Entry) * msg->glob_built.entry_count);
-    out_model->glob_truncated = msg->glob_built.truncated;
-
-    if (out_model->mode == MODE_GLOB) {
-        recompute_glob_live(out_model);
-    } else {
-        int truncated;
-        apply_filter(out_model->glob_candidates, out_model->glob_candidate_count,
-                     glob_as_filter_type(out_model->glob_type), out_model->glob_pattern, 0,
-                     out_model->sort_mode, out_model->group_mode,
-                     out_model->entries, MAX_ENTRIES, &out_model->entry_count, &truncated);
-        out_model->selected = 0;
-        recompute_scroll(out_model);
-
-        if (truncated)
-            enter_glob_match_truncated_error(out_model);
-    }
-
-    if (out_model->glob_truncated) {
-        out_model->mode = MODE_ERROR;
-        out_model->error_reenter_glob = 1;
-        snprintf(out_model->error_msg, sizeof(out_model->error_msg),
-                 "results incomplete (%d+ matches) - try a subfolder", GLOB_MAX_CANDIDATES);
-    }
+    sort_entries(out_model->entries, out_model->entry_count, out_model->sort_mode, out_model->group_mode);
+    out_model->glob_capped = msg->glob_built.truncated;
+    out_model->selected = 0;
+    recompute_scroll(out_model);
 }
 
 static void handle_dir_loaded(const Msg *msg, Model *out_model)
@@ -494,6 +448,9 @@ void update(const Msg *msg, const Model *model, Model *out_model, Cmd *out_cmd)
     case MSG_OP_SUCCEEDED:
         if (out_model->glob_type != GLOB_NONE) {
             out_cmd->type = CMD_BUILD_GLOB;
+            out_cmd->glob_type = out_model->glob_type;
+            strncpy(out_cmd->cmd_text, out_model->glob_pattern, sizeof(out_cmd->cmd_text) - 1);
+            out_cmd->cmd_text[sizeof(out_cmd->cmd_text) - 1] = '\0';
             strncpy(out_cmd->path, out_model->current_path, sizeof(out_cmd->path) - 1);
             out_cmd->path[sizeof(out_cmd->path) - 1] = '\0';
             return;
@@ -506,7 +463,6 @@ void update(const Msg *msg, const Model *model, Model *out_model, Cmd *out_cmd)
 
     case MSG_OP_FAILED:
         out_model->mode = MODE_ERROR;
-        out_model->error_reenter_glob = 0;
         strncpy(out_model->error_msg, msg->error, sizeof(out_model->error_msg) - 1);
         out_model->error_msg[sizeof(out_model->error_msg) - 1] = '\0';
         return;
@@ -530,14 +486,6 @@ void update(const Msg *msg, const Model *model, Model *out_model, Cmd *out_cmd)
     else if (model->mode == MODE_CONFIRM_DELETE)
         handle_confirm_delete(msg, out_model, out_cmd);
     else if (model->mode == MODE_ERROR) {
-        if (model->error_reenter_glob) {
-            out_model->mode = MODE_GLOB;
-            out_model->error_reenter_glob = 0;
-            strncpy(out_model->edit_buf, out_model->glob_pattern, sizeof(out_model->edit_buf) - 1);
-            out_model->edit_buf[sizeof(out_model->edit_buf) - 1] = '\0';
-            out_model->edit_len = strlen(out_model->edit_buf);
-        } else {
-            out_model->mode = MODE_NAV;
-        }
+        out_model->mode = MODE_NAV;
     }
 }
