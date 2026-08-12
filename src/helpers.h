@@ -24,6 +24,13 @@ int parse_preview_rules(const char *text, PreviewRule *out_rules, int max_rules,
                          char *errbuf, size_t errbuf_len);
 const PreviewRule *match_preview_rule(const char *filename, const PreviewRule *rules, int rule_count);
 
+#define PREVIEW_ARGV_MAX 16
+#define PREVIEW_EXEC_TOKEN_MAX (PATH_MAX_LEN + 64)
+
+int build_preview_argv(const PreviewRule *rule, const char *file_path, int col_width,
+                        char argv_buf[PREVIEW_ARGV_MAX][PREVIEW_EXEC_TOKEN_MAX],
+                        char *out_argv[PREVIEW_ARGV_MAX + 1]);
+
 int is_protected_name(const char *name);
 int is_hidden_name(const char *name);
 ArchiveFormat archive_format_for_name(const char *name);

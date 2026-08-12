@@ -688,6 +688,85 @@ static void test_match_preview_rule(void)
     }
 }
 
+static void test_build_preview_argv(void)
+{
+    typedef struct {
+        const char *label;
+        const char *argv_template;
+        const char *file_path;
+        int col_width;
+        int expect_error;
+        int expected_argc;
+        const char *expected_argv[6];
+    } Case;
+
+    static char long_path[600];
+    memset(long_path, 'x', sizeof(long_path) - 5);
+    memcpy(long_path + sizeof(long_path) - 5, ".txt", 5);
+
+    Case cases[] = {
+        {"dollar-FILE as its own token", "less $FILE", "/tmp/a.txt", 80,
+         0, 2, {"less", "/tmp/a.txt"}},
+
+        {"dollar-FILE embedded in larger token", "prog --file=$FILE", "/tmp/a.txt", 80,
+         0, 2, {"prog", "--file=/tmp/a.txt"}},
+
+        {"dollar-FILE repeated across multiple tokens", "cp $FILE $FILE.bak", "/tmp/a.txt", 80,
+         0, 3, {"cp", "/tmp/a.txt", "/tmp/a.txt.bak"}},
+
+        {"dollar-COL substituted alongside dollar-FILE", "viewer $FILE --width=$COL",
+         "/tmp/a.txt", 120,
+         0, 3, {"viewer", "/tmp/a.txt", "--width=120"}},
+
+        {"rule with no dollar-COL token", "less $FILE", "/tmp/a.txt", 999,
+         0, 2, {"less", "/tmp/a.txt"}},
+
+        {"long path exercises exec-time buffer", "cat $FILE", long_path, 80,
+         0, 2, {"cat", long_path}},
+
+        {"too many tokens exceeds cap", "a b c d e f g h i j k l m n o p q", "/tmp/a.txt", 80,
+         1, 0, {0}},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        PreviewRule rule;
+        memset(&rule, 0, sizeof(rule));
+        strcpy(rule.suffix, "x");
+        snprintf(rule.argv_template, sizeof(rule.argv_template), "%s", cases[i].argv_template);
+
+        char argv_buf[PREVIEW_ARGV_MAX][PREVIEW_EXEC_TOKEN_MAX];
+        char *out_argv[PREVIEW_ARGV_MAX + 1];
+
+        int got = build_preview_argv(&rule, cases[i].file_path, cases[i].col_width,
+                                      argv_buf, out_argv);
+
+        if (cases[i].expect_error) {
+            if (got != -1) {
+                TEST_ERRORF(cases[i].label, "build_preview_argv(...) = %d, want -1", got);
+            }
+            continue;
+        }
+
+        if (got != cases[i].expected_argc) {
+            TEST_ERRORF(cases[i].label, "build_preview_argv(...) = %d, want %d",
+                        got, cases[i].expected_argc);
+            continue;
+        }
+
+        if (out_argv[got] != NULL) {
+            TEST_ERRORF(cases[i].label, "out_argv[%d] = %p, want NULL",
+                        got, (void *)out_argv[got]);
+        }
+
+        for (int j = 0; j < got; j++) {
+            if (strcmp(out_argv[j], cases[i].expected_argv[j]) != 0) {
+                TEST_ERRORF(cases[i].label, "out_argv[%d] = %s, want %s",
+                            j, out_argv[j], cases[i].expected_argv[j]);
+            }
+        }
+    }
+}
+
 void test_helpers(void)
 {
     test_is_protected_name();
@@ -707,4 +786,5 @@ void test_helpers(void)
     test_archive_format_for_name();
     test_parse_preview_rules();
     test_match_preview_rule();
+    test_build_preview_argv();
 }

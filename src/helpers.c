@@ -388,6 +388,66 @@ const PreviewRule *match_preview_rule(const char *filename, const PreviewRule *r
     return NULL;
 }
 
+int build_preview_argv(const PreviewRule *rule, const char *file_path, int col_width,
+                        char argv_buf[PREVIEW_ARGV_MAX][PREVIEW_EXEC_TOKEN_MAX],
+                        char *out_argv[PREVIEW_ARGV_MAX + 1])
+{
+    char col_str[16];
+    snprintf(col_str, sizeof(col_str), "%d", col_width);
+
+    const char *p = rule->argv_template;
+    int argc = 0;
+
+    while (*p) {
+        while (*p && isspace((unsigned char)*p))
+            p++;
+        if (!*p)
+            break;
+
+        if (argc >= PREVIEW_ARGV_MAX)
+            return -1;
+
+        char *dst = argv_buf[argc];
+        size_t pos = 0;
+
+        while (*p && !isspace((unsigned char)*p)) {
+            const char *replacement = NULL;
+            size_t match_len = 0;
+
+            if (strncmp(p, "$FILE", 5) == 0) {
+                replacement = file_path;
+                match_len = 5;
+            } else if (strncmp(p, "$COL", 4) == 0) {
+                replacement = col_str;
+                match_len = 4;
+            }
+
+            if (replacement) {
+                size_t rlen = strlen(replacement);
+                if (pos + rlen >= PREVIEW_EXEC_TOKEN_MAX)
+                    return -1;
+                memcpy(dst + pos, replacement, rlen);
+                pos += rlen;
+                p += match_len;
+            } else {
+                if (pos + 1 >= PREVIEW_EXEC_TOKEN_MAX)
+                    return -1;
+                dst[pos++] = *p++;
+            }
+        }
+
+        dst[pos] = '\0';
+        out_argv[argc] = dst;
+        argc++;
+    }
+
+    if (argc == 0)
+        return -1;
+
+    out_argv[argc] = NULL;
+    return argc;
+}
+
 void mode_to_str(mode_t m, char *out)
 {
     out[0] = S_ISDIR(m) ? 'd' : '-';
