@@ -24,6 +24,10 @@
 
 #define PREVIEW_SNIFF_LEN 512
 #define BUILD_TIMESTAMP __DATE__ " " __TIME__
+#define PREVIEW_CONFIG_MAX_BYTES 16384
+
+static PreviewRule g_preview_rules[PREVIEW_RULE_MAX];
+static int g_preview_rule_count = 0;
 
 /* main() is the only impure code in the program: the only place that calls
  * a tb_* function, and the only place that touches the filesystem or spawns
@@ -790,6 +794,49 @@ static void print_help(void)
         printf("Detected window size: unavailable (%s)\n", strerror(errno));
 }
 
+static void load_preview_config(void)
+{
+    const char *home = getenv("HOME");
+    if (!home || home[0] == '\0')
+        return;
+
+    char config_dir[PATH_MAX_LEN];
+    snprintf(config_dir, sizeof(config_dir), "%s/.config", home);
+    if (mkdir(config_dir, 0755) != 0 && errno != EEXIST)
+        return;
+
+    char config_path[PATH_MAX_LEN];
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+    snprintf(config_path, sizeof(config_path), "%s/dired", config_dir);
+#pragma GCC diagnostic pop
+
+    if (access(config_path, F_OK) != 0) {
+        FILE *created = fopen(config_path, "w");
+        if (!created)
+            return;
+        fclose(created);
+    }
+
+    FILE *f = fopen(config_path, "r");
+    if (!f)
+        return;
+
+    char text[PREVIEW_CONFIG_MAX_BYTES];
+    size_t n = fread(text, 1, sizeof(text) - 1, f);
+    fclose(f);
+    text[n] = '\0';
+
+    char errbuf[256];
+    int count = parse_preview_rules(text, g_preview_rules, PREVIEW_RULE_MAX, errbuf, sizeof(errbuf));
+    if (count < 0) {
+        fprintf(stderr, "dired: %s: %s\n", config_path, errbuf);
+        exit(EXIT_FAILURE);
+    }
+
+    g_preview_rule_count = count;
+}
+
 int main(int argc, char **argv)
 {
     for (int i = 1; i < argc; i++) {
@@ -798,6 +845,8 @@ int main(int argc, char **argv)
             return EXIT_SUCCESS;
         }
     }
+
+    load_preview_config();
 
     tb_init();
 
