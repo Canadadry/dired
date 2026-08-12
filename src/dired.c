@@ -279,6 +279,22 @@ static void run_piped(char *const argv1[], char *const argv2[], const char *cwd)
 
 static Msg execute_preview(const char *path)
 {
+    const PreviewRule *rule = match_preview_rule(path, g_preview_rules, g_preview_rule_count);
+    if (rule) {
+        int col_width = tb_width();
+        tb_shutdown();
+
+        char argv_buf[PREVIEW_ARGV_MAX][PREVIEW_EXEC_TOKEN_MAX];
+        char *argv[PREVIEW_ARGV_MAX + 1];
+        if (build_preview_argv(rule, path, col_width, argv_buf, argv) > 0) {
+            char *pager_argv[] = { "more", NULL };
+            run_piped(argv, pager_argv, NULL);
+        }
+
+        tb_init();
+        return (Msg){ .type = MSG_OP_SUCCEEDED };
+    }
+
     FILE *f = fopen(path, "r");
     if (!f)
         return msg_failed("preview: %s", strerror(errno));
