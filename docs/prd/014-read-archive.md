@@ -1,7 +1,8 @@
 ---
 title: "Read archive capabilities"
 description: "dired can only browse the real filesystem — finding or extracting a single file inside a tar/zip archive means leaving dired entirely and shelling out to tar/unzip by hand."
-status: needs-triage
+status: done
+branch: feat/read-archive
 ---
 
 ## Problem Statement
@@ -97,6 +98,65 @@ Consistent with every prior PRD's Testing Decisions: good tests here assert on p
 - **The "children at this level" function**: table-driven against canned member lists — root level, a nested subfolder, a subfolder with only implied (not explicit) directory entries, and an empty result for a subfolder with no members.
 - **`update()`-level tests** (same harness as `filter`/`glob`'s existing suites in `update_test.c`): entering an archive-format file from nav mode produces the listing `Cmd`; `MSG_GO_PARENT` inside a subfolder pops one segment without leaving the archive; `MSG_GO_PARENT` at an archive's root pops the whole level (and, for a nested level, includes the tmp-cleanup intent); each blocked operation (rename/create/delete/trash/paste-into/yank-move/run-command) while inside an archive produces `MODE_ERROR` with the "not possible in archive" message and no other side effect; yank-copy on a directory-type member is blocked the same way; yank-copy on a file-type member followed by paste in a real directory produces the extraction `Cmd` with the resolved, collision-free destination name; filter/glob committed while inside an archive operate against the level's cached list rather than issuing any real-filesystem `Cmd`.
 - **Listing/extraction execution itself is not unit-tested**, matching the established convention for `load_directory`/`execute_preview`/`walk_glob_matches` (real fork/exec/pipe I/O, no canned-buffer seam to test against at that layer — the parsing seam above is where the coverage lives instead). Validated manually against: a small tar and a small zip archive; a nested archive inside another archive; a corrupted archive; a password-protected zip; an archive exceeding the glob/filter display cap; opening a member in vim and confirming it's read-only; copy-out via yank/paste landing correctly in a real directory with a name collision.
+
+## Implementation Chunks
+
+This PRD is too wide to build as one vertical slice, so it's cut into sequential,
+independently-testable chunks. Each chunk builds only on prior chunks, follows
+the tdd skill's tracer-bullet loop on its own, and should reach a green test
+suite before the next chunk starts. Story/decision references are to the
+sections above.
+
+- [x] **Chunk 0 — `feat/read-archive`, commit `b0c8fe8`**: `archive_format_for_name`
+  pure classifier (story 25), table-tested. `MSG_ACTIVATE` on a regular file
+  with a recognized extension returns `CMD_LIST_ARCHIVE` (carrying the detected
+  `ArchiveFormat`) instead of `CMD_LAUNCH_EDITOR` — routing only, no listing
+  execution wired up yet (`CMD_LIST_ARCHIVE` is currently a no-op in `dired.c`).
+- [x] **Chunk 1 — commit `f9d25d6`**: `parse_tar_listing` / `parse_zip_listing` pure functions
+  fed canned `tar -tvf`/`unzip -l` stdout text (story 26), and the pure
+  "children visible at this subfolder" function over a cached member list
+  (story 27). No `Model`/`update()` wiring yet — parsing/derivation only.
+- [x] **Chunk 2 — commit `b5d6920`**: `CMD_LIST_ARCHIVE`'s real
+  fork/exec of `tar -tvf`/`unzip -l` (story 28, joins the un-unit-tested
+  execution layer alongside `load_directory`/`execute_preview`); `Model` gains
+  the bounded archive-level stack; a new `Msg` (e.g. `MSG_ARCHIVE_LISTED`)
+  feeds the parsed listing into `update()`, pushing the first level and
+  populating `entries` via chunk 1's children-at-root-subfolder function
+  (completes story 1, story 8's one-fetch-per-level). Path bar renders the
+  archive as an ordinary path segment (story 2).
+- [x] **Chunk 3 — commit `77c2130`**: `MSG_ACTIVATE` on a
+  directory-type member descends a subfolder in place (pure re-filter of the
+  cached list, no re-fetch); `MSG_GO_PARENT` pops one subfolder segment, then
+  pops the whole level back to the containing level or real filesystem once
+  the subfolder is empty (stories 3, 4, 5).
+- [x] **Chunk 4 — commit `c50554d`**: entering an archive-format member while
+  already inside a level extracts it to a tmp file first, then pushes a new
+  level sourced from that tmp file; popping a tmp-sourced level deletes the
+  tmp file (stories 6, 7, and the nested-level part of story 29).
+- [x] **Chunk 5 — commit `594fa11`**: `f`/`F` and `g`/`G` reuse their
+  existing predicates and interaction model unchanged, but source from the
+  active level's cached member list instead of `unfiltered_entries`/a real
+  walk; same cap-with-status-line-hint behavior (stories 9, 10, 11).
+- [x] **Chunk 6 — commit `dd7d55d`**: Enter and Space extract the member to a
+  fresh, read-only tmp file, then hand off unmodified to the existing
+  `CMD_LAUNCH_EDITOR`/`CMD_PREVIEW` paths (stories 12, 13, 14).
+- [x] **Chunk 7 — commit `a70024a`**: yank-copy on a file-type member records the level
+  and member path instead of a real filesystem path; yank-copy on a
+  directory-type member is blocked; paste extracts to the resolved,
+  collision-free destination in the real directory (stories 15, 16, 17).
+- [x] **Chunk 8 — commit `9246af2`**: Rename, Create, Delete/Trash,
+  Paste-into, Yank-Move, and `:` Run Command all resolve to
+  `MODE_ERROR("not possible in archive")` while any archive level is active
+  (stories 18, 19, 20).
+- [x] **Chunk 9 — commit `e46a699`**: a missing `tar`/`unzip` binary, a corrupted
+  archive, and a password-protected archive all surface via the existing
+  `MODE_ERROR` path carrying the tool's stderr, leaving no broken level
+  pushed (stories 21, 22).
+- [x] **Chunk 10 — commit `8d9898c`**: `s`/`d` cycling
+  and the `a` hidden-files toggle apply to archive listings, including the
+  placeholder mode string for zip's missing permission bits; any remaining
+  leftover tmp files get a best-effort cleanup on quit (stories 23, 24, and
+  the remainder of story 29).
 
 ## Out of Scope
 

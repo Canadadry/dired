@@ -5,6 +5,7 @@ A lightweight terminal-based file manager written in C using termbox2 (vendored 
 ## Features
 
 * Navigate directories with arrow keys.
+* Enter a `.zip` or `.tar`/`.tar.gz`/`.tgz`/`.tar.bz2`/`.tbz2`/`.tar.xz`/`.txz`/`.tar.Z` archive with →/Enter to browse its contents like a directory.
 * Open and edit files with Vim directly from the interface.
 * Rename files and directories.
 * Create new files or directories (via a temporary virtual line).
@@ -79,6 +80,7 @@ drwxr-xr-x    128 src
 * The `>` indicates the current selection.
 * The last line (virtual line) is used when creating a new file or directory — the user types the name directly.
 * Files and directories are displayed with permissions and sizes.
+* Inside an archive listing, entries show `----------`/`d---------` in place of permissions, since archive tools don't always report real permission bits.
 
 ## Purpose
 

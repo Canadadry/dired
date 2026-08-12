@@ -4,7 +4,10 @@
 #include "../src/cmd.h"
 #include "../src/update.h"
 #include "../src/helpers.h"
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 static Model make_nav_model(int entry_count, int selected)
 {
@@ -193,6 +196,81 @@ static void test_activate(void)
     }
 }
 
+static void test_activate_on_archive_file_lists_archive_instead_of_launching_editor(void)
+{
+    typedef struct {
+        const char *label;
+        const char *name;
+        ArchiveFormat expected_format;
+    } Case;
+
+    Case cases[] = {
+        {"tar archive", "project.tar", ARCHIVE_TAR},
+        {"tar.gz archive", "project.tar.gz", ARCHIVE_TAR},
+        {"zip archive", "project.zip", ARCHIVE_ZIP},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model in = make_model_with_entry("/home/user", cases[i].name, S_IFREG | 0644, 0);
+        Msg msg = { .type = MSG_ACTIVATE };
+        Model out;
+        Cmd cmd;
+
+        update(&msg, &in, &out, &cmd);
+
+        if (cmd.type != CMD_LIST_ARCHIVE) {
+            TEST_ERRORF(cases[i].label, "cmd.type = %d, want CMD_LIST_ARCHIVE", cmd.type);
+            continue;
+        }
+        if (cmd.archive_format != cases[i].expected_format) {
+            TEST_ERRORF(cases[i].label, "cmd.archive_format = %d, want %d",
+                        cmd.archive_format, cases[i].expected_format);
+        }
+        char expected_path[PATH_MAX_LEN];
+        snprintf(expected_path, sizeof(expected_path), "/home/user/%s", cases[i].name);
+        if (strcmp(cmd.path, expected_path) != 0) {
+            TEST_ERRORF(cases[i].label, "cmd.path = %s, want %s", cmd.path, expected_path);
+        }
+    }
+}
+
+static void test_activate_on_archive_file_resets_active_filter_and_glob(void)
+{
+    Model in = make_model_with_entry("/home/user", "project.zip", S_IFREG | 0644, 0);
+    in.filter_type = FILTER_PLAIN;
+    strcpy(in.filter_pattern, "report");
+    in.glob_type = GLOB_PLAIN;
+    strcpy(in.glob_pattern, "report");
+    Msg msg = { .type = MSG_ACTIVATE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.filter_type != FILTER_NONE || out.filter_pattern[0] != '\0') {
+        TEST_ERRORF("activate on archive resets filter", "filter = {%d, '%s'}, want {FILTER_NONE, ''}",
+                    out.filter_type, out.filter_pattern);
+    }
+    if (out.glob_type != GLOB_NONE || out.glob_pattern[0] != '\0') {
+        TEST_ERRORF("activate on archive resets glob", "glob = {%d, '%s'}, want {GLOB_NONE, ''}",
+                    out.glob_type, out.glob_pattern);
+    }
+}
+
+static void test_activate_on_non_archive_file_still_launches_editor(void)
+{
+    Model in = make_model_with_entry("/home/user", "notes.txt", S_IFREG | 0644, 0);
+    Msg msg = { .type = MSG_ACTIVATE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_LAUNCH_EDITOR) {
+        TEST_ERRORF("non-archive file", "cmd.type = %d, want CMD_LAUNCH_EDITOR", cmd.type);
+    }
+}
+
 static void test_activate_into_directory_resets_filter_but_opening_a_file_does_not(void)
 {
     typedef struct {
@@ -347,6 +425,785 @@ static void test_dir_loaded(void)
     }
 }
 
+static ArchiveMember make_archive_member(const char *path, int is_dir, long size)
+{
+    ArchiveMember m = {0};
+    strncpy(m.path, path, sizeof(m.path) - 1);
+    m.is_dir = is_dir;
+    m.size = size;
+    m.mtime = 0;
+    return m;
+}
+
+static void test_archive_listed_pushes_first_level_and_populates_root_entries(void)
+{
+    ArchiveMember members[] = {
+        make_archive_member("readme.txt", 0, 6),
+        make_archive_member("src", 1, 0),
+        make_archive_member("src/main.c", 0, 42),
+    };
+    int member_count = sizeof(members) / sizeof(members[0]);
+
+    Model in = make_nav_model(0, 0);
+    strcpy(in.current_path, "/home/user");
+
+    Msg msg = { .type = MSG_ARCHIVE_LISTED };
+    msg.archive_listed.members = members;
+    msg.archive_listed.member_count = member_count;
+    msg.archive_listed.format = ARCHIVE_ZIP;
+    strcpy(msg.archive_listed.path, "/home/user/project.zip");
+
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.archive_depth != 1) {
+        TEST_ERRORF("archive listed pushes level", "archive_depth = %d, want 1", out.archive_depth);
+        return;
+    }
+
+    ArchiveLevel *level = &out.archive_stack[0];
+    if (level->format != ARCHIVE_ZIP) {
+        TEST_ERRORF("archive listed pushes level", "level.format = %d, want ARCHIVE_ZIP", level->format);
+    }
+    if (strcmp(level->display_name, "project.zip") != 0) {
+        TEST_ERRORF("archive listed pushes level", "level.display_name = '%s', want 'project.zip'", level->display_name);
+    }
+    if (strcmp(level->source_path, "/home/user/project.zip") != 0) {
+        TEST_ERRORF("archive listed pushes level", "level.source_path = '%s', want '/home/user/project.zip'", level->source_path);
+    }
+    if (level->subfolder[0] != '\0') {
+        TEST_ERRORF("archive listed pushes level", "level.subfolder = '%s', want ''", level->subfolder);
+    }
+    if (level->source_is_tmp != 0) {
+        TEST_ERRORF("archive listed pushes level", "level.source_is_tmp = %d, want 0", level->source_is_tmp);
+    }
+    if (level->member_count != member_count) {
+        TEST_ERRORF("archive listed pushes level", "level.member_count = %d, want %d", level->member_count, member_count);
+    }
+
+    if (strcmp(out.current_path, "/home/user/project.zip") != 0) {
+        TEST_ERRORF("archive listed pushes level", "current_path = '%s', want '/home/user/project.zip'", out.current_path);
+    }
+
+    if (out.entry_count != 2) {
+        TEST_ERRORF("archive listed populates root entries", "entry_count = %d, want 2", out.entry_count);
+        return;
+    }
+    if (strcmp(out.entries[0].name, "src") != 0 || !S_ISDIR(out.entries[0].st.st_mode)) {
+        TEST_ERRORF("archive listed populates root entries", "entries[0] = '%s' (dir=%d), want 'src' (dir)",
+                    out.entries[0].name, S_ISDIR(out.entries[0].st.st_mode));
+    }
+    if (strcmp(out.entries[1].name, "readme.txt") != 0 || !S_ISREG(out.entries[1].st.st_mode) ||
+        out.entries[1].st.st_size != 6) {
+        TEST_ERRORF("archive listed populates root entries",
+                    "entries[1] = '%s' (reg=%d, size=%ld), want 'readme.txt' (reg, size 6)",
+                    out.entries[1].name, S_ISREG(out.entries[1].st.st_mode), (long)out.entries[1].st.st_size);
+    }
+
+    if (out.selected != 0) {
+        TEST_ERRORF("archive listed populates root entries", "selected = %d, want 0", out.selected);
+    }
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("archive listed populates root entries", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+
+    free(out.archive_stack[0].members);
+}
+
+static void test_archive_listed_populates_entries_without_fabricated_permission_bits(void)
+{
+    ArchiveMember members[] = {
+        make_archive_member("readme.txt", 0, 6),
+        make_archive_member("src", 1, 0),
+    };
+    int member_count = sizeof(members) / sizeof(members[0]);
+
+    Model in = make_nav_model(0, 0);
+    strcpy(in.current_path, "/home/user");
+
+    Msg msg = { .type = MSG_ARCHIVE_LISTED };
+    msg.archive_listed.members = members;
+    msg.archive_listed.member_count = member_count;
+    msg.archive_listed.format = ARCHIVE_ZIP;
+    strcpy(msg.archive_listed.path, "/home/user/project.zip");
+
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    for (int i = 0; i < out.entry_count; i++) {
+        mode_t perm_bits = out.entries[i].st.st_mode & ~S_IFMT;
+        if (perm_bits != 0) {
+            TEST_ERRORF("archive listed no fabricated permissions",
+                        "entries[%d] ('%s') permission bits = %o, want 0 (placeholder, not fabricated)",
+                        i, out.entries[i].name, perm_bits);
+        }
+    }
+
+    free(out.archive_stack[0].members);
+}
+
+static void test_archive_listed_beyond_128_members_is_not_truncated(void)
+{
+    static ArchiveMember members[300];
+    for (int i = 0; i < 300; i++) {
+        char name[32];
+        snprintf(name, sizeof(name), "file%d.txt", i);
+        members[i] = make_archive_member(name, 0, i);
+    }
+
+    Model in = make_nav_model(0, 0);
+    strcpy(in.current_path, "/home/user");
+
+    Msg msg = { .type = MSG_ARCHIVE_LISTED };
+    msg.archive_listed.members = members;
+    msg.archive_listed.member_count = 300;
+    msg.archive_listed.format = ARCHIVE_TAR;
+    strcpy(msg.archive_listed.path, "/home/user/project.tar");
+
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.archive_stack[0].member_count != 300) {
+        TEST_ERRORF("archive listed beyond 128 members is not truncated",
+                    "level.member_count = %d, want 300", out.archive_stack[0].member_count);
+    }
+    if (out.entry_count != 300) {
+        TEST_ERRORF("archive listed beyond 128 members is not truncated",
+                    "entry_count = %d, want 300", out.entry_count);
+    }
+
+    free(out.archive_stack[0].members);
+}
+
+static void test_archive_listed_at_max_depth_is_a_noop(void)
+{
+    ArchiveMember members[] = {
+        make_archive_member("readme.txt", 0, 6),
+    };
+
+    Model in = make_nav_model(0, 0);
+    strcpy(in.current_path, "/home/user");
+    in.archive_depth = ARCHIVE_MAX_DEPTH;
+
+    Msg msg = { .type = MSG_ARCHIVE_LISTED };
+    msg.archive_listed.members = members;
+    msg.archive_listed.member_count = 1;
+    msg.archive_listed.format = ARCHIVE_TAR;
+    strcpy(msg.archive_listed.path, "/home/user/project.tar");
+
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.archive_depth != ARCHIVE_MAX_DEPTH) {
+        TEST_ERRORF("archive listed at max depth is a no-op", "archive_depth = %d, want %d",
+                    out.archive_depth, ARCHIVE_MAX_DEPTH);
+    }
+    if (strcmp(out.current_path, "/home/user") != 0) {
+        TEST_ERRORF("archive listed at max depth is a no-op", "current_path = '%s', want unchanged '/home/user'",
+                    out.current_path);
+    }
+}
+
+static Model make_archive_level_model(ArchiveMember *members, int member_count,
+                                       const char *subfolder, const char *display_name,
+                                       const char *current_path)
+{
+    Model m = make_nav_model(0, 0);
+    strcpy(m.current_path, current_path);
+
+    ArchiveLevel *level = &m.archive_stack[0];
+    memset(level, 0, sizeof(*level));
+    level->format = ARCHIVE_ZIP;
+    strncpy(level->display_name, display_name, sizeof(level->display_name) - 1);
+    strncpy(level->source_path, current_path, sizeof(level->source_path) - 1);
+    strncpy(level->subfolder, subfolder, sizeof(level->subfolder) - 1);
+    level->member_count = member_count;
+    level->members = malloc(sizeof(ArchiveMember) * member_count);
+    memcpy(level->members, members, sizeof(ArchiveMember) * member_count);
+
+    m.archive_depth = 1;
+    return m;
+}
+
+static void test_activate_on_archive_directory_descends_subfolder_in_place(void)
+{
+    ArchiveMember members[] = {
+        make_archive_member("src", 1, 0),
+        make_archive_member("src/main.c", 0, 42),
+        make_archive_member("readme.txt", 0, 6),
+    };
+    int member_count = sizeof(members) / sizeof(members[0]);
+
+    Model in = make_archive_level_model(members, member_count, "", "project.zip",
+                                         "/home/user/project.zip");
+    strcpy(in.entries[0].name, "src");
+    in.entries[0].st.st_mode = S_IFDIR | 0755;
+    in.entry_count = 1;
+    in.selected = 0;
+
+    Msg msg = { .type = MSG_ACTIVATE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("activate descends archive subfolder", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+    if (strcmp(out.archive_stack[0].subfolder, "src") != 0) {
+        TEST_ERRORF("activate descends archive subfolder", "subfolder = '%s', want 'src'",
+                    out.archive_stack[0].subfolder);
+    }
+    if (strcmp(out.current_path, "/home/user/project.zip/src") != 0) {
+        TEST_ERRORF("activate descends archive subfolder", "current_path = '%s', want '/home/user/project.zip/src'",
+                    out.current_path);
+    }
+    if (out.entry_count != 1 || strcmp(out.entries[0].name, "main.c") != 0) {
+        TEST_ERRORF("activate descends archive subfolder", "entries[0] = '%s' (count %d), want 'main.c' (count 1)",
+                    out.entries[0].name, out.entry_count);
+    }
+    if (out.selected != 0) {
+        TEST_ERRORF("activate descends archive subfolder", "selected = %d, want 0", out.selected);
+    }
+
+    free(out.archive_stack[0].members);
+}
+
+static void test_go_parent_inside_archive_pops_one_subfolder_segment(void)
+{
+    ArchiveMember members[] = {
+        make_archive_member("src", 1, 0),
+        make_archive_member("src/assets", 1, 0),
+        make_archive_member("src/assets/logo.png", 0, 100),
+        make_archive_member("src/main.c", 0, 42),
+    };
+    int member_count = sizeof(members) / sizeof(members[0]);
+
+    Model in = make_archive_level_model(members, member_count, "src/assets", "project.zip",
+                                         "/home/user/project.zip/src/assets");
+
+    Msg msg = { .type = MSG_GO_PARENT };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("go parent pops one archive subfolder segment", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+    if (out.archive_depth != 1) {
+        TEST_ERRORF("go parent pops one archive subfolder segment", "archive_depth = %d, want 1", out.archive_depth);
+    }
+    if (strcmp(out.archive_stack[0].subfolder, "src") != 0) {
+        TEST_ERRORF("go parent pops one archive subfolder segment", "subfolder = '%s', want 'src'",
+                    out.archive_stack[0].subfolder);
+    }
+    if (strcmp(out.current_path, "/home/user/project.zip/src") != 0) {
+        TEST_ERRORF("go parent pops one archive subfolder segment", "current_path = '%s', want '/home/user/project.zip/src'",
+                    out.current_path);
+    }
+    if (out.entry_count != 2) {
+        TEST_ERRORF("go parent pops one archive subfolder segment", "entry_count = %d, want 2", out.entry_count);
+    }
+
+    free(out.archive_stack[0].members);
+}
+
+static void test_go_parent_at_archive_root_pops_level_to_real_filesystem(void)
+{
+    ArchiveMember members[] = {
+        make_archive_member("readme.txt", 0, 6),
+    };
+    int member_count = sizeof(members) / sizeof(members[0]);
+
+    Model in = make_archive_level_model(members, member_count, "", "project.zip",
+                                         "/home/user/project.zip");
+    in.show_hidden = 1;
+
+    Msg msg = { .type = MSG_GO_PARENT };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.archive_depth != 0) {
+        TEST_ERRORF("go parent at archive root pops level to real fs", "archive_depth = %d, want 0", out.archive_depth);
+    }
+    if (cmd.type != CMD_LOAD_DIR) {
+        TEST_ERRORF("go parent at archive root pops level to real fs", "cmd.type = %d, want CMD_LOAD_DIR", cmd.type);
+    }
+    if (strcmp(cmd.path, "/home/user") != 0) {
+        TEST_ERRORF("go parent at archive root pops level to real fs", "cmd.path = '%s', want '/home/user'", cmd.path);
+    }
+    if (!cmd.show_hidden) {
+        TEST_ERRORF("go parent at archive root pops level to real fs", "cmd.show_hidden = %d, want 1", cmd.show_hidden);
+    }
+}
+
+static void test_go_parent_at_nested_archive_root_pops_to_containing_level(void)
+{
+    ArchiveMember outer_members[] = {
+        make_archive_member("sub1", 1, 0),
+        make_archive_member("sub1/inner.zip", 0, 500),
+        make_archive_member("sub1/other.txt", 0, 10),
+    };
+    int outer_count = sizeof(outer_members) / sizeof(outer_members[0]);
+
+    ArchiveMember inner_members[] = {
+        make_archive_member("a.txt", 0, 1),
+    };
+    int inner_count = sizeof(inner_members) / sizeof(inner_members[0]);
+
+    Model in = make_archive_level_model(outer_members, outer_count, "sub1", "outer.tar",
+                                         "/home/user/outer.tar/sub1");
+
+    ArchiveLevel *inner = &in.archive_stack[1];
+    memset(inner, 0, sizeof(*inner));
+    inner->format = ARCHIVE_ZIP;
+    strcpy(inner->display_name, "inner.zip");
+    strcpy(inner->source_path, "/tmp/inner-extracted.zip");
+    inner->subfolder[0] = '\0';
+    inner->source_is_tmp = 1;
+    inner->member_count = inner_count;
+    inner->members = malloc(sizeof(ArchiveMember) * inner_count);
+    memcpy(inner->members, inner_members, sizeof(ArchiveMember) * inner_count);
+    in.archive_depth = 2;
+    strcpy(in.current_path, "/home/user/outer.tar/sub1/inner.zip");
+
+    Msg msg = { .type = MSG_GO_PARENT };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("go parent at nested archive root pops to containing level", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+    if (out.archive_depth != 1) {
+        TEST_ERRORF("go parent at nested archive root pops to containing level", "archive_depth = %d, want 1",
+                    out.archive_depth);
+    }
+    if (strcmp(out.current_path, "/home/user/outer.tar/sub1") != 0) {
+        TEST_ERRORF("go parent at nested archive root pops to containing level", "current_path = '%s', want '/home/user/outer.tar/sub1'",
+                    out.current_path);
+    }
+    if (out.entry_count != 2) {
+        TEST_ERRORF("go parent at nested archive root pops to containing level", "entry_count = %d, want 2", out.entry_count);
+    } else {
+        int found_inner = 0, found_other = 0;
+        for (int i = 0; i < out.entry_count; i++) {
+            if (strcmp(out.entries[i].name, "inner.zip") == 0)
+                found_inner = 1;
+            if (strcmp(out.entries[i].name, "other.txt") == 0)
+                found_other = 1;
+        }
+        if (!found_inner || !found_other) {
+            TEST_ERRORF("go parent at nested archive root pops to containing level",
+                        "entries missing expected names (found_inner=%d, found_other=%d)", found_inner, found_other);
+        }
+    }
+
+    free(out.archive_stack[0].members);
+}
+
+static void test_activate_on_archive_member_inside_archive_extracts_member_first(void)
+{
+    ArchiveMember members[] = {
+        make_archive_member("sub1", 1, 0),
+        make_archive_member("sub1/inner.zip", 0, 500),
+    };
+    int member_count = sizeof(members) / sizeof(members[0]);
+
+    Model in = make_archive_level_model(members, member_count, "sub1", "outer.tar",
+                                         "/home/user/outer.tar/sub1");
+    in.archive_stack[0].format = ARCHIVE_TAR;
+    strcpy(in.archive_stack[0].source_path, "/home/user/outer.tar");
+    strcpy(in.entries[0].name, "inner.zip");
+    in.entries[0].st.st_mode = S_IFREG | 0644;
+    in.entry_count = 1;
+    in.selected = 0;
+
+    Msg msg = { .type = MSG_ACTIVATE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_EXTRACT_MEMBER) {
+        TEST_ERRORF("activate on nested archive member extracts first",
+                    "cmd.type = %d, want CMD_EXTRACT_MEMBER", cmd.type);
+    }
+    if (cmd.archive_format != ARCHIVE_TAR) {
+        TEST_ERRORF("activate on nested archive member extracts first",
+                    "cmd.archive_format = %d, want ARCHIVE_TAR", cmd.archive_format);
+    }
+    if (strcmp(cmd.path, "/home/user/outer.tar") != 0) {
+        TEST_ERRORF("activate on nested archive member extracts first",
+                    "cmd.path = '%s', want '/home/user/outer.tar'", cmd.path);
+    }
+    if (strcmp(cmd.path2, "sub1/inner.zip") != 0) {
+        TEST_ERRORF("activate on nested archive member extracts first",
+                    "cmd.path2 = '%s', want 'sub1/inner.zip'", cmd.path2);
+    }
+    if (out.archive_depth != 1) {
+        TEST_ERRORF("activate on nested archive member extracts first",
+                    "archive_depth = %d, want unchanged 1", out.archive_depth);
+    }
+    if (out.entry_count != 1 || strcmp(out.entries[0].name, "inner.zip") != 0) {
+        TEST_ERRORF("activate on nested archive member extracts first",
+                    "entries unexpectedly changed before extraction completes");
+    }
+
+    free(out.archive_stack[0].members);
+}
+
+static void test_activate_on_archive_member_at_max_depth_does_not_extract(void)
+{
+    ArchiveMember members[] = {
+        make_archive_member("inner.zip", 0, 500),
+    };
+    int member_count = sizeof(members) / sizeof(members[0]);
+
+    Model in = make_archive_level_model(members, member_count, "", "level4.tar",
+                                         "/home/user/l1.tar/l2.tar/l3.tar/level4.tar");
+    in.archive_depth = ARCHIVE_MAX_DEPTH;
+    strcpy(in.entries[0].name, "inner.zip");
+    in.entries[0].st.st_mode = S_IFREG | 0644;
+    in.entry_count = 1;
+    in.selected = 0;
+
+    Msg msg = { .type = MSG_ACTIVATE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("activate on archive member at max depth is a no-op",
+                    "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+    if (out.archive_depth != ARCHIVE_MAX_DEPTH) {
+        TEST_ERRORF("activate on archive member at max depth is a no-op",
+                    "archive_depth = %d, want %d", out.archive_depth, ARCHIVE_MAX_DEPTH);
+    }
+
+    free(out.archive_stack[0].members);
+}
+
+static void test_activate_on_plain_file_inside_archive_opens_archive_member(void)
+{
+    ArchiveMember members[] = {
+        make_archive_member("sub1", 1, 0),
+        make_archive_member("sub1/notes.txt", 0, 12),
+    };
+    int member_count = sizeof(members) / sizeof(members[0]);
+
+    Model in = make_archive_level_model(members, member_count, "sub1", "outer.tar",
+                                         "/home/user/outer.tar/sub1");
+    in.archive_stack[0].format = ARCHIVE_TAR;
+    strcpy(in.archive_stack[0].source_path, "/home/user/outer.tar");
+    strcpy(in.entries[0].name, "notes.txt");
+    in.entries[0].st.st_mode = S_IFREG | 0644;
+    in.entry_count = 1;
+    in.selected = 0;
+
+    Msg msg = { .type = MSG_ACTIVATE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_OPEN_ARCHIVE_MEMBER) {
+        TEST_ERRORF("activate on plain file inside archive opens archive member",
+                    "cmd.type = %d, want CMD_OPEN_ARCHIVE_MEMBER", cmd.type);
+    }
+    if (cmd.archive_format != ARCHIVE_TAR) {
+        TEST_ERRORF("activate on plain file inside archive opens archive member",
+                    "cmd.archive_format = %d, want ARCHIVE_TAR", cmd.archive_format);
+    }
+    if (strcmp(cmd.path, "/home/user/outer.tar") != 0) {
+        TEST_ERRORF("activate on plain file inside archive opens archive member",
+                    "cmd.path = '%s', want '/home/user/outer.tar'", cmd.path);
+    }
+    if (strcmp(cmd.path2, "sub1/notes.txt") != 0) {
+        TEST_ERRORF("activate on plain file inside archive opens archive member",
+                    "cmd.path2 = '%s', want 'sub1/notes.txt'", cmd.path2);
+    }
+    if (out.archive_depth != 1) {
+        TEST_ERRORF("activate on plain file inside archive opens archive member",
+                    "archive_depth = %d, want unchanged 1", out.archive_depth);
+    }
+    if (out.entry_count != 1 || strcmp(out.entries[0].name, "notes.txt") != 0) {
+        TEST_ERRORF("activate on plain file inside archive opens archive member",
+                    "entries unexpectedly changed");
+    }
+
+    free(out.archive_stack[0].members);
+}
+
+static void test_preview_on_file_inside_archive_previews_archive_member(void)
+{
+    ArchiveMember members[] = {
+        make_archive_member("sub1", 1, 0),
+        make_archive_member("sub1/notes.txt", 0, 12),
+    };
+    int member_count = sizeof(members) / sizeof(members[0]);
+
+    Model in = make_archive_level_model(members, member_count, "sub1", "outer.tar",
+                                         "/home/user/outer.tar/sub1");
+    in.archive_stack[0].format = ARCHIVE_TAR;
+    strcpy(in.archive_stack[0].source_path, "/home/user/outer.tar");
+    strcpy(in.entries[0].name, "notes.txt");
+    in.entries[0].st.st_mode = S_IFREG | 0644;
+    in.entry_count = 1;
+    in.selected = 0;
+
+    Msg msg = { .type = MSG_PREVIEW };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_PREVIEW_ARCHIVE_MEMBER) {
+        TEST_ERRORF("preview on file inside archive previews archive member",
+                    "cmd.type = %d, want CMD_PREVIEW_ARCHIVE_MEMBER", cmd.type);
+    }
+    if (cmd.archive_format != ARCHIVE_TAR) {
+        TEST_ERRORF("preview on file inside archive previews archive member",
+                    "cmd.archive_format = %d, want ARCHIVE_TAR", cmd.archive_format);
+    }
+    if (strcmp(cmd.path, "/home/user/outer.tar") != 0) {
+        TEST_ERRORF("preview on file inside archive previews archive member",
+                    "cmd.path = '%s', want '/home/user/outer.tar'", cmd.path);
+    }
+    if (strcmp(cmd.path2, "sub1/notes.txt") != 0) {
+        TEST_ERRORF("preview on file inside archive previews archive member",
+                    "cmd.path2 = '%s', want 'sub1/notes.txt'", cmd.path2);
+    }
+    if (out.archive_depth != 1) {
+        TEST_ERRORF("preview on file inside archive previews archive member",
+                    "archive_depth = %d, want unchanged 1", out.archive_depth);
+    }
+
+    free(out.archive_stack[0].members);
+}
+
+static void test_member_extracted_issues_list_archive_for_nested_format(void)
+{
+    ArchiveMember dummy[] = { make_archive_member("placeholder", 0, 1) };
+    Model in = make_archive_level_model(dummy, 1, "sub1", "outer.tar", "/home/user/outer.tar/sub1");
+
+    Msg msg = { .type = MSG_MEMBER_EXTRACTED };
+    strcpy(msg.member_extracted.tmp_path, "/tmp/dired-archive-abc123");
+    strcpy(msg.member_extracted.member_path, "sub1/inner.zip");
+
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_LIST_ARCHIVE) {
+        TEST_ERRORF("member extracted issues list archive", "cmd.type = %d, want CMD_LIST_ARCHIVE", cmd.type);
+    }
+    if (cmd.archive_format != ARCHIVE_ZIP) {
+        TEST_ERRORF("member extracted issues list archive", "cmd.archive_format = %d, want ARCHIVE_ZIP", cmd.archive_format);
+    }
+    if (strcmp(cmd.path, "/tmp/dired-archive-abc123") != 0) {
+        TEST_ERRORF("member extracted issues list archive", "cmd.path = '%s', want tmp path", cmd.path);
+    }
+    if (strcmp(cmd.path2, "inner.zip") != 0) {
+        TEST_ERRORF("member extracted issues list archive", "cmd.path2 = '%s', want 'inner.zip'", cmd.path2);
+    }
+    if (!cmd.is_dir) {
+        TEST_ERRORF("member extracted issues list archive", "cmd.is_dir (source_is_tmp) = %d, want 1", cmd.is_dir);
+    }
+    if (out.archive_depth != 1) {
+        TEST_ERRORF("member extracted issues list archive", "archive_depth = %d, want unchanged 1", out.archive_depth);
+    }
+
+    free(out.archive_stack[0].members);
+}
+
+static void test_archive_listed_from_tmp_source_pushes_nested_level(void)
+{
+    ArchiveMember outer_members[] = {
+        make_archive_member("sub1", 1, 0),
+        make_archive_member("sub1/inner.zip", 0, 500),
+    };
+    int outer_count = sizeof(outer_members) / sizeof(outer_members[0]);
+
+    Model in = make_archive_level_model(outer_members, outer_count, "sub1", "outer.tar",
+                                         "/home/user/outer.tar/sub1");
+
+    ArchiveMember inner_members[] = {
+        make_archive_member("a.txt", 0, 1),
+    };
+    int inner_count = sizeof(inner_members) / sizeof(inner_members[0]);
+
+    Msg msg = { .type = MSG_ARCHIVE_LISTED };
+    msg.archive_listed.members = inner_members;
+    msg.archive_listed.member_count = inner_count;
+    msg.archive_listed.format = ARCHIVE_ZIP;
+    strcpy(msg.archive_listed.path, "/tmp/dired-archive-abc123");
+    strcpy(msg.archive_listed.display_name, "inner.zip");
+    msg.archive_listed.source_is_tmp = 1;
+
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.archive_depth != 2) {
+        TEST_ERRORF("archive listed from tmp source pushes nested level",
+                    "archive_depth = %d, want 2", out.archive_depth);
+    }
+
+    ArchiveLevel *level = &out.archive_stack[1];
+    if (level->format != ARCHIVE_ZIP) {
+        TEST_ERRORF("archive listed from tmp source pushes nested level",
+                    "level.format = %d, want ARCHIVE_ZIP", level->format);
+    }
+    if (strcmp(level->display_name, "inner.zip") != 0) {
+        TEST_ERRORF("archive listed from tmp source pushes nested level",
+                    "level.display_name = '%s', want 'inner.zip'", level->display_name);
+    }
+    if (strcmp(level->source_path, "/tmp/dired-archive-abc123") != 0) {
+        TEST_ERRORF("archive listed from tmp source pushes nested level",
+                    "level.source_path = '%s', want '/tmp/dired-archive-abc123'", level->source_path);
+    }
+    if (!level->source_is_tmp) {
+        TEST_ERRORF("archive listed from tmp source pushes nested level",
+                    "level.source_is_tmp = %d, want 1", level->source_is_tmp);
+    }
+    if (strcmp(out.current_path, "/home/user/outer.tar/sub1/inner.zip") != 0) {
+        TEST_ERRORF("archive listed from tmp source pushes nested level",
+                    "current_path = '%s', want '/home/user/outer.tar/sub1/inner.zip'", out.current_path);
+    }
+    if (out.entry_count != 1 || strcmp(out.entries[0].name, "a.txt") != 0) {
+        TEST_ERRORF("archive listed from tmp source pushes nested level",
+                    "entries[0] = '%s' (count %d), want 'a.txt' (count 1)",
+                    out.entries[0].name, out.entry_count);
+    }
+
+    free(out.archive_stack[0].members);
+    free(out.archive_stack[1].members);
+}
+
+static void test_go_parent_at_nested_archive_root_deletes_tmp_source_file(void)
+{
+    const char *tmpdir = getenv("TMPDIR");
+    if (!tmpdir)
+        tmpdir = "/tmp";
+
+    char tmpl[PATH_MAX_LEN];
+    snprintf(tmpl, sizeof(tmpl), "%s/dired_update_test_XXXXXX", tmpdir);
+    int fd = mkstemp(tmpl);
+    if (fd < 0) {
+        TEST_ERRORF("setup", "mkstemp failed");
+        return;
+    }
+    close(fd);
+
+    ArchiveMember outer_members[] = {
+        make_archive_member("sub1", 1, 0),
+        make_archive_member("sub1/inner.zip", 0, 500),
+    };
+    int outer_count = sizeof(outer_members) / sizeof(outer_members[0]);
+
+    Model in = make_archive_level_model(outer_members, outer_count, "sub1", "outer.tar",
+                                         "/home/user/outer.tar/sub1");
+
+    ArchiveMember inner_members[] = {
+        make_archive_member("a.txt", 0, 1),
+    };
+    int inner_count = sizeof(inner_members) / sizeof(inner_members[0]);
+
+    ArchiveLevel *inner = &in.archive_stack[1];
+    memset(inner, 0, sizeof(*inner));
+    inner->format = ARCHIVE_ZIP;
+    strcpy(inner->display_name, "inner.zip");
+    strncpy(inner->source_path, tmpl, sizeof(inner->source_path) - 1);
+    inner->source_is_tmp = 1;
+    inner->member_count = inner_count;
+    inner->members = malloc(sizeof(ArchiveMember) * inner_count);
+    memcpy(inner->members, inner_members, sizeof(ArchiveMember) * inner_count);
+    in.archive_depth = 2;
+    strcpy(in.current_path, "/home/user/outer.tar/sub1/inner.zip");
+
+    Msg msg = { .type = MSG_GO_PARENT };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.archive_depth != 1) {
+        TEST_ERRORF("go parent at nested archive root deletes tmp source file",
+                    "archive_depth = %d, want 1", out.archive_depth);
+    }
+    if (access(tmpl, F_OK) == 0) {
+        TEST_ERRORF("go parent at nested archive root deletes tmp source file",
+                    "tmp file '%s' still exists after pop", tmpl);
+    }
+
+    free(out.archive_stack[0].members);
+}
+
+static void test_filter_inside_archive_narrows_from_level_current_subfolder(void)
+{
+    ArchiveMember members[] = {
+        make_archive_member("report.txt", 0, 6),
+        make_archive_member("other.txt", 0, 4),
+        make_archive_member("reporter.log", 0, 9),
+    };
+    int member_count = sizeof(members) / sizeof(members[0]);
+
+    Model in = make_nav_model(0, 0);
+    strcpy(in.current_path, "/home/user");
+
+    Msg listed_msg = { .type = MSG_ARCHIVE_LISTED };
+    listed_msg.archive_listed.members = members;
+    listed_msg.archive_listed.member_count = member_count;
+    listed_msg.archive_listed.format = ARCHIVE_ZIP;
+    strcpy(listed_msg.archive_listed.path, "/home/user/project.zip");
+
+    Model after_listed;
+    Cmd cmd;
+    update(&listed_msg, &in, &after_listed, &cmd);
+
+    if (after_listed.unfiltered_count != 3) {
+        TEST_ERRORF("filter inside archive narrows", "unfiltered_count = %d, want 3 (synced from archive level)",
+                    after_listed.unfiltered_count);
+        free(after_listed.archive_stack[0].members);
+        return;
+    }
+
+    after_listed.mode = MODE_FILTER;
+    after_listed.filter_type = FILTER_PLAIN;
+    strcpy(after_listed.edit_buf, "repor");
+    after_listed.edit_len = strlen(after_listed.edit_buf);
+
+    Msg text_msg = { .type = MSG_TEXT_INPUT, .ch = 't' };
+    Model out;
+    update(&text_msg, &after_listed, &out, &cmd);
+
+    if (out.entry_count != 2 || strcmp(out.entries[0].name, "report.txt") != 0 ||
+        strcmp(out.entries[1].name, "reporter.log") != 0) {
+        TEST_ERRORF("filter inside archive narrows",
+                    "entries = [%s, %s] (%d), want [report.txt, reporter.log] (2)",
+                    out.entries[0].name, out.entries[1].name, out.entry_count);
+    }
+
+    free(out.archive_stack[0].members);
+}
+
 static void test_op_succeeded(void)
 {
     Model in = make_nav_model(3, 1);
@@ -391,6 +1248,89 @@ static void test_op_succeeded_rebuilds_glob_when_active(void)
         TEST_ERRORF("op succeeded rebuilds glob", "cmd = {%d, '%s'}, want {GLOB_PLAIN, 'report'}",
                     cmd.glob_type, cmd.cmd_text);
     }
+}
+
+static void test_op_succeeded_inside_archive_refreshes_entries_in_place(void)
+{
+    ArchiveMember members[] = {
+        make_archive_member("src", 1, 0),
+        make_archive_member("src/main.c", 0, 42),
+        make_archive_member("readme.txt", 0, 6),
+    };
+    int member_count = sizeof(members) / sizeof(members[0]);
+
+    Model in = make_archive_level_model(members, member_count, "", "project.zip",
+                                         "/home/user/project.zip");
+    in.entry_count = 2;
+    strcpy(in.entries[0].name, "src");
+    in.entries[0].st.st_mode = S_IFDIR | 0755;
+    strcpy(in.entries[1].name, "readme.txt");
+    in.entries[1].st.st_mode = S_IFREG | 0644;
+    in.selected = 1;
+
+    Msg msg = { .type = MSG_OP_SUCCEEDED };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("op succeeded inside archive refreshes in place",
+                    "cmd.type = %d, want CMD_NONE (no real-filesystem reload of a virtual path)", cmd.type);
+    }
+    if (out.archive_depth != 1) {
+        TEST_ERRORF("op succeeded inside archive refreshes in place",
+                    "archive_depth = %d, want unchanged 1", out.archive_depth);
+    }
+    if (out.entry_count != 2 || strcmp(out.entries[0].name, "src") != 0 ||
+        strcmp(out.entries[1].name, "readme.txt") != 0) {
+        TEST_ERRORF("op succeeded inside archive refreshes in place",
+                    "entries = [%s, %s] (%d), want [src, readme.txt] (2)",
+                    out.entries[0].name, out.entries[1].name, out.entry_count);
+    }
+    if (out.selected != 1) {
+        TEST_ERRORF("op succeeded inside archive refreshes in place",
+                    "selected = %d, want unchanged 1", out.selected);
+    }
+
+    free(out.archive_stack[0].members);
+}
+
+static void test_op_succeeded_inside_archive_with_glob_active_recomputes_glob_in_place(void)
+{
+    ArchiveMember members[] = {
+        make_archive_member("readme.txt", 0, 6),
+        make_archive_member("src", 1, 0),
+        make_archive_member("src/main.c", 0, 42),
+    };
+    int member_count = sizeof(members) / sizeof(members[0]);
+
+    Model in = make_archive_level_model(members, member_count, "", "project.zip",
+                                         "/home/user/project.zip");
+    in.glob_type = GLOB_PLAIN;
+    strcpy(in.glob_pattern, ".c");
+    in.entry_count = 1;
+    strcpy(in.entries[0].name, "src/main.c");
+    in.entries[0].st.st_mode = S_IFREG | 0644;
+    in.selected = 0;
+
+    Msg msg = { .type = MSG_OP_SUCCEEDED };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("op succeeded inside archive with glob active recomputes in place",
+                    "cmd.type = %d, want CMD_NONE (no real-filesystem walk)", cmd.type);
+    }
+    if (out.entry_count != 1 || strcmp(out.entries[0].name, "src/main.c") != 0) {
+        TEST_ERRORF("op succeeded inside archive with glob active recomputes in place",
+                    "entries = [%s] (%d), want [src/main.c] (1)",
+                    out.entries[0].name, out.entry_count);
+    }
+
+    free(out.archive_stack[0].members);
 }
 
 static void test_op_failed(void)
@@ -899,6 +1839,119 @@ static void test_glob_built_sets_capped_flag_without_error(void)
     if (cmd.type != CMD_NONE) {
         TEST_ERRORF("glob built capped", "cmd.type = %d, want CMD_NONE", cmd.type);
     }
+}
+
+static void test_glob_commit_inside_archive_populates_entries_directly(void)
+{
+    ArchiveMember members[] = {
+        make_archive_member("readme.txt", 0, 6),
+        make_archive_member("src", 1, 0),
+        make_archive_member("src/main.c", 0, 42),
+        make_archive_member("src/lib", 1, 0),
+        make_archive_member("src/lib/util.c", 0, 12),
+    };
+    int member_count = sizeof(members) / sizeof(members[0]);
+
+    Model in = make_archive_level_model(members, member_count, "", "project.zip",
+                                         "/home/user/project.zip");
+    in.mode = MODE_GLOB;
+    in.glob_type = GLOB_PLAIN;
+    strcpy(in.edit_buf, ".c");
+    in.edit_len = strlen(in.edit_buf);
+
+    Msg msg = { .type = MSG_ACTIVATE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("glob commit inside archive", "cmd.type = %d, want CMD_NONE (no real-filesystem walk)", cmd.type);
+    }
+    if (out.mode != MODE_NAV) {
+        TEST_ERRORF("glob commit inside archive", "mode = %d, want MODE_NAV", out.mode);
+    }
+    if (out.entry_count != 2 || strcmp(out.entries[0].name, "src/lib/util.c") != 0 ||
+        strcmp(out.entries[1].name, "src/main.c") != 0) {
+        TEST_ERRORF("glob commit inside archive",
+                    "entries = [%s, %s] (%d), want [src/lib/util.c, src/main.c] (2)",
+                    out.entries[0].name, out.entries[1].name, out.entry_count);
+    }
+    if (out.glob_capped) {
+        TEST_ERRORF("glob commit inside archive", "glob_capped = 1, want 0");
+    }
+
+    free(out.archive_stack[0].members);
+}
+
+static void test_glob_commit_inside_archive_caps_and_reports_truncation(void)
+{
+    static ArchiveMember members[MAX_ENTRIES + 5];
+    int member_count = MAX_ENTRIES + 5;
+    for (int i = 0; i < member_count; i++) {
+        char name[32];
+        snprintf(name, sizeof(name), "file%d.txt", i);
+        members[i] = make_archive_member(name, 0, i);
+    }
+
+    Model in = make_archive_level_model(members, member_count, "", "project.zip",
+                                         "/home/user/project.zip");
+    in.mode = MODE_GLOB;
+    in.glob_type = GLOB_PLAIN;
+    strcpy(in.edit_buf, ".txt");
+    in.edit_len = strlen(in.edit_buf);
+
+    Msg msg = { .type = MSG_ACTIVATE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.entry_count != MAX_ENTRIES) {
+        TEST_ERRORF("glob commit inside archive caps", "entry_count = %d, want %d", out.entry_count, MAX_ENTRIES);
+    }
+    if (!out.glob_capped) {
+        TEST_ERRORF("glob commit inside archive caps", "glob_capped = 0, want 1");
+    }
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("glob commit inside archive caps", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+
+    free(out.archive_stack[0].members);
+}
+
+static void test_glob_commit_inside_archive_subfolder_uses_relative_names(void)
+{
+    ArchiveMember members[] = {
+        make_archive_member("proj", 1, 0),
+        make_archive_member("proj/src", 1, 0),
+        make_archive_member("proj/src/main.c", 0, 42),
+        make_archive_member("proj/readme.txt", 0, 6),
+        make_archive_member("other.txt", 0, 3),
+    };
+    int member_count = sizeof(members) / sizeof(members[0]);
+
+    Model in = make_archive_level_model(members, member_count, "proj", "project.zip",
+                                         "/home/user/project.zip/proj");
+    in.mode = MODE_GLOB;
+    in.glob_type = GLOB_PLAIN;
+    in.edit_buf[0] = '\0';
+    in.edit_len = 0;
+
+    Msg msg = { .type = MSG_ACTIVATE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.entry_count != 3 || strcmp(out.entries[0].name, "src") != 0 ||
+        strcmp(out.entries[1].name, "readme.txt") != 0 || strcmp(out.entries[2].name, "src/main.c") != 0) {
+        TEST_ERRORF("glob commit relative names",
+                    "entries = [%s, %s, %s] (%d), want [src, readme.txt, src/main.c] (3)",
+                    out.entries[0].name, out.entries[1].name, out.entries[2].name, out.entry_count);
+    }
+
+    free(out.archive_stack[0].members);
 }
 
 static void test_error_dismiss_returns_to_nav_even_with_glob_active(void)
@@ -1515,6 +2568,10 @@ static void test_yank(void)
             TEST_ERRORF(cases[i].label, "yank_is_move = %d, want %d",
                         out.yank_is_move, cases[i].expected_yank_is_move);
         }
+        if (out.yank_from_archive != 0) {
+            TEST_ERRORF(cases[i].label, "yank_from_archive = %d, want 0 (real-directory yank)",
+                        out.yank_from_archive);
+        }
         if (out.mode != MODE_NAV) {
             TEST_ERRORF(cases[i].label, "mode = %d, want MODE_NAV (yank must not enter a mode)", out.mode);
         }
@@ -1656,6 +2713,405 @@ static void test_paste_pending(void)
     }
 }
 
+static void test_yank_copy_on_file_inside_archive_records_archive_yank(void)
+{
+    ArchiveMember members[] = {
+        make_archive_member("sub1", 1, 0),
+        make_archive_member("sub1/notes.txt", 0, 12),
+    };
+    int member_count = sizeof(members) / sizeof(members[0]);
+
+    Model in = make_archive_level_model(members, member_count, "sub1", "outer.tar",
+                                         "/home/user/outer.tar/sub1");
+    in.archive_stack[0].format = ARCHIVE_TAR;
+    strcpy(in.archive_stack[0].source_path, "/home/user/outer.tar");
+    strcpy(in.entries[0].name, "notes.txt");
+    in.entries[0].st.st_mode = S_IFREG | 0644;
+    in.entry_count = 1;
+    in.selected = 0;
+
+    Msg msg = { .type = MSG_YANK_COPY };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (!out.yank_from_archive) {
+        TEST_ERRORF("yank copy on file inside archive", "yank_from_archive = 0, want 1");
+    }
+    if (out.yank_archive_format != ARCHIVE_TAR) {
+        TEST_ERRORF("yank copy on file inside archive", "yank_archive_format = %d, want ARCHIVE_TAR",
+                    out.yank_archive_format);
+    }
+    if (strcmp(out.yank_archive_source_path, "/home/user/outer.tar") != 0) {
+        TEST_ERRORF("yank copy on file inside archive",
+                    "yank_archive_source_path = '%s', want '/home/user/outer.tar'", out.yank_archive_source_path);
+    }
+    if (strcmp(out.yank_archive_member_path, "sub1/notes.txt") != 0) {
+        TEST_ERRORF("yank copy on file inside archive", "yank_archive_member_path = '%s', want 'sub1/notes.txt'",
+                    out.yank_archive_member_path);
+    }
+    if (out.yank_path[0] != '\0') {
+        TEST_ERRORF("yank copy on file inside archive", "yank_path = '%s', want empty sentinel", out.yank_path);
+    }
+    if (out.mode != MODE_NAV) {
+        TEST_ERRORF("yank copy on file inside archive", "mode = %d, want MODE_NAV", out.mode);
+    }
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("yank copy on file inside archive", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+
+    free(out.archive_stack[0].members);
+}
+
+static void test_yank_copy_on_directory_inside_archive_is_blocked(void)
+{
+    ArchiveMember members[] = {
+        make_archive_member("sub1", 1, 0),
+        make_archive_member("sub1/notes.txt", 0, 12),
+    };
+    int member_count = sizeof(members) / sizeof(members[0]);
+
+    Model in = make_archive_level_model(members, member_count, "", "outer.tar",
+                                         "/home/user/outer.tar");
+    in.archive_stack[0].format = ARCHIVE_TAR;
+    strcpy(in.archive_stack[0].source_path, "/home/user/outer.tar");
+    strcpy(in.entries[0].name, "sub1");
+    in.entries[0].st.st_mode = S_IFDIR | 0755;
+    in.entry_count = 1;
+    in.selected = 0;
+
+    Msg msg = { .type = MSG_YANK_COPY };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.mode != MODE_ERROR) {
+        TEST_ERRORF("yank copy on directory inside archive is blocked", "mode = %d, want MODE_ERROR", out.mode);
+    }
+    if (strcmp(out.error_msg, "not possible in archive") != 0) {
+        TEST_ERRORF("yank copy on directory inside archive is blocked",
+                    "error_msg = '%s', want 'not possible in archive'", out.error_msg);
+    }
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("yank copy on directory inside archive is blocked", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+    if (out.yank_from_archive) {
+        TEST_ERRORF("yank copy on directory inside archive is blocked", "yank_from_archive = 1, want 0");
+    }
+    if (out.yank_path[0] != '\0') {
+        TEST_ERRORF("yank copy on directory inside archive is blocked", "yank_path = '%s', want empty", out.yank_path);
+    }
+
+    free(out.archive_stack[0].members);
+}
+
+static void test_paste_pending_from_archive_yank(void)
+{
+    typedef struct {
+        const char *label;
+        const char *member_path;
+        const char *existing_unfiltered_entry;
+        const char *expected_path3;
+    } Case;
+
+    Case cases[] = {
+        {"paste from archive with no collision", "sub1/notes.txt", "other.txt", "/tmp/notes.txt"},
+        {"paste from archive with name collision gets a numbered duplicate", "sub1/notes.txt", "notes.txt",
+         "/tmp/notes (1).txt"},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model in = make_nav_model(1, 0);
+        strcpy(in.current_path, "/tmp");
+        strcpy(in.entries[0].name, "placeholder");
+        strcpy(in.unfiltered_entries[0].name, cases[i].existing_unfiltered_entry);
+        in.unfiltered_count = 1;
+
+        in.yank_from_archive = 1;
+        in.yank_archive_format = ARCHIVE_TAR;
+        strcpy(in.yank_archive_source_path, "/home/user/outer.tar");
+        strcpy(in.yank_archive_member_path, cases[i].member_path);
+
+        Msg msg = { .type = MSG_PASTE };
+        Model out;
+        Cmd cmd;
+
+        update(&msg, &in, &out, &cmd);
+
+        if (cmd.type != CMD_EXTRACT_MEMBER_TO) {
+            TEST_ERRORF(cases[i].label, "cmd.type = %d, want CMD_EXTRACT_MEMBER_TO", cmd.type);
+            continue;
+        }
+        if (cmd.archive_format != ARCHIVE_TAR) {
+            TEST_ERRORF(cases[i].label, "cmd.archive_format = %d, want ARCHIVE_TAR", cmd.archive_format);
+        }
+        if (strcmp(cmd.path, "/home/user/outer.tar") != 0) {
+            TEST_ERRORF(cases[i].label, "cmd.path = '%s', want '/home/user/outer.tar'", cmd.path);
+        }
+        if (strcmp(cmd.path2, cases[i].member_path) != 0) {
+            TEST_ERRORF(cases[i].label, "cmd.path2 = '%s', want '%s'", cmd.path2, cases[i].member_path);
+        }
+        if (strcmp(cmd.path3, cases[i].expected_path3) != 0) {
+            TEST_ERRORF(cases[i].label, "cmd.path3 = '%s', want '%s'", cmd.path3, cases[i].expected_path3);
+        }
+        if (out.yank_from_archive) {
+            TEST_ERRORF(cases[i].label, "yank_from_archive = 1, want cleared to 0");
+        }
+        if (out.yank_archive_source_path[0] != '\0' || out.yank_archive_member_path[0] != '\0') {
+            TEST_ERRORF(cases[i].label, "archive yank state not cleared after paste");
+        }
+    }
+}
+
+static void test_rename_inside_archive_is_blocked(void)
+{
+    ArchiveMember members[] = {
+        make_archive_member("notes.txt", 0, 12),
+    };
+    int member_count = sizeof(members) / sizeof(members[0]);
+
+    Model in = make_archive_level_model(members, member_count, "", "outer.tar",
+                                         "/home/user/outer.tar");
+    strcpy(in.entries[0].name, "notes.txt");
+    in.entries[0].st.st_mode = S_IFREG | 0644;
+    in.entry_count = 1;
+    in.selected = 0;
+
+    Msg msg = { .type = MSG_RENAME };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.mode != MODE_ERROR) {
+        TEST_ERRORF("rename inside archive is blocked", "mode = %d, want MODE_ERROR", out.mode);
+    }
+    if (strcmp(out.error_msg, "not possible in archive") != 0) {
+        TEST_ERRORF("rename inside archive is blocked",
+                    "error_msg = '%s', want 'not possible in archive'", out.error_msg);
+    }
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("rename inside archive is blocked", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+
+    free(out.archive_stack[0].members);
+}
+
+static void test_new_inside_archive_is_blocked(void)
+{
+    ArchiveMember members[] = {
+        make_archive_member("notes.txt", 0, 12),
+    };
+    int member_count = sizeof(members) / sizeof(members[0]);
+
+    Model in = make_archive_level_model(members, member_count, "", "outer.tar",
+                                         "/home/user/outer.tar");
+    strcpy(in.entries[0].name, "notes.txt");
+    in.entries[0].st.st_mode = S_IFREG | 0644;
+    in.entry_count = 1;
+    in.selected = 0;
+
+    Msg msg = { .type = MSG_NEW };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.mode != MODE_ERROR) {
+        TEST_ERRORF("new inside archive is blocked", "mode = %d, want MODE_ERROR", out.mode);
+    }
+    if (strcmp(out.error_msg, "not possible in archive") != 0) {
+        TEST_ERRORF("new inside archive is blocked",
+                    "error_msg = '%s', want 'not possible in archive'", out.error_msg);
+    }
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("new inside archive is blocked", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+
+    free(out.archive_stack[0].members);
+}
+
+static void test_run_cmd_inside_archive_is_blocked(void)
+{
+    ArchiveMember members[] = {
+        make_archive_member("notes.txt", 0, 12),
+    };
+    int member_count = sizeof(members) / sizeof(members[0]);
+
+    Model in = make_archive_level_model(members, member_count, "", "outer.tar",
+                                         "/home/user/outer.tar");
+    strcpy(in.entries[0].name, "notes.txt");
+    in.entries[0].st.st_mode = S_IFREG | 0644;
+    in.entry_count = 1;
+    in.selected = 0;
+
+    Msg msg = { .type = MSG_RUN_CMD };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.mode != MODE_ERROR) {
+        TEST_ERRORF("run cmd inside archive is blocked", "mode = %d, want MODE_ERROR", out.mode);
+    }
+    if (strcmp(out.error_msg, "not possible in archive") != 0) {
+        TEST_ERRORF("run cmd inside archive is blocked",
+                    "error_msg = '%s', want 'not possible in archive'", out.error_msg);
+    }
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("run cmd inside archive is blocked", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+
+    free(out.archive_stack[0].members);
+}
+
+static void test_delete_and_delete_permanent_inside_archive_are_blocked(void)
+{
+    MsgType types[] = { MSG_DELETE, MSG_DELETE_PERMANENT };
+
+    for (size_t i = 0; i < sizeof(types) / sizeof(types[0]); i++) {
+        ArchiveMember members[] = {
+            make_archive_member("notes.txt", 0, 12),
+        };
+        int member_count = sizeof(members) / sizeof(members[0]);
+
+        Model in = make_archive_level_model(members, member_count, "", "outer.tar",
+                                             "/home/user/outer.tar");
+        strcpy(in.entries[0].name, "notes.txt");
+        in.entries[0].st.st_mode = S_IFREG | 0644;
+        in.entry_count = 1;
+        in.selected = 0;
+
+        Msg msg = { .type = types[i] };
+        Model out;
+        Cmd cmd;
+
+        update(&msg, &in, &out, &cmd);
+
+        if (out.mode != MODE_ERROR) {
+            TEST_ERRORF("delete inside archive is blocked", "mode = %d, want MODE_ERROR", out.mode);
+        }
+        if (strcmp(out.error_msg, "not possible in archive") != 0) {
+            TEST_ERRORF("delete inside archive is blocked",
+                        "error_msg = '%s', want 'not possible in archive'", out.error_msg);
+        }
+        if (cmd.type != CMD_NONE) {
+            TEST_ERRORF("delete inside archive is blocked", "cmd.type = %d, want CMD_NONE", cmd.type);
+        }
+
+        free(out.archive_stack[0].members);
+    }
+}
+
+static void test_yank_move_inside_archive_is_blocked(void)
+{
+    ArchiveMember members[] = {
+        make_archive_member("notes.txt", 0, 12),
+    };
+    int member_count = sizeof(members) / sizeof(members[0]);
+
+    Model in = make_archive_level_model(members, member_count, "", "outer.tar",
+                                         "/home/user/outer.tar");
+    strcpy(in.entries[0].name, "notes.txt");
+    in.entries[0].st.st_mode = S_IFREG | 0644;
+    in.entry_count = 1;
+    in.selected = 0;
+
+    Msg msg = { .type = MSG_YANK_MOVE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.mode != MODE_ERROR) {
+        TEST_ERRORF("yank move inside archive is blocked", "mode = %d, want MODE_ERROR", out.mode);
+    }
+    if (strcmp(out.error_msg, "not possible in archive") != 0) {
+        TEST_ERRORF("yank move inside archive is blocked",
+                    "error_msg = '%s', want 'not possible in archive'", out.error_msg);
+    }
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("yank move inside archive is blocked", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+    if (out.yank_path[0] != '\0') {
+        TEST_ERRORF("yank move inside archive is blocked", "yank_path = '%s', want empty", out.yank_path);
+    }
+    if (out.yank_is_move) {
+        TEST_ERRORF("yank move inside archive is blocked", "yank_is_move = 1, want 0");
+    }
+
+    free(out.archive_stack[0].members);
+}
+
+static void test_paste_inside_archive_is_blocked_regardless_of_pending_yank(void)
+{
+    typedef struct {
+        const char *label;
+        int yank_from_archive;
+        const char *yank_path;
+    } Case;
+
+    Case cases[] = {
+        {"paste into archive blocked with real yank_path pending", 0, "/tmp/file.txt"},
+        {"paste into archive blocked with archive-sourced yank pending", 1, ""},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        ArchiveMember members[] = {
+            make_archive_member("notes.txt", 0, 12),
+        };
+        int member_count = sizeof(members) / sizeof(members[0]);
+
+        Model in = make_archive_level_model(members, member_count, "", "outer.tar",
+                                             "/home/user/outer.tar");
+        strcpy(in.entries[0].name, "notes.txt");
+        in.entries[0].st.st_mode = S_IFREG | 0644;
+        in.entry_count = 1;
+        in.selected = 0;
+
+        in.yank_from_archive = cases[i].yank_from_archive;
+        strcpy(in.yank_path, cases[i].yank_path);
+        if (cases[i].yank_from_archive) {
+            in.yank_archive_format = ARCHIVE_TAR;
+            strcpy(in.yank_archive_source_path, "/home/user/other.tar");
+            strcpy(in.yank_archive_member_path, "docs/readme.txt");
+        }
+
+        Msg msg = { .type = MSG_PASTE };
+        Model out;
+        Cmd cmd;
+
+        update(&msg, &in, &out, &cmd);
+
+        if (out.mode != MODE_ERROR) {
+            TEST_ERRORF(cases[i].label, "mode = %d, want MODE_ERROR", out.mode);
+        }
+        if (strcmp(out.error_msg, "not possible in archive") != 0) {
+            TEST_ERRORF(cases[i].label, "error_msg = '%s', want 'not possible in archive'", out.error_msg);
+        }
+        if (cmd.type != CMD_NONE) {
+            TEST_ERRORF(cases[i].label, "cmd.type = %d, want CMD_NONE", cmd.type);
+        }
+        if (out.yank_from_archive != cases[i].yank_from_archive) {
+            TEST_ERRORF(cases[i].label, "yank_from_archive = %d, want unchanged %d",
+                        out.yank_from_archive, cases[i].yank_from_archive);
+        }
+        if (strcmp(out.yank_path, cases[i].yank_path) != 0) {
+            TEST_ERRORF(cases[i].label, "yank_path = '%s', want unchanged '%s'", out.yank_path, cases[i].yank_path);
+        }
+        if (cases[i].yank_from_archive) {
+            if (strcmp(out.yank_archive_source_path, "/home/user/other.tar") != 0 ||
+                strcmp(out.yank_archive_member_path, "docs/readme.txt") != 0) {
+                TEST_ERRORF(cases[i].label, "archive yank state was cleared, want left intact");
+            }
+        }
+
+        free(out.archive_stack[0].members);
+    }
+}
+
 static void test_cycle_page_advances_to_next_page(void)
 {
     Model in = make_nav_model(50, 5);
@@ -1757,6 +3213,87 @@ static void test_cycle_group_wraps_through_all_three_states(void)
     }
 }
 
+static void test_cycle_sort_on_archive_sourced_entries_reorders_in_place(void)
+{
+    ArchiveMember members[] = {
+        make_archive_member("zeta.txt", 0, 6),
+        make_archive_member("alpha.txt", 0, 3),
+        make_archive_member("src", 1, 0),
+    };
+    int member_count = sizeof(members) / sizeof(members[0]);
+
+    Model in = make_archive_level_model(members, member_count, "", "project.zip",
+                                         "/home/user/project.zip");
+    in.entry_count = 3;
+    strcpy(in.entries[0].name, "zeta.txt");
+    in.entries[0].st.st_mode = S_IFREG;
+    strcpy(in.entries[1].name, "alpha.txt");
+    in.entries[1].st.st_mode = S_IFREG;
+    strcpy(in.entries[2].name, "src");
+    in.entries[2].st.st_mode = S_IFDIR;
+    in.selected = 0;
+
+    Msg msg = { .type = MSG_CYCLE_SORT };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("cycle sort on archive entries", "cmd.type = %d, want CMD_NONE (pure in-memory resort)", cmd.type);
+    }
+    if (out.sort_mode != SORT_NAME_DESC) {
+        TEST_ERRORF("cycle sort on archive entries", "sort_mode = %d, want SORT_NAME_DESC", out.sort_mode);
+    }
+    if (out.entry_count != 3 || strcmp(out.entries[0].name, "src") != 0 ||
+        strcmp(out.entries[1].name, "zeta.txt") != 0 || strcmp(out.entries[2].name, "alpha.txt") != 0) {
+        TEST_ERRORF("cycle sort on archive entries",
+                    "entries = [%s, %s, %s] (%d), want [src, zeta.txt, alpha.txt] (3) (dirs-first, name-desc)",
+                    out.entries[0].name, out.entries[1].name, out.entries[2].name, out.entry_count);
+    }
+
+    free(out.archive_stack[0].members);
+}
+
+static void test_cycle_group_on_archive_sourced_entries_regroups_in_place(void)
+{
+    ArchiveMember members[] = {
+        make_archive_member("alpha.txt", 0, 3),
+        make_archive_member("src", 1, 0),
+    };
+    int member_count = sizeof(members) / sizeof(members[0]);
+
+    Model in = make_archive_level_model(members, member_count, "", "project.zip",
+                                         "/home/user/project.zip");
+    in.entry_count = 2;
+    strcpy(in.entries[0].name, "src");
+    in.entries[0].st.st_mode = S_IFDIR;
+    strcpy(in.entries[1].name, "alpha.txt");
+    in.entries[1].st.st_mode = S_IFREG;
+    in.selected = 0;
+
+    Msg msg = { .type = MSG_CYCLE_GROUP };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("cycle group on archive entries", "cmd.type = %d, want CMD_NONE (pure in-memory regroup)", cmd.type);
+    }
+    if (out.group_mode != GROUP_DIRS_LAST) {
+        TEST_ERRORF("cycle group on archive entries", "group_mode = %d, want GROUP_DIRS_LAST", out.group_mode);
+    }
+    if (out.entry_count != 2 || strcmp(out.entries[0].name, "alpha.txt") != 0 ||
+        strcmp(out.entries[1].name, "src") != 0) {
+        TEST_ERRORF("cycle group on archive entries",
+                    "entries = [%s, %s] (%d), want [alpha.txt, src] (2) (dirs-last)",
+                    out.entries[0].name, out.entries[1].name, out.entry_count);
+    }
+
+    free(out.archive_stack[0].members);
+}
+
 static void test_toggle_hidden(void)
 {
     Model in = make_nav_model(3, 1);
@@ -1788,6 +3325,70 @@ static void test_toggle_hidden(void)
         TEST_ERRORF("toggle hidden off", "cmd = {%d, show_hidden=%d}, want {CMD_LOAD_DIR, show_hidden=0}",
                     cmd2.type, cmd2.show_hidden);
     }
+}
+
+static void test_toggle_hidden_inside_archive_repopulates_entries_without_cmd(void)
+{
+    ArchiveMember members[] = {
+        make_archive_member(".hidden.txt", 0, 3),
+        make_archive_member("visible.txt", 0, 5),
+    };
+    int member_count = sizeof(members) / sizeof(members[0]);
+
+    Model in = make_archive_level_model(members, member_count, "", "project.zip",
+                                         "/home/user/project.zip");
+    in.show_hidden = 0;
+    in.entry_count = 1;
+    strcpy(in.entries[0].name, "visible.txt");
+    in.entries[0].st.st_mode = S_IFREG;
+
+    Msg msg = { .type = MSG_TOGGLE_HIDDEN };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("toggle hidden inside archive", "cmd.type = %d, want CMD_NONE (no real-filesystem reload)", cmd.type);
+    }
+    if (!out.show_hidden) {
+        TEST_ERRORF("toggle hidden inside archive", "show_hidden = %d, want 1", out.show_hidden);
+    }
+    if (out.entry_count != 2) {
+        TEST_ERRORF("toggle hidden inside archive", "entry_count = %d, want 2", out.entry_count);
+    } else {
+        int found_hidden = 0, found_visible = 0;
+        for (int i = 0; i < out.entry_count; i++) {
+            if (strcmp(out.entries[i].name, ".hidden.txt") == 0)
+                found_hidden = 1;
+            if (strcmp(out.entries[i].name, "visible.txt") == 0)
+                found_visible = 1;
+        }
+        if (!found_hidden || !found_visible) {
+            TEST_ERRORF("toggle hidden inside archive",
+                        "entries missing expected names (found_hidden=%d, found_visible=%d)",
+                        found_hidden, found_visible);
+        }
+    }
+
+    Model in2 = out;
+    Model out2;
+    Cmd cmd2;
+    update(&msg, &in2, &out2, &cmd2);
+
+    if (cmd2.type != CMD_NONE) {
+        TEST_ERRORF("toggle hidden inside archive back off", "cmd.type = %d, want CMD_NONE", cmd2.type);
+    }
+    if (out2.show_hidden) {
+        TEST_ERRORF("toggle hidden inside archive back off", "show_hidden = %d, want 0", out2.show_hidden);
+    }
+    if (out2.entry_count != 1 || strcmp(out2.entries[0].name, "visible.txt") != 0) {
+        TEST_ERRORF("toggle hidden inside archive back off",
+                    "entries = [%s] (%d), want [visible.txt] (1)",
+                    out2.entries[0].name, out2.entry_count);
+    }
+
+    free(out2.archive_stack[0].members);
 }
 
 static void test_resort_keeps_selection_on_same_file(void)
@@ -2005,10 +3606,31 @@ void test_update(void)
     test_activate_into_directory_resets_filter_but_opening_a_file_does_not();
     test_activate_into_directory_resets_active_glob_but_opening_a_file_does_not();
     test_activate();
+    test_activate_on_archive_file_lists_archive_instead_of_launching_editor();
+    test_activate_on_archive_file_resets_active_filter_and_glob();
+    test_activate_on_non_archive_file_still_launches_editor();
     test_preview();
+    test_archive_listed_pushes_first_level_and_populates_root_entries();
+    test_archive_listed_populates_entries_without_fabricated_permission_bits();
+    test_archive_listed_beyond_128_members_is_not_truncated();
+    test_archive_listed_at_max_depth_is_a_noop();
+    test_activate_on_archive_directory_descends_subfolder_in_place();
+    test_go_parent_inside_archive_pops_one_subfolder_segment();
+    test_go_parent_at_archive_root_pops_level_to_real_filesystem();
+    test_go_parent_at_nested_archive_root_pops_to_containing_level();
+    test_activate_on_archive_member_inside_archive_extracts_member_first();
+    test_activate_on_archive_member_at_max_depth_does_not_extract();
+    test_activate_on_plain_file_inside_archive_opens_archive_member();
+    test_preview_on_file_inside_archive_previews_archive_member();
+    test_member_extracted_issues_list_archive_for_nested_format();
+    test_archive_listed_from_tmp_source_pushes_nested_level();
+    test_go_parent_at_nested_archive_root_deletes_tmp_source_file();
+    test_filter_inside_archive_narrows_from_level_current_subfolder();
     test_dir_loaded();
     test_op_succeeded();
     test_op_succeeded_rebuilds_glob_when_active();
+    test_op_succeeded_inside_archive_refreshes_entries_in_place();
+    test_op_succeeded_inside_archive_with_glob_active_recomputes_glob_in_place();
     test_op_failed();
     test_start_edit();
     test_enter_filter_mode();
@@ -2025,6 +3647,9 @@ void test_update(void)
     test_glob_cancel_fully_clears();
     test_glob_built_populates_and_sorts();
     test_glob_built_sets_capped_flag_without_error();
+    test_glob_commit_inside_archive_populates_entries_directly();
+    test_glob_commit_inside_archive_caps_and_reports_truncation();
+    test_glob_commit_inside_archive_subfolder_uses_relative_names();
     test_error_dismiss_returns_to_nav_even_with_glob_active();
     test_edit_text_entry();
     test_edit_text_entry_full_buffer_is_noop();
@@ -2052,12 +3677,24 @@ void test_update(void)
     test_nav_cancel_with_no_pending_yank_is_noop();
     test_paste_nothing_pending_is_noop();
     test_paste_pending();
+    test_yank_copy_on_file_inside_archive_records_archive_yank();
+    test_yank_copy_on_directory_inside_archive_is_blocked();
+    test_paste_pending_from_archive_yank();
+    test_rename_inside_archive_is_blocked();
+    test_new_inside_archive_is_blocked();
+    test_run_cmd_inside_archive_is_blocked();
+    test_delete_and_delete_permanent_inside_archive_are_blocked();
+    test_yank_move_inside_archive_is_blocked();
+    test_paste_inside_archive_is_blocked_regardless_of_pending_yank();
     test_cycle_page_advances_to_next_page();
     test_cycle_page_wraps_from_last_page();
     test_cycle_page_noop_when_everything_fits();
     test_cycle_sort_wraps_through_all_eight_states();
     test_cycle_group_wraps_through_all_three_states();
+    test_cycle_sort_on_archive_sourced_entries_reorders_in_place();
+    test_cycle_group_on_archive_sourced_entries_regroups_in_place();
     test_toggle_hidden();
+    test_toggle_hidden_inside_archive_repopulates_entries_without_cmd();
     test_resort_keeps_selection_on_same_file();
     test_dir_loaded_sorts_entries();
     test_dir_loaded_reapplies_committed_filter();

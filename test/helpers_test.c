@@ -500,6 +500,42 @@ static void test_dirname_of(void)
     }
 }
 
+static void test_archive_format_for_name(void)
+{
+    typedef struct {
+        const char *name;
+        ArchiveFormat expected;
+    } Case;
+
+    Case cases[] = {
+        {"project.tar", ARCHIVE_TAR},
+        {"project.tar.gz", ARCHIVE_TAR},
+        {"project.tgz", ARCHIVE_TAR},
+        {"project.tar.bz2", ARCHIVE_TAR},
+        {"project.tbz2", ARCHIVE_TAR},
+        {"project.tar.xz", ARCHIVE_TAR},
+        {"project.txz", ARCHIVE_TAR},
+        {"project.tar.Z", ARCHIVE_TAR},
+        {"project.zip", ARCHIVE_ZIP},
+        {"notes.txt", ARCHIVE_NONE},
+        {"archive.rar", ARCHIVE_NONE},
+        {"archive.7z", ARCHIVE_NONE},
+        {"plain.gz", ARCHIVE_NONE},
+        {"plain.bz2", ARCHIVE_NONE},
+        {"plain.xz", ARCHIVE_NONE},
+        {"no_extension", ARCHIVE_NONE},
+        {"", ARCHIVE_NONE},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        ArchiveFormat got = archive_format_for_name(cases[i].name);
+        if (got != cases[i].expected) {
+            TEST_ERRORF(cases[i].name, "archive_format_for_name(%s) = %d, want %d",
+                        cases[i].name, got, cases[i].expected);
+        }
+    }
+}
+
 void test_helpers(void)
 {
     test_is_protected_name();
@@ -516,4 +552,5 @@ void test_helpers(void)
     test_apply_filter();
     test_apply_filter_truncation();
     test_dirname_of();
+    test_archive_format_for_name();
 }

@@ -17,6 +17,11 @@ typedef enum {
     CMD_TRASH,
     CMD_LAUNCH_EDITOR,
     CMD_PREVIEW,
+    CMD_LIST_ARCHIVE,
+    CMD_EXTRACT_MEMBER,
+    CMD_EXTRACT_MEMBER_TO,
+    CMD_OPEN_ARCHIVE_MEMBER,
+    CMD_PREVIEW_ARCHIVE_MEMBER,
     CMD_COPY,
     CMD_MOVE,
     CMD_RUN,
@@ -26,11 +31,13 @@ typedef struct {
     CmdType type;
     char path[PATH_MAX_LEN];   /* load/create/delete/launch target, or rename/copy/move source */
     char path2[PATH_MAX_LEN];  /* CMD_RENAME/CMD_COPY/CMD_MOVE destination */
+    char path3[PATH_MAX_LEN];
     int is_dir;
     int show_hidden;           /* CMD_LOAD_DIR: forwarded to load_directory() */
     char cmd_text[PATH_MAX_LEN];
     char selected_path[PATH_MAX_LEN];
     GlobType glob_type;
+    ArchiveFormat archive_format;
 } Cmd;
 
 #endif // DIRED_CMD_H

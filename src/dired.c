@@ -6,6 +6,7 @@
 #include "helpers.h"
 #include "loaddir.h"
 #include "trash.h"
+#include "archive.h"
 #include "../vendor/termbox2.h"
 
 #include <ctype.h>
@@ -40,6 +41,16 @@ static Msg msg_failed(const char *fmt, ...)
     va_end(args);
 
     return msg;
+}
+
+static void report_exec_failure(const char *prog)
+{
+    char msg[256];
+    int len = snprintf(msg, sizeof(msg), "%s: %s\n", prog, strerror(errno));
+    if (len > 0) {
+        size_t wlen = (size_t)len < sizeof(msg) ? (size_t)len : sizeof(msg) - 1;
+        write(STDERR_FILENO, msg, wlen);
+    }
 }
 
 static Msg execute_rename(const char *from, const char *to)
@@ -87,6 +98,7 @@ static int run_argv(char *const argv[], char *errbuf, size_t errbuf_len)
         }
 
         execvp(argv[0], argv);
+        report_exec_failure(argv[0]);
         _exit(EXIT_FAILURE);
     }
 
@@ -103,6 +115,69 @@ static int run_argv(char *const argv[], char *errbuf, size_t errbuf_len)
     int status;
     waitpid(pid, &status, 0);
     return (WIFEXITED(status) && WEXITSTATUS(status) == 0) ? 0 : -1;
+}
+
+static int run_capture(char *const argv[], char *outbuf, size_t outbuf_len,
+                        char *errbuf, size_t errbuf_len)
+{
+    int outpipe[2];
+    int errpipe[2];
+    if (pipe(outpipe) != 0)
+        return -1;
+    if (pipe(errpipe) != 0) {
+        close(outpipe[0]);
+        close(outpipe[1]);
+        return -1;
+    }
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        close(outpipe[0]);
+        dup2(outpipe[1], STDOUT_FILENO);
+        close(outpipe[1]);
+
+        close(errpipe[0]);
+        dup2(errpipe[1], STDERR_FILENO);
+        close(errpipe[1]);
+
+        int devnull_in = open("/dev/null", O_RDONLY);
+        if (devnull_in >= 0) {
+            dup2(devnull_in, STDIN_FILENO);
+            close(devnull_in);
+        }
+
+        execvp(argv[0], argv);
+        report_exec_failure(argv[0]);
+        _exit(EXIT_FAILURE);
+    }
+
+    close(outpipe[1]);
+    close(errpipe[1]);
+
+    size_t out_total = 0;
+    if (outbuf && outbuf_len > 0) {
+        ssize_t n;
+        while (out_total < outbuf_len - 1 &&
+               (n = read(outpipe[0], outbuf + out_total, outbuf_len - 1 - out_total)) > 0)
+            out_total += (size_t)n;
+        outbuf[out_total] = '\0';
+    }
+    close(outpipe[0]);
+
+    if (errbuf && errbuf_len > 0) {
+        ssize_t n = read(errpipe[0], errbuf, errbuf_len - 1);
+        errbuf[n > 0 ? n : 0] = '\0';
+        size_t len = strlen(errbuf);
+        if (len > 0 && errbuf[len - 1] == '\n')
+            errbuf[len - 1] = '\0';
+    }
+    close(errpipe[0]);
+
+    int status;
+    waitpid(pid, &status, 0);
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
+        return -1;
+    return (int)out_total;
 }
 
 static Msg execute_delete(const char *path, int is_dir)
@@ -231,6 +306,181 @@ static Msg execute_preview(const char *path)
     return (Msg){ .type = MSG_OP_SUCCEEDED };
 }
 
+#define ARCHIVE_LISTING_BUF_LEN (1 << 20)
+
+static Msg execute_list_archive(const char *path, ArchiveFormat format,
+                                 const char *display_name, int source_is_tmp)
+{
+    static char output[ARCHIVE_LISTING_BUF_LEN];
+    static ArchiveMember members[MAX_ENTRIES];
+
+    char errbuf[256] = { 0 };
+    char *tar_argv[] = { "tar", "-tvf", (char *)path, NULL };
+    char *unzip_argv[] = { "unzip", "-l", (char *)path, NULL };
+    char *const *argv = (format == ARCHIVE_ZIP) ? unzip_argv : tar_argv;
+
+    if (run_capture(argv, output, sizeof(output), errbuf, sizeof(errbuf)) < 0) {
+        if (source_is_tmp)
+            remove(path);
+        return msg_failed("list archive: %s", errbuf[0] ? errbuf : "failed");
+    }
+
+    int count = (format == ARCHIVE_ZIP)
+        ? parse_zip_listing(output, members, MAX_ENTRIES)
+        : parse_tar_listing(output, members, MAX_ENTRIES);
+
+    Msg msg = { .type = MSG_ARCHIVE_LISTED };
+    msg.archive_listed.members = members;
+    msg.archive_listed.member_count = count;
+    msg.archive_listed.format = format;
+    strncpy(msg.archive_listed.path, path, sizeof(msg.archive_listed.path) - 1);
+    msg.archive_listed.path[sizeof(msg.archive_listed.path) - 1] = '\0';
+    strncpy(msg.archive_listed.display_name, display_name, sizeof(msg.archive_listed.display_name) - 1);
+    msg.archive_listed.display_name[sizeof(msg.archive_listed.display_name) - 1] = '\0';
+    msg.archive_listed.source_is_tmp = source_is_tmp;
+    return msg;
+}
+
+static int run_capture_to_fd(char *const argv[], int out_fd, char *errbuf, size_t errbuf_len)
+{
+    int errpipe[2];
+    if (pipe(errpipe) != 0)
+        return -1;
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        dup2(out_fd, STDOUT_FILENO);
+        close(errpipe[0]);
+        dup2(errpipe[1], STDERR_FILENO);
+        close(errpipe[1]);
+
+        int devnull_in = open("/dev/null", O_RDONLY);
+        if (devnull_in >= 0) {
+            dup2(devnull_in, STDIN_FILENO);
+            close(devnull_in);
+        }
+
+        execvp(argv[0], argv);
+        report_exec_failure(argv[0]);
+        _exit(EXIT_FAILURE);
+    }
+
+    close(errpipe[1]);
+    if (errbuf && errbuf_len > 0) {
+        ssize_t n = read(errpipe[0], errbuf, errbuf_len - 1);
+        errbuf[n > 0 ? n : 0] = '\0';
+        size_t len = strlen(errbuf);
+        if (len > 0 && errbuf[len - 1] == '\n')
+            errbuf[len - 1] = '\0';
+    }
+    close(errpipe[0]);
+
+    int status;
+    waitpid(pid, &status, 0);
+    return (WIFEXITED(status) && WEXITSTATUS(status) == 0) ? 0 : -1;
+}
+
+static int extract_member_to_fd(int fd, const char *archive_path, ArchiveFormat format,
+                                 const char *member_path, char *errbuf, size_t errbuf_len)
+{
+    char *tar_argv[] = { "tar", "-xOf", (char *)archive_path, (char *)member_path, NULL };
+    char *unzip_argv[] = { "unzip", "-p", (char *)archive_path, (char *)member_path, NULL };
+    char *const *argv = (format == ARCHIVE_ZIP) ? unzip_argv : tar_argv;
+
+    return run_capture_to_fd(argv, fd, errbuf, errbuf_len);
+}
+
+static int extract_member_to_tmp(const char *archive_path, ArchiveFormat format, const char *member_path,
+                                  char *tmp_path, size_t tmp_path_size, char *errbuf, size_t errbuf_len)
+{
+    const char *tmpdir = getenv("TMPDIR");
+    if (!tmpdir || tmpdir[0] == '\0')
+        tmpdir = "/tmp";
+
+    snprintf(tmp_path, tmp_path_size, "%s/dired-archive-XXXXXX", tmpdir);
+
+    int fd = mkstemp(tmp_path);
+    if (fd < 0) {
+        snprintf(errbuf, errbuf_len, "%s", strerror(errno));
+        return -1;
+    }
+
+    int rc = extract_member_to_fd(fd, archive_path, format, member_path, errbuf, errbuf_len);
+    close(fd);
+
+    if (rc != 0) {
+        remove(tmp_path);
+        return -1;
+    }
+
+    return 0;
+}
+
+static int extract_member_to_path(const char *archive_path, ArchiveFormat format, const char *member_path,
+                                   const char *dest_path, char *errbuf, size_t errbuf_len)
+{
+    int fd = open(dest_path, O_CREAT | O_EXCL | O_WRONLY, 0644);
+    if (fd < 0) {
+        snprintf(errbuf, errbuf_len, "%s", strerror(errno));
+        return -1;
+    }
+
+    int rc = extract_member_to_fd(fd, archive_path, format, member_path, errbuf, errbuf_len);
+    close(fd);
+
+    if (rc != 0) {
+        remove(dest_path);
+        return -1;
+    }
+
+    return 0;
+}
+
+static Msg execute_extract_member(const char *archive_path, ArchiveFormat format, const char *member_path)
+{
+    char tmp_path[PATH_MAX_LEN];
+    char errbuf[256] = { 0 };
+
+    if (extract_member_to_tmp(archive_path, format, member_path, tmp_path, sizeof(tmp_path),
+                               errbuf, sizeof(errbuf)) != 0)
+        return msg_failed("extract: %s", errbuf[0] ? errbuf : "failed");
+
+    Msg msg = { .type = MSG_MEMBER_EXTRACTED };
+    strncpy(msg.member_extracted.tmp_path, tmp_path, sizeof(msg.member_extracted.tmp_path) - 1);
+    msg.member_extracted.tmp_path[sizeof(msg.member_extracted.tmp_path) - 1] = '\0';
+    strncpy(msg.member_extracted.member_path, member_path, sizeof(msg.member_extracted.member_path) - 1);
+    msg.member_extracted.member_path[sizeof(msg.member_extracted.member_path) - 1] = '\0';
+    return msg;
+}
+
+static Msg execute_extract_member_to(const char *archive_path, ArchiveFormat format,
+                                      const char *member_path, const char *dest_path)
+{
+    char errbuf[256] = { 0 };
+
+    if (extract_member_to_path(archive_path, format, member_path, dest_path, errbuf, sizeof(errbuf)) != 0)
+        return msg_failed("extract: %s", errbuf[0] ? errbuf : "failed");
+
+    return (Msg){ .type = MSG_OP_SUCCEEDED };
+}
+
+static Msg execute_open_archive_member(const char *archive_path, ArchiveFormat format,
+                                        const char *member_path, int preview)
+{
+    char tmp_path[PATH_MAX_LEN];
+    char errbuf[256] = { 0 };
+
+    if (extract_member_to_tmp(archive_path, format, member_path, tmp_path, sizeof(tmp_path),
+                               errbuf, sizeof(errbuf)) != 0)
+        return msg_failed("extract: %s", errbuf[0] ? errbuf : "failed");
+
+    chmod(tmp_path, 0400);
+
+    Msg result = preview ? execute_preview(tmp_path) : execute_launch_editor(tmp_path);
+    remove(tmp_path);
+    return result;
+}
+
 static void walk_glob_matches(const char *abs_dir, const char *rel_prefix,
                                FilterType filter_type, const char *pattern,
                                Entry *out_entries, int *out_count, int *out_truncated)
@@ -331,6 +581,11 @@ static Msg execute_cmd(const Cmd *cmd)
     case CMD_TRASH:         return trash_item(cmd->path);
     case CMD_LAUNCH_EDITOR: return execute_launch_editor(cmd->path);
     case CMD_PREVIEW:       return execute_preview(cmd->path);
+    case CMD_LIST_ARCHIVE:  return execute_list_archive(cmd->path, cmd->archive_format, cmd->path2, cmd->is_dir);
+    case CMD_EXTRACT_MEMBER: return execute_extract_member(cmd->path, cmd->archive_format, cmd->path2);
+    case CMD_EXTRACT_MEMBER_TO: return execute_extract_member_to(cmd->path, cmd->archive_format, cmd->path2, cmd->path3);
+    case CMD_OPEN_ARCHIVE_MEMBER: return execute_open_archive_member(cmd->path, cmd->archive_format, cmd->path2, 0);
+    case CMD_PREVIEW_ARCHIVE_MEMBER: return execute_open_archive_member(cmd->path, cmd->archive_format, cmd->path2, 1);
     case CMD_COPY:          return execute_copy(cmd->path, cmd->path2);
     case CMD_MOVE:          return execute_move(cmd->path, cmd->path2);
     case CMD_RUN:           return execute_run_cmd(cmd->path, cmd->cmd_text, cmd->selected_path);
@@ -576,6 +831,12 @@ int main(int argc, char **argv)
         update(&msg, &model, &next_model, &next_cmd);
         model = next_model;
         cmd = next_cmd;
+    }
+
+    for (int i = 0; i < model.archive_depth; i++) {
+        if (model.archive_stack[i].source_is_tmp)
+            remove(model.archive_stack[i].source_path);
+        free(model.archive_stack[i].members);
     }
 
     tb_shutdown();

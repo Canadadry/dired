@@ -8,6 +8,7 @@ int main(void) {
     TEST_GROUP(test_view);
     TEST_GROUP(test_loaddir);
     TEST_GROUP(test_trash);
+    TEST_GROUP(test_archive);
 
     test_done();
     return 0;

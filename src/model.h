@@ -3,10 +3,12 @@
 
 #include <stddef.h>
 #include <sys/stat.h>
+#include <time.h>
 
 #define MAX_ENTRIES 1024
 #define NAME_MAX_LEN 1024
 #define PATH_MAX_LEN 1024
+#define ARCHIVE_MAX_DEPTH 4
 
 typedef enum {
     MODE_NAV = 0,
@@ -30,6 +32,19 @@ typedef enum {
     GLOB_PLAIN,
     GLOB_REGEX,
 } GlobType;
+
+typedef enum {
+    ARCHIVE_NONE = 0,
+    ARCHIVE_TAR,
+    ARCHIVE_ZIP,
+} ArchiveFormat;
+
+typedef struct {
+    char path[PATH_MAX_LEN];
+    int is_dir;
+    off_t size;
+    time_t mtime;
+} ArchiveMember;
 
 /* Fixed 8-state cycle order for the `s` key: name -> date -> size -> ext,
  * ascending before descending within each key, wrapping back to name-asc. */
@@ -59,6 +74,16 @@ typedef struct {
 } Entry;
 
 typedef struct {
+    ArchiveFormat format;
+    char display_name[NAME_MAX_LEN + 1];
+    char source_path[PATH_MAX_LEN];
+    char subfolder[PATH_MAX_LEN];
+    ArchiveMember *members;
+    int member_count;
+    int source_is_tmp;
+} ArchiveLevel;
+
+typedef struct {
     Entry entries[MAX_ENTRIES];
     int entry_count;
     int selected;
@@ -74,6 +99,9 @@ typedef struct {
     int glob_capped;
 
     char current_path[PATH_MAX_LEN];
+
+    ArchiveLevel archive_stack[ARCHIVE_MAX_DEPTH];
+    int archive_depth;
 
     /* Session-scoped: survive directory navigation like yank_path does, but
      * never persisted — a fresh process always starts at the defaults
@@ -95,6 +123,11 @@ typedef struct {
      * An empty yank_path is the "nothing pending" sentinel. */
     char yank_path[PATH_MAX_LEN];
     int yank_is_move;
+
+    int yank_from_archive;
+    ArchiveFormat yank_archive_format;
+    char yank_archive_source_path[PATH_MAX_LEN];
+    char yank_archive_member_path[PATH_MAX_LEN];
 
     char error_msg[256];
 

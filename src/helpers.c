@@ -13,6 +13,32 @@ int is_hidden_name(const char *name)
     return name[0] == '.';
 }
 
+static int ends_with(const char *name, const char *suffix)
+{
+    size_t name_len = strlen(name);
+    size_t suffix_len = strlen(suffix);
+    if (suffix_len > name_len)
+        return 0;
+    return strcmp(name + (name_len - suffix_len), suffix) == 0;
+}
+
+ArchiveFormat archive_format_for_name(const char *name)
+{
+    static const char *tar_suffixes[] = {
+        ".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz", ".tar.Z",
+    };
+
+    for (size_t i = 0; i < sizeof(tar_suffixes) / sizeof(tar_suffixes[0]); i++) {
+        if (ends_with(name, tar_suffixes[i]))
+            return ARCHIVE_TAR;
+    }
+
+    if (ends_with(name, ".zip"))
+        return ARCHIVE_ZIP;
+
+    return ARCHIVE_NONE;
+}
+
 static int name_collides(const char *name, const Entry *entries, int entry_count)
 {
     for (int i = 0; i < entry_count; i++) {

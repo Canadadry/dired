@@ -43,6 +43,8 @@ typedef enum {
      * then feeds the outcome back in as one of these. */
     MSG_DIR_LOADED,
     MSG_GLOB_BUILT,
+    MSG_ARCHIVE_LISTED,
+    MSG_MEMBER_EXTRACTED,
     MSG_OP_SUCCEEDED,
     MSG_OP_FAILED,
 } MsgType;
@@ -69,11 +71,27 @@ typedef struct {
 } MsgGlobBuilt;
 
 typedef struct {
+    const ArchiveMember *members;
+    int member_count;
+    ArchiveFormat format;
+    char path[PATH_MAX_LEN];
+    char display_name[NAME_MAX_LEN + 1];
+    int source_is_tmp;
+} MsgArchiveListed;
+
+typedef struct {
+    char tmp_path[PATH_MAX_LEN];
+    char member_path[PATH_MAX_LEN];
+} MsgMemberExtracted;
+
+typedef struct {
     MsgType type;
     union {
         char ch;                  /* MSG_TEXT_INPUT */
         MsgDirLoaded dir_loaded;  /* MSG_DIR_LOADED */
         MsgGlobBuilt glob_built;
+        MsgArchiveListed archive_listed;
+        MsgMemberExtracted member_extracted;
         char error[256];          /* MSG_OP_FAILED */
         MsgResize resize;
     };

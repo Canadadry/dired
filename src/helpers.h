@@ -13,6 +13,7 @@ typedef enum {
 
 int is_protected_name(const char *name);
 int is_hidden_name(const char *name);
+ArchiveFormat archive_format_for_name(const char *name);
 int filter_matches(const char *name, FilterType type, const char *pattern);
 int filter_is_valid(FilterType type, const char *pattern);
 
