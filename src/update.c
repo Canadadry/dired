@@ -117,8 +117,10 @@ static void resort_and_relocate(Model *out_model, const char *prev_name)
 
 static void member_to_entry(const ArchiveMember *m, Entry *e)
 {
-    strncpy(e->name, m->path, NAME_MAX_LEN);
-    e->name[NAME_MAX_LEN] = '\0';
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+    snprintf(e->name, NAME_MAX_LEN + 1, "%s", m->path);
+#pragma GCC diagnostic pop
     memset(&e->st, 0, sizeof(e->st));
     e->st.st_mode = m->is_dir ? S_IFDIR : S_IFREG;
     e->st.st_size = m->size;
@@ -453,8 +455,10 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
                 ArchiveLevel *level = &out_model->archive_stack[out_model->archive_depth - 1];
                 char new_subfolder[PATH_MAX_LEN];
                 append_subfolder_segment(level->subfolder, e->name, new_subfolder, sizeof(new_subfolder));
-                strncpy(level->subfolder, new_subfolder, sizeof(level->subfolder) - 1);
-                level->subfolder[sizeof(level->subfolder) - 1] = '\0';
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+                snprintf(level->subfolder, sizeof(level->subfolder), "%s", new_subfolder);
+#pragma GCC diagnostic pop
 
                 char new_path[PATH_MAX_LEN];
                 join_path(out_model->current_path, e->name, new_path, sizeof(new_path));
@@ -684,14 +688,15 @@ static void handle_archive_listed(const Msg *msg, Model *out_model)
     ArchiveLevel *level = &out_model->archive_stack[out_model->archive_depth];
     level->format = msg->archive_listed.format;
     level->source_is_tmp = msg->archive_listed.source_is_tmp;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
     if (level->source_is_tmp) {
-        strncpy(level->display_name, msg->archive_listed.display_name, sizeof(level->display_name) - 1);
-        level->display_name[sizeof(level->display_name) - 1] = '\0';
+        snprintf(level->display_name, sizeof(level->display_name), "%s", msg->archive_listed.display_name);
     } else {
         basename_of(msg->archive_listed.path, level->display_name, sizeof(level->display_name));
     }
-    strncpy(level->source_path, msg->archive_listed.path, sizeof(level->source_path) - 1);
-    level->source_path[sizeof(level->source_path) - 1] = '\0';
+    snprintf(level->source_path, sizeof(level->source_path), "%s", msg->archive_listed.path);
+#pragma GCC diagnostic pop
     level->subfolder[0] = '\0';
 
     level->member_count = msg->archive_listed.member_count;

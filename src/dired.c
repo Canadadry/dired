@@ -333,10 +333,11 @@ static Msg execute_list_archive(const char *path, ArchiveFormat format,
     msg.archive_listed.members = members;
     msg.archive_listed.member_count = count;
     msg.archive_listed.format = format;
-    strncpy(msg.archive_listed.path, path, sizeof(msg.archive_listed.path) - 1);
-    msg.archive_listed.path[sizeof(msg.archive_listed.path) - 1] = '\0';
-    strncpy(msg.archive_listed.display_name, display_name, sizeof(msg.archive_listed.display_name) - 1);
-    msg.archive_listed.display_name[sizeof(msg.archive_listed.display_name) - 1] = '\0';
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+    snprintf(msg.archive_listed.path, sizeof(msg.archive_listed.path), "%s", path);
+    snprintf(msg.archive_listed.display_name, sizeof(msg.archive_listed.display_name), "%s", display_name);
+#pragma GCC diagnostic pop
     msg.archive_listed.source_is_tmp = source_is_tmp;
     return msg;
 }
@@ -446,10 +447,11 @@ static Msg execute_extract_member(const char *archive_path, ArchiveFormat format
         return msg_failed("extract: %s", errbuf[0] ? errbuf : "failed");
 
     Msg msg = { .type = MSG_MEMBER_EXTRACTED };
-    strncpy(msg.member_extracted.tmp_path, tmp_path, sizeof(msg.member_extracted.tmp_path) - 1);
-    msg.member_extracted.tmp_path[sizeof(msg.member_extracted.tmp_path) - 1] = '\0';
-    strncpy(msg.member_extracted.member_path, member_path, sizeof(msg.member_extracted.member_path) - 1);
-    msg.member_extracted.member_path[sizeof(msg.member_extracted.member_path) - 1] = '\0';
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+    snprintf(msg.member_extracted.tmp_path, sizeof(msg.member_extracted.tmp_path), "%s", tmp_path);
+    snprintf(msg.member_extracted.member_path, sizeof(msg.member_extracted.member_path), "%s", member_path);
+#pragma GCC diagnostic pop
     return msg;
 }
 
