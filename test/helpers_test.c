@@ -536,6 +536,90 @@ static void test_archive_format_for_name(void)
     }
 }
 
+static void test_parse_preview_rules(void)
+{
+    typedef struct {
+        const char *label;
+        const char *text;
+        int max_rules;
+        int expect_error;
+        int expected_count;
+        const char *expected_suffix[4];
+        const char *expected_template[4];
+        const char *expected_errbuf_substr;
+    } Case;
+
+    Case cases[] = {
+        {"single valid rule", "jpg=chafa $FILE", PREVIEW_RULE_MAX,
+         0, 1, {"jpg"}, {"chafa $FILE"}, NULL},
+
+        {"multiple rules", "jpg=chafa $FILE\npng=viu $FILE", PREVIEW_RULE_MAX,
+         0, 2, {"jpg", "png"}, {"chafa $FILE", "viu $FILE"}, NULL},
+
+        {"blank line skipped", "jpg=chafa $FILE\n\npng=viu $FILE", PREVIEW_RULE_MAX,
+         0, 2, {"jpg", "png"}, {"chafa $FILE", "viu $FILE"}, NULL},
+
+        {"comment line skipped", "# a comment\njpg=chafa $FILE", PREVIEW_RULE_MAX,
+         0, 1, {"jpg"}, {"chafa $FILE"}, NULL},
+
+        {"comment between two valid rules",
+         "jpg=chafa $FILE\n# a comment\npng=viu $FILE", PREVIEW_RULE_MAX,
+         0, 2, {"jpg", "png"}, {"chafa $FILE", "viu $FILE"}, NULL},
+
+        {"line missing equals", "jpgchafa $FILE", PREVIEW_RULE_MAX,
+         1, 0, {0}, {0}, "line 1"},
+
+        {"empty key", "=chafa $FILE", PREVIEW_RULE_MAX,
+         1, 0, {0}, {0}, "line 1"},
+
+        {"value with no dollar-FILE token", "jpg=chafa somefile", PREVIEW_RULE_MAX,
+         1, 0, {0}, {0}, "line 1"},
+
+        {"rule count exactly at cap succeeds",
+         "jpg=chafa $FILE\npng=viu $FILE", 2,
+         0, 2, {"jpg", "png"}, {"chafa $FILE", "viu $FILE"}, NULL},
+
+        {"rule count over cap is a parse error",
+         "jpg=chafa $FILE\npng=viu $FILE\ngif=viu $FILE", 2,
+         1, 0, {0}, {0}, "line 3"},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        PreviewRule rules[4];
+        char errbuf[256] = {0};
+        int got = parse_preview_rules(cases[i].text, rules, cases[i].max_rules,
+                                       errbuf, sizeof(errbuf));
+
+        if (cases[i].expect_error) {
+            if (got != -1) {
+                TEST_ERRORF(cases[i].label, "parse_preview_rules(...) = %d, want -1", got);
+                continue;
+            }
+            if (!strstr(errbuf, cases[i].expected_errbuf_substr)) {
+                TEST_ERRORF(cases[i].label, "errbuf = %s, want substring %s",
+                            errbuf, cases[i].expected_errbuf_substr);
+            }
+            continue;
+        }
+
+        if (got != cases[i].expected_count) {
+            TEST_ERRORF(cases[i].label, "parse_preview_rules(...) = %d, want %d",
+                        got, cases[i].expected_count);
+            continue;
+        }
+        for (int j = 0; j < got; j++) {
+            if (strcmp(rules[j].suffix, cases[i].expected_suffix[j]) != 0) {
+                TEST_ERRORF(cases[i].label, "rules[%d].suffix = %s, want %s",
+                            j, rules[j].suffix, cases[i].expected_suffix[j]);
+            }
+            if (strcmp(rules[j].argv_template, cases[i].expected_template[j]) != 0) {
+                TEST_ERRORF(cases[i].label, "rules[%d].argv_template = %s, want %s",
+                            j, rules[j].argv_template, cases[i].expected_template[j]);
+            }
+        }
+    }
+}
+
 void test_helpers(void)
 {
     test_is_protected_name();
@@ -553,4 +637,5 @@ void test_helpers(void)
     test_apply_filter_truncation();
     test_dirname_of();
     test_archive_format_for_name();
+    test_parse_preview_rules();
 }

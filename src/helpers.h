@@ -11,6 +11,18 @@ typedef enum {
     NAME_IS_DIR,
 } NameKind;
 
+#define PREVIEW_RULE_MAX 64
+#define PREVIEW_SUFFIX_MAX 64
+#define PREVIEW_TEMPLATE_MAX 256
+
+typedef struct {
+    char suffix[PREVIEW_SUFFIX_MAX];
+    char argv_template[PREVIEW_TEMPLATE_MAX];
+} PreviewRule;
+
+int parse_preview_rules(const char *text, PreviewRule *out_rules, int max_rules,
+                         char *errbuf, size_t errbuf_len);
+
 int is_protected_name(const char *name);
 int is_hidden_name(const char *name);
 ArchiveFormat archive_format_for_name(const char *name);

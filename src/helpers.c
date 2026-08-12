@@ -1,6 +1,7 @@
 #include "helpers.h"
 #include <string.h>
 #include <stdio.h>
+#include <ctype.h>
 #include <regex.h>
 
 int is_protected_name(const char *name)
@@ -261,6 +262,105 @@ int is_binary_content(const unsigned char *buf, size_t len)
             return 1;
     }
     return 0;
+}
+
+static int span_is_blank(const char *start, size_t len)
+{
+    for (size_t i = 0; i < len; i++) {
+        if (!isspace((unsigned char)start[i]))
+            return 0;
+    }
+    return 1;
+}
+
+static size_t skip_leading_space(const char *start, size_t len)
+{
+    size_t i = 0;
+    while (i < len && isspace((unsigned char)start[i]))
+        i++;
+    return i;
+}
+
+static int span_contains(const char *start, size_t len, const char *needle)
+{
+    size_t needle_len = strlen(needle);
+    if (needle_len == 0 || needle_len > len)
+        return 0;
+    for (size_t i = 0; i + needle_len <= len; i++) {
+        if (memcmp(start + i, needle, needle_len) == 0)
+            return 1;
+    }
+    return 0;
+}
+
+static void span_copy_capped(char *dst, size_t dst_size, const char *src, size_t src_len)
+{
+    size_t copy_len = src_len < dst_size - 1 ? src_len : dst_size - 1;
+    memcpy(dst, src, copy_len);
+    dst[copy_len] = '\0';
+}
+
+int parse_preview_rules(const char *text, PreviewRule *out_rules, int max_rules,
+                         char *errbuf, size_t errbuf_len)
+{
+    int count = 0;
+    int line_no = 0;
+    const char *p = text;
+
+    while (*p) {
+        const char *line_start = p;
+        const char *nl = strchr(p, '\n');
+        size_t line_len = nl ? (size_t)(nl - line_start) : strlen(line_start);
+        line_no++;
+        p = nl ? nl + 1 : line_start + line_len;
+
+        size_t content_len = line_len;
+        while (content_len > 0 && line_start[content_len - 1] == '\r')
+            content_len--;
+
+        if (span_is_blank(line_start, content_len))
+            continue;
+
+        size_t lead = skip_leading_space(line_start, content_len);
+        if (lead < content_len && line_start[lead] == '#')
+            continue;
+
+        const char *eq = memchr(line_start, '=', content_len);
+        if (!eq) {
+            snprintf(errbuf, errbuf_len, "line %d: missing '=': %.*s",
+                     line_no, (int)content_len, line_start);
+            return -1;
+        }
+
+        size_t key_len = (size_t)(eq - line_start);
+        if (key_len == 0) {
+            snprintf(errbuf, errbuf_len, "line %d: empty key: %.*s",
+                     line_no, (int)content_len, line_start);
+            return -1;
+        }
+
+        const char *val_start = eq + 1;
+        size_t val_len = content_len - key_len - 1;
+
+        if (!span_contains(val_start, val_len, "$FILE")) {
+            snprintf(errbuf, errbuf_len, "line %d: value missing $FILE: %.*s",
+                     line_no, (int)content_len, line_start);
+            return -1;
+        }
+
+        if (count >= max_rules) {
+            snprintf(errbuf, errbuf_len, "line %d: too many rules (max %d): %.*s",
+                     line_no, max_rules, (int)content_len, line_start);
+            return -1;
+        }
+
+        PreviewRule *rule = &out_rules[count];
+        span_copy_capped(rule->suffix, sizeof(rule->suffix), line_start, key_len);
+        span_copy_capped(rule->argv_template, sizeof(rule->argv_template), val_start, val_len);
+        count++;
+    }
+
+    return count;
 }
 
 void mode_to_str(mode_t m, char *out)
