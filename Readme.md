@@ -85,3 +85,11 @@ drwxr-xr-x    128 src
 ## Purpose
 
 This tool provides a **simple and fast way to browse directories and edit files in a terminal**, particularly useful when working on remote systems via SSH. It focuses on minimalism and speed, allowing quick file management without a full-featured file manager.
+
+## Note for AI agents working in this repo
+
+Never launch `dired`/`build/dired` directly (interactively or headlessly) to check whether a change works — it's a full-screen terminal UI (`tb_init()`/`tb_poll_event()`), and an agent has no way to see or interact with that UI. Piping fake keystrokes at it or background-and-timeout-killing it is not a substitute for real interaction, and a timeout-triggered exit is not a pass/fail signal for TUI behavior.
+
+This includes `./builder clean dired` / `./builder debug clean dired` — despite looking like a build command, passing `dired` as an argument to `./builder` also **executes** the freshly-built binary (see `build.c`'s `BUILD_RUN_CMD("./build/"TARGET_DIRED)` call), which hangs forever waiting for a keypress. `build_lib()` already compiles and links `build/dired`/`build/diredd` unconditionally, so to confirm the binary builds and links, run `./builder clean` (release) or `./builder debug clean` (debug) — never append `dired` after `clean`/`debug clean`, that's only for a human at a real terminal who wants to run the app.
+
+Verify changes via code review, unit tests of the pure helpers `execute_*`/`update`/etc. call, and — for non-interactive startup-only behavior (e.g. config loading that happens before `tb_init()` runs) — a scratch-`$HOME` script that inspects files/stderr/exit code produced *before* the TUI starts. Never treat anything that happens after `tb_init()` as something you actually observed. For behavior that requires watching the UI render or respond to keypresses, rely on the user for interactive testing, and say plainly what still needs a human at a real terminal.
