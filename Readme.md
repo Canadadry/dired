@@ -11,6 +11,7 @@ A lightweight terminal-based file manager written in C using termbox2 (vendored 
 * Create new files or directories (via a temporary virtual line).
 * Delete files and directories with confirmation — moved to `~/.trash` by default, or permanently with a separate key.
 * Preview a file's contents (paged as text, or hex-dumped if binary) without leaving the app.
+* Configure custom preview commands per file extension (e.g. render markdown or images) via `~/.config/dired`.
 * Run an ad-hoc shell command against the current directory without leaving the app.
 * Filter the listing live by filename, either a plain substring or an extended regex.
 * Recursively glob the current directory tree by filename, either a plain substring or an extended regex.
@@ -60,6 +61,35 @@ a: Toggle hidden files (dotfiles hidden by default)
 Backspace: Move selected file/directory to trash (~/.trash)
 x: Permanently delete selected file/directory (bypasses trash)
 q: Quit
+```
+
+## Per-Extension Preview Commands
+
+By default, previewing a file (Space) pages its text through `more`, or hex-dumps it through `hexdump -C | more` if it looks binary. You can override this per file extension by editing `~/.config/dired` — the file (and `~/.config` itself, if missing) is created empty automatically the first time you run dired.
+
+Each line is:
+
+```
+ext=command arg1 arg2 $FILE
+```
+
+* `ext` has no leading dot (e.g. `md`, not `.md`).
+* `$FILE` is replaced with the real path of the file being previewed — it can appear more than once and can be embedded inside a larger argument (e.g. `--file=$FILE`).
+* `$COL` is optional and is replaced with the terminal's current column width, useful for sizing output (e.g. an image renderer) to fit the screen.
+* Blank lines and lines starting with `#` are ignored, so you can space out and comment your rules.
+* Matching is case-insensitive and checks whether the filename ends in `.` + `ext` — so `tar.gz` works as a key without special-casing. When more than one rule could match, the first one listed wins, so order rules deliberately (e.g. put `tar.gz=` above `gz=` if you want the more specific one to take precedence).
+* Files with no matching rule preview exactly as before (text via `more`, binary via `hexdump -C | more`).
+* This also applies to files previewed inside an archive, not just files on disk.
+
+A malformed line (missing `=`, an empty key, or a value missing `$FILE`) is a startup error — dired refuses to start and reports the offending line.
+
+Example config:
+
+```
+# ~/.config/dired
+md=glow $FILE
+jpg=chafa --size=$COLx40 $FILE
+png=chafa --size=$COLx40 $FILE
 ```
 
 ## Example Interface

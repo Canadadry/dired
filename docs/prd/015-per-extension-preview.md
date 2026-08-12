@@ -1,7 +1,7 @@
 ---
 title: "Per-extension preview commands via config file"
 description: "The preview key always runs the same hardcoded more/hexdump logic regardless of file type, so there's no way to view a markdown file rendered, an image as art, or a JSON file pretty-printed without leaving dired."
-status: needs-triage
+status: done
 ---
 
 ## Problem Statement
