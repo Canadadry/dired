@@ -363,6 +363,31 @@ int parse_preview_rules(const char *text, PreviewRule *out_rules, int max_rules,
     return count;
 }
 
+static int ends_with_ci(const char *name, const char *suffix)
+{
+    size_t name_len = strlen(name);
+    size_t suffix_len = strlen(suffix);
+    if (suffix_len > name_len)
+        return 0;
+    const char *tail = name + (name_len - suffix_len);
+    for (size_t i = 0; i < suffix_len; i++) {
+        if (tolower((unsigned char)tail[i]) != tolower((unsigned char)suffix[i]))
+            return 0;
+    }
+    return 1;
+}
+
+const PreviewRule *match_preview_rule(const char *filename, const PreviewRule *rules, int rule_count)
+{
+    for (int i = 0; i < rule_count; i++) {
+        char dotted[PREVIEW_SUFFIX_MAX + 2];
+        snprintf(dotted, sizeof(dotted), ".%s", rules[i].suffix);
+        if (ends_with_ci(filename, dotted))
+            return &rules[i];
+    }
+    return NULL;
+}
+
 void mode_to_str(mode_t m, char *out)
 {
     out[0] = S_ISDIR(m) ? 'd' : '-';

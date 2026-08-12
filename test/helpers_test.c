@@ -620,6 +620,74 @@ static void test_parse_preview_rules(void)
     }
 }
 
+static PreviewRule make_rule(const char *suffix, const char *argv_template)
+{
+    PreviewRule r;
+    memset(&r, 0, sizeof(r));
+    strcpy(r.suffix, suffix);
+    strcpy(r.argv_template, argv_template);
+    return r;
+}
+
+static void test_match_preview_rule(void)
+{
+    typedef struct {
+        const char *label;
+        const char *filename;
+        PreviewRule rules[4];
+        int rule_count;
+        int expect_match;
+        int expected_index;
+    } Case;
+
+    Case cases[] = {
+        {"exact match", "photo.jpg",
+         {make_rule("jpg", "chafa $FILE")}, 1, 1, 0},
+
+        {"no match", "notes.txt",
+         {make_rule("jpg", "chafa $FILE")}, 1, 0, -1},
+
+        {"case-insensitive match", "photo.JPG",
+         {make_rule("jpg", "chafa $FILE")}, 1, 1, 0},
+
+        {"gz before tar.gz, gz wins",
+         "archive.tar.gz",
+         {make_rule("gz", "zcat $FILE"), make_rule("tar.gz", "tar tzf $FILE")},
+         2, 1, 0},
+
+        {"tar.gz before gz, tar.gz wins",
+         "archive.tar.gz",
+         {make_rule("tar.gz", "tar tzf $FILE"), make_rule("gz", "zcat $FILE")},
+         2, 1, 0},
+
+        {"empty rule list", "photo.jpg", {{{0}}}, 0, 0, -1},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        const PreviewRule *got = match_preview_rule(cases[i].filename, cases[i].rules,
+                                                      cases[i].rule_count);
+
+        if (!cases[i].expect_match) {
+            if (got != NULL) {
+                TEST_ERRORF(cases[i].label, "match_preview_rule(...) = %p, want NULL",
+                            (void *)got);
+            }
+            continue;
+        }
+
+        if (got == NULL) {
+            TEST_ERRORF(cases[i].label, "match_preview_rule(...) = NULL, want match");
+            continue;
+        }
+
+        const PreviewRule *want = &cases[i].rules[cases[i].expected_index];
+        if (got != want) {
+            TEST_ERRORF(cases[i].label, "match_preview_rule(...) = rule[%d], want rule[%d]",
+                        (int)(got - cases[i].rules), cases[i].expected_index);
+        }
+    }
+}
+
 void test_helpers(void)
 {
     test_is_protected_name();
@@ -638,4 +706,5 @@ void test_helpers(void)
     test_dirname_of();
     test_archive_format_for_name();
     test_parse_preview_rules();
+    test_match_preview_rule();
 }

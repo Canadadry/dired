@@ -22,6 +22,7 @@ typedef struct {
 
 int parse_preview_rules(const char *text, PreviewRule *out_rules, int max_rules,
                          char *errbuf, size_t errbuf_len);
+const PreviewRule *match_preview_rule(const char *filename, const PreviewRule *rules, int rule_count);
 
 int is_protected_name(const char *name);
 int is_hidden_name(const char *name);
