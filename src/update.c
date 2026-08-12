@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 static void join_path(const char *dir, const char *name, char *out, size_t out_size)
 {
@@ -395,8 +396,15 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
             break;
         }
 
-        if (level->source_is_tmp)
+        if (level->source_is_tmp) {
+            char tmp_dir[PATH_MAX_LEN];
+            snprintf(tmp_dir, sizeof(tmp_dir), "%s", level->source_path);
+            char *slash = strrchr(tmp_dir, '/');
+            if (slash)
+                *slash = '\0';
             remove(level->source_path);
+            rmdir(tmp_dir);
+        }
         free(level->members);
         level->members = NULL;
         out_model->archive_depth--;

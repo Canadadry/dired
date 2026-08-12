@@ -340,8 +340,15 @@ static Msg execute_list_archive(const char *path, ArchiveFormat format,
     char *const *argv = (format == ARCHIVE_ZIP) ? unzip_argv : tar_argv;
 
     if (run_capture(argv, output, sizeof(output), errbuf, sizeof(errbuf)) < 0) {
-        if (source_is_tmp)
+        if (source_is_tmp) {
+            char tmp_dir[PATH_MAX_LEN];
+            snprintf(tmp_dir, sizeof(tmp_dir), "%s", path);
+            char *slash = strrchr(tmp_dir, '/');
+            if (slash)
+                *slash = '\0';
             remove(path);
+            rmdir(tmp_dir);
+        }
         return msg_failed("list archive: %s", errbuf[0] ? errbuf : "failed");
     }
 
@@ -411,6 +418,13 @@ static int extract_member_to_fd(int fd, const char *archive_path, ArchiveFormat 
     return run_capture_to_fd(argv, fd, errbuf, errbuf_len);
 }
 
+static void member_basename(const char *member_path, char *out, size_t out_size)
+{
+    const char *slash = strrchr(member_path, '/');
+    const char *name = slash ? slash + 1 : member_path;
+    snprintf(out, out_size, "%s", name);
+}
+
 static int extract_member_to_tmp(const char *archive_path, ArchiveFormat format, const char *member_path,
                                   char *tmp_path, size_t tmp_path_size, char *errbuf, size_t errbuf_len)
 {
@@ -418,11 +432,26 @@ static int extract_member_to_tmp(const char *archive_path, ArchiveFormat format,
     if (!tmpdir || tmpdir[0] == '\0')
         tmpdir = "/tmp";
 
-    snprintf(tmp_path, tmp_path_size, "%s/dired-archive-XXXXXX", tmpdir);
+    char tmp_dir[PATH_MAX_LEN];
+    snprintf(tmp_dir, sizeof(tmp_dir), "%s/dired-archive-XXXXXX", tmpdir);
 
-    int fd = mkstemp(tmp_path);
+    if (!mkdtemp(tmp_dir)) {
+        snprintf(errbuf, errbuf_len, "%s", strerror(errno));
+        return -1;
+    }
+
+    char name[NAME_MAX_LEN + 1];
+    member_basename(member_path, name, sizeof(name));
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+    snprintf(tmp_path, tmp_path_size, "%s/%s", tmp_dir, name);
+#pragma GCC diagnostic pop
+
+    int fd = open(tmp_path, O_CREAT | O_EXCL | O_WRONLY, 0644);
     if (fd < 0) {
         snprintf(errbuf, errbuf_len, "%s", strerror(errno));
+        rmdir(tmp_dir);
         return -1;
     }
 
@@ -431,6 +460,7 @@ static int extract_member_to_tmp(const char *archive_path, ArchiveFormat format,
 
     if (rc != 0) {
         remove(tmp_path);
+        rmdir(tmp_dir);
         return -1;
     }
 
@@ -498,8 +528,15 @@ static Msg execute_open_archive_member(const char *archive_path, ArchiveFormat f
 
     chmod(tmp_path, 0400);
 
+    char tmp_dir[PATH_MAX_LEN];
+    snprintf(tmp_dir, sizeof(tmp_dir), "%s", tmp_path);
+    char *slash = strrchr(tmp_dir, '/');
+    if (slash)
+        *slash = '\0';
+
     Msg result = preview ? execute_preview(tmp_path) : execute_launch_editor(tmp_path);
     remove(tmp_path);
+    rmdir(tmp_dir);
     return result;
 }
 
@@ -901,8 +938,15 @@ int main(int argc, char **argv)
     }
 
     for (int i = 0; i < model.archive_depth; i++) {
-        if (model.archive_stack[i].source_is_tmp)
+        if (model.archive_stack[i].source_is_tmp) {
+            char tmp_dir[PATH_MAX_LEN];
+            snprintf(tmp_dir, sizeof(tmp_dir), "%s", model.archive_stack[i].source_path);
+            char *slash = strrchr(tmp_dir, '/');
+            if (slash)
+                *slash = '\0';
             remove(model.archive_stack[i].source_path);
+            rmdir(tmp_dir);
+        }
         free(model.archive_stack[i].members);
     }
 
