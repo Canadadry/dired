@@ -29,6 +29,29 @@
 static PreviewRule g_preview_rules[PREVIEW_RULE_MAX];
 static int g_preview_rule_count = 0;
 
+static const char PREVIEW_CONFIG_TEMPLATE[] =
+    "# ~/.config/dired -- per-extension preview commands\n"
+    "#\n"
+    "# format: ext=command arg1 arg2 $FILE\n"
+    "#   ext    file extension, no leading dot (e.g. md, tar.gz)\n"
+    "#   $FILE  replaced with the real path of the file being previewed\n"
+    "#   $COL   optional, replaced with the terminal's current column width\n"
+    "#\n"
+    "# blank lines and lines starting with # are ignored\n"
+    "# the first matching rule (top to bottom) wins, so order deliberately\n"
+    "#\n"
+    "# uncomment (and adjust) any of these to enable them:\n"
+    "#\n"
+    "# md=glow $FILE\n"
+    "# jpg=chafa --size=$COLx40 $FILE\n"
+    "# jpeg=chafa --size=$COLx40 $FILE\n"
+    "# png=chafa --size=$COLx40 $FILE\n"
+    "# gif=chafa --size=$COLx40 $FILE\n"
+    "# json=jq . $FILE\n"
+    "# pdf=pdftotext $FILE -\n"
+    "# tar.gz=tar -tzvf $FILE\n"
+    "# gz=zcat $FILE\n";
+
 /* main() is the only impure code in the program: the only place that calls
  * a tb_* function, and the only place that touches the filesystem or spawns
  * a process. Everything it decides is delegated to the pure update()/view()
@@ -868,6 +891,7 @@ static void load_preview_config(void)
         FILE *created = fopen(config_path, "w");
         if (!created)
             return;
+        fwrite(PREVIEW_CONFIG_TEMPLATE, 1, sizeof(PREVIEW_CONFIG_TEMPLATE) - 1, created);
         fclose(created);
     }
 

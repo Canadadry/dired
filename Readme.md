@@ -65,7 +65,7 @@ q: Quit
 
 ## Per-Extension Preview Commands
 
-By default, previewing a file (Space) pages its text through `more`, or hex-dumps it through `hexdump -C | more` if it looks binary. You can override this per file extension by editing `~/.config/dired` — the file (and `~/.config` itself, if missing) is created empty automatically the first time you run dired.
+By default, previewing a file (Space) pages its text through `more`, or hex-dumps it through `hexdump -C | more` if it looks binary. You can override this per file extension by editing `~/.config/dired` — the file (and `~/.config` itself, if missing) is created automatically the first time you run dired, pre-filled with a commented-out example config to get you started (every line commented out, so it has no effect until you uncomment something).
 
 Each line is:
 
