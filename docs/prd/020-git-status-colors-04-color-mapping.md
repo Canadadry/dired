@@ -1,7 +1,7 @@
 ---
 title: "Git status: color mapping (chunk 4/4)"
 description: "view() now emits git-aware StyleTags, but style_colors() doesn't map them to real termbox2 colors yet, so nothing visibly changes on screen."
-status: needs-triage
+status: done
 ---
 
 ## Problem Statement

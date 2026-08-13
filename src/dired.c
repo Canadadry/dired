@@ -693,6 +693,38 @@ static void style_colors(StyleTag style, uintattr_t *fg, uintattr_t *bg)
         *fg = TB_GREEN;
         *bg = TB_DEFAULT;
         break;
+    case STYLE_CONFLICTED:
+        *fg = TB_RED;
+        *bg = TB_DEFAULT;
+        break;
+    case STYLE_CONFLICTED_SELECTED:
+        *fg = TB_WHITE;
+        *bg = TB_RED;
+        break;
+    case STYLE_MODIFIED:
+        *fg = TB_GREEN;
+        *bg = TB_DEFAULT;
+        break;
+    case STYLE_MODIFIED_SELECTED:
+        *fg = TB_BLACK;
+        *bg = TB_GREEN;
+        break;
+    case STYLE_UNTRACKED:
+        *fg = TB_YELLOW;
+        *bg = TB_DEFAULT;
+        break;
+    case STYLE_UNTRACKED_SELECTED:
+        *fg = TB_BLACK;
+        *bg = TB_YELLOW;
+        break;
+    case STYLE_IGNORED:
+        *fg = TB_BLACK | TB_BRIGHT;
+        *bg = TB_DEFAULT;
+        break;
+    case STYLE_IGNORED_SELECTED:
+        *fg = TB_WHITE;
+        *bg = TB_BLACK | TB_BRIGHT;
+        break;
     default:
         *fg = TB_DEFAULT;
         *bg = TB_DEFAULT;
