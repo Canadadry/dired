@@ -57,6 +57,15 @@ Replace `more` as the pager for every preview path — plain text preview, binar
 - **Explicitly not automated, and not expected to be**: whether a specific real-world tool like `chafa` renders a visually correct or attractive image, and whether `less`'s interactive navigation (space/q/arrows/search) feels right in practice. Both require a human at a real terminal; no test in this PRD's suite is designed to catch "the image looks wrong" or "scrolling feels off" — those get verified manually by whoever implements this, not by an agent (agents cannot observe rendered terminal output per this repo's own "Note for AI agents working in this repo" in `Readme.md`).
 - **New test file needed**: since these tests exercise `src/dired.c`-level fork/exec logic rather than `src/helpers.c` pure functions, and no test file currently covers any of `dired.c`'s process-oriented code, this will need a new test file (following the existing `test/*_test.c` + `test/main.c`/`test/tests.h` wiring convention) — itself a small new precedent, since `dired.c`'s fork/exec code has never had test coverage of any kind before this PRD.
 
+## Implementation Chunks
+
+This PRD is scoped narrowly enough that it doesn't need the same degree of splitting `015-per-extension-preview.md` did (that PRD built up a whole new subsystem from scratch; this one is one new deep module plus three call-site swaps). Still, it introduces genuinely new territory for this codebase — real `forkpty()`/pty handling, and the first dependency-injection test seam used anywhere here — so each piece should get its own isolated TDD pass and verification rather than being built in one sitting. Recommended breakdown, each a candidate for its own implement → verify → commit cycle:
+
+1. **`run_via_pty`** — pty allocation, producer/pager wiring, and its integration tests, plus the `-lutil`/`MACOS_FLAGS` build change it needs to link at all. The riskiest, most novel piece; worth isolating so a build/link problem or a pty-wiring bug is easy to attribute.
+2. **`run_paged` orchestrator** — the injectable pty-allocation seam, the fallback-to-`run_via_pipe` logic (reusing existing `run_piped`), and the two orchestrator tests (success path, fallback-triggered path). Depends on chunk 1.
+3. **Wire `run_paged` into `execute_preview`'s three call sites** — configured rules, default hexdump preview, and simplifying default text preview to a direct `less -R` exec. Depends on chunk 2. `execute_preview` is a heavily-used path (every preview goes through it), so this deserves its own isolated diff and verification pass rather than being bundled with chunk 1 or 2's new-module work.
+4. **README update + PRD graduation** — same shape as `015-per-extension-preview.md`'s final chunk.
+
 ## Out of Scope
 
 - Any change to `~/.config/dired`'s file format or syntax — this PRD is purely an internal execution-mechanism change.
