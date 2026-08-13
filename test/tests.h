@@ -7,5 +7,6 @@ void test_view(void);
 void test_loaddir(void);
 void test_trash(void);
 void test_archive(void);
+void test_pager(void);
 
 #endif // DIRED_TESTS_H
