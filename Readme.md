@@ -48,7 +48,7 @@ ssh user@remotehost 'cd /path/to/dired && ./builder debug clean dired'
 → / Enter: Open file or enter directory
 r: Rename selected file/directory
 n: Create a new file or directory (trailing / for a directory)
-Space: Preview selected file (text pages, binary is hex-dumped)
+Space: Preview selected file (text pages, binary is hex-dumped — both paged via less)
 :: Run a shell command (prefix with !, e.g. !unzip $FILE), output paged. $FILE is the selected entry's path
 f: Filter listing by filename (plain substring)
 F: Filter listing by filename (extended regex)
@@ -65,7 +65,7 @@ q: Quit
 
 ## Per-Extension Preview Commands
 
-By default, previewing a file (Space) pages its text through `more`, or hex-dumps it through `hexdump -C | more` if it looks binary. You can override this per file extension by editing `~/.config/dired` — the file (and `~/.config` itself, if missing) is created automatically the first time you run dired, pre-filled with a commented-out example config to get you started (every line commented out, so it has no effect until you uncomment something).
+By default, previewing a file (Space) pages its text through `less -R`, or hex-dumps it through `hexdump -C` piped into `less -R` if it looks binary. You can override this per file extension by editing `~/.config/dired` — the file (and `~/.config` itself, if missing) is created automatically the first time you run dired, pre-filled with a commented-out example config to get you started (every line commented out, so it has no effect until you uncomment something).
 
 Each line is:
 
@@ -76,9 +76,10 @@ ext=command arg1 arg2 $FILE
 * `ext` has no leading dot (e.g. `md`, not `.md`).
 * `$FILE` is replaced with the real path of the file being previewed — it can appear more than once and can be embedded inside a larger argument (e.g. `--file=$FILE`).
 * `$COL` is optional and is replaced with the terminal's current column width, useful for sizing output (e.g. an image renderer) to fit the screen.
+* If the environment supports it, your command's stdout/stderr run attached to a real pseudo-terminal rather than a plain pipe, so TTY-aware tools (e.g. `chafa`, which checks `isatty()` to decide render quality) produce full-quality output instead of a degraded fallback. Where pty allocation isn't available, this falls back silently to the old plain-pipe behavior — no error shown, nothing to configure.
 * Blank lines and lines starting with `#` are ignored, so you can space out and comment your rules.
 * Matching is case-insensitive and checks whether the filename ends in `.` + `ext` — so `tar.gz` works as a key without special-casing. When more than one rule could match, the first one listed wins, so order rules deliberately (e.g. put `tar.gz=` above `gz=` if you want the more specific one to take precedence).
-* Files with no matching rule preview exactly as before (text via `more`, binary via `hexdump -C | more`).
+* Files with no matching rule preview exactly as before (text via `less -R`, binary via `hexdump -C | less -R`).
 * This also applies to files previewed inside an archive, not just files on disk.
 
 A malformed line (missing `=`, an empty key, or a value missing `$FILE`) is a startup error — dired refuses to start and reports the offending line.
