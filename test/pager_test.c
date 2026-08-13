@@ -165,9 +165,66 @@ static void test_run_paged_falls_back_to_pipe_pager_on_alloc_failure(void)
         TEST_ERRORF("run_paged fallback", "pty pager received %s, want empty", got_pty);
 }
 
+static void test_run_via_pty_pager_stdin_is_not_a_tty(void)
+{
+    const char *producer_text = "hello from producer\n";
+
+    char out_path[256];
+    if (make_tmp_file(out_path, sizeof(out_path)) < 0) {
+        TEST_ERRORF("pager stdin not a tty", "mkstemp failed");
+        return;
+    }
+
+    char *primary_argv[] = { "printf", "%s", (char *)producer_text, NULL };
+    char *pager_argv[] = { "sh", "-c", "less -R > \"$1\"", "sh", out_path, NULL };
+
+    run_via_pty(primary_argv, pager_argv);
+
+    char got[4096];
+    int n = read_file_contents(out_path, got, sizeof(got));
+    unlink(out_path);
+
+    if (n < 0) {
+        TEST_ERRORF("pager stdin not a tty", "failed to read pager output file");
+        return;
+    }
+    if (strcmp(got, producer_text) != 0)
+        TEST_ERRORF("pager stdin not a tty", "less received %s, want %s", got, producer_text);
+}
+
+static void test_run_via_pty_producer_receives_forced_term(void)
+{
+    char out_path[256];
+    if (make_tmp_file(out_path, sizeof(out_path)) < 0) {
+        TEST_ERRORF("producer receives forced TERM", "mkstemp failed");
+        return;
+    }
+
+    char of_arg[sizeof(out_path) + 8];
+    snprintf(of_arg, sizeof(of_arg), "of=%s", out_path);
+
+    char *primary_argv[] = { "sh", "-c", "printf '%s' \"$TERM\"", NULL };
+    char *pager_argv[] = { "dd", of_arg, "status=none", NULL };
+
+    run_via_pty(primary_argv, pager_argv);
+
+    char got[4096];
+    int n = read_file_contents(out_path, got, sizeof(got));
+    unlink(out_path);
+
+    if (n < 0) {
+        TEST_ERRORF("producer receives forced TERM", "failed to read pager output file");
+        return;
+    }
+    if (strcmp(got, "tmux-256color") != 0)
+        TEST_ERRORF("producer receives forced TERM", "producer saw TERM=%s, want tmux-256color", got);
+}
+
 void test_pager(void)
 {
     test_run_via_pty_forwards_producer_output_intact();
     test_run_paged_uses_pty_pager_on_alloc_success();
     test_run_paged_falls_back_to_pipe_pager_on_alloc_failure();
+    test_run_via_pty_pager_stdin_is_not_a_tty();
+    test_run_via_pty_producer_receives_forced_term();
 }

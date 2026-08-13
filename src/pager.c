@@ -3,6 +3,7 @@
 #include "pager.h"
 
 #include <fcntl.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <termios.h>
 #include <unistd.h>
@@ -56,19 +57,49 @@ static void run_via_pty_fd(char *const primary_argv[], char *const pager_argv[],
         dup2(slave_fd, STDERR_FILENO);
         close(slave_fd);
 
+        setenv("TERM", "tmux-256color", 1);
+
         execvp(primary_argv[0], primary_argv);
         _exit(EXIT_FAILURE);
     }
 
+    int relay_fd[2];
+    if (pipe(relay_fd) != 0) {
+        close(master_fd);
+        waitpid(pid1, NULL, 0);
+        return;
+    }
+
     pid_t pid2 = fork();
     if (pid2 == 0) {
-        dup2(master_fd, STDIN_FILENO);
         close(master_fd);
+        close(relay_fd[1]);
+        dup2(relay_fd[0], STDIN_FILENO);
+        close(relay_fd[0]);
         setenv("POSIXLY_CORRECT", "1", 1);
         execvp(pager_argv[0], pager_argv);
         _exit(EXIT_FAILURE);
     }
 
+    close(relay_fd[0]);
+
+    void (*prev_sigpipe)(int) = signal(SIGPIPE, SIG_IGN);
+    char buf[4096];
+    ssize_t n;
+    while ((n = read(master_fd, buf, sizeof(buf))) > 0) {
+        ssize_t written = 0;
+        while (written < n) {
+            ssize_t w = write(relay_fd[1], buf + written, (size_t)(n - written));
+            if (w <= 0)
+                break;
+            written += w;
+        }
+        if (written < n)
+            break;
+    }
+    signal(SIGPIPE, prev_sigpipe);
+
+    close(relay_fd[1]);
     close(master_fd);
     waitpid(pid1, NULL, 0);
     waitpid(pid2, NULL, 0);
