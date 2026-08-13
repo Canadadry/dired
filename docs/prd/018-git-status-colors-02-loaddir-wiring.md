@@ -1,7 +1,7 @@
 ---
 title: "Git status: loaddir wiring (chunk 2/4)"
 description: "The pure gitstatus classifier exists but nothing feeds it real data, so Entry.git_status is never populated from an actual repo."
-status: needs-triage
+status: done
 ---
 
 ## Problem Statement
