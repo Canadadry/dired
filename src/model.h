@@ -68,9 +68,18 @@ typedef enum {
     GROUP_MODE_COUNT,
 } GroupMode;
 
+typedef enum {
+    GIT_STATUS_NONE = 0,
+    GIT_STATUS_IGNORED,
+    GIT_STATUS_UNTRACKED,
+    GIT_STATUS_MODIFIED,
+    GIT_STATUS_CONFLICTED,
+} GitStatusTag;
+
 typedef struct {
     char name[NAME_MAX_LEN + 1];
     struct stat st;
+    GitStatusTag git_status;
 } Entry;
 
 typedef struct {

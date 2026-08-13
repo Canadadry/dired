@@ -8,5 +8,6 @@ void test_loaddir(void);
 void test_trash(void);
 void test_archive(void);
 void test_pager(void);
+void test_gitstatus(void);
 
 #endif // DIRED_TESTS_H

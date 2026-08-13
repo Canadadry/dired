@@ -10,6 +10,7 @@ int main(void) {
     TEST_GROUP(test_trash);
     TEST_GROUP(test_archive);
     TEST_GROUP(test_pager);
+    TEST_GROUP(test_gitstatus);
 
     test_done();
     return 0;

@@ -1,7 +1,7 @@
 ---
 title: "Git status: data model and pure classification (chunk 1/4)"
 description: "No representation exists yet for an entry's git status, and there is no pure logic to derive one from `git status` output — add both, with zero filesystem/process access."
-status: needs-triage
+status: done
 ---
 
 ## Problem Statement
