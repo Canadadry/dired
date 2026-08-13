@@ -54,6 +54,43 @@ static void test_view_nav_listing(void)
     }
 }
 
+static void test_view_git_status_style(void)
+{
+    typedef struct {
+        const char *label;
+        GitStatusTag git_status;
+        int selected;
+        StyleTag expected_style;
+    } Case;
+
+    Case cases[] = {
+        {"conflicted, unselected", GIT_STATUS_CONFLICTED, 0, STYLE_CONFLICTED},
+        {"conflicted, selected", GIT_STATUS_CONFLICTED, 1, STYLE_CONFLICTED_SELECTED},
+        {"modified, unselected", GIT_STATUS_MODIFIED, 0, STYLE_MODIFIED},
+        {"modified, selected", GIT_STATUS_MODIFIED, 1, STYLE_MODIFIED_SELECTED},
+        {"untracked, unselected", GIT_STATUS_UNTRACKED, 0, STYLE_UNTRACKED},
+        {"untracked, selected", GIT_STATUS_UNTRACKED, 1, STYLE_UNTRACKED_SELECTED},
+        {"ignored, unselected", GIT_STATUS_IGNORED, 0, STYLE_IGNORED},
+        {"ignored, selected", GIT_STATUS_IGNORED, 1, STYLE_IGNORED_SELECTED},
+        {"none, unselected", GIT_STATUS_NONE, 0, STYLE_NORMAL},
+        {"none, selected", GIT_STATUS_NONE, 1, STYLE_SELECTED},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model m = make_view_model();
+        set_entry(&m, 0, "main.c", S_IFREG | 0644, 512);
+        m.entries[0].git_status = cases[i].git_status;
+        m.entry_count = 1;
+        m.selected = cases[i].selected ? 0 : 1;
+
+        View v = view(&m);
+
+        if (v.lines[2].style != cases[i].expected_style) {
+            TEST_ERRORF(cases[i].label, "lines[2].style = %d, want %d", v.lines[2].style, cases[i].expected_style);
+        }
+    }
+}
+
 static void test_view_create_virtual_row(void)
 {
     Model m = make_view_model();
@@ -524,6 +561,7 @@ static void test_view_page_indicator_during_create_mode(void)
 void test_view(void)
 {
     test_view_nav_listing();
+    test_view_git_status_style();
     test_view_paginates_long_list();
     test_view_page_indicator_first_page();
     test_view_page_indicator_middle_page();

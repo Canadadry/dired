@@ -74,11 +74,27 @@ static void add_prompt_line(View *v, const Model *m)
     }
 }
 
+static StyleTag entry_style_tag(GitStatusTag git_status, int selected)
+{
+    switch (git_status) {
+    case GIT_STATUS_CONFLICTED:
+        return selected ? STYLE_CONFLICTED_SELECTED : STYLE_CONFLICTED;
+    case GIT_STATUS_MODIFIED:
+        return selected ? STYLE_MODIFIED_SELECTED : STYLE_MODIFIED;
+    case GIT_STATUS_UNTRACKED:
+        return selected ? STYLE_UNTRACKED_SELECTED : STYLE_UNTRACKED;
+    case GIT_STATUS_IGNORED:
+        return selected ? STYLE_IGNORED_SELECTED : STYLE_IGNORED;
+    default:
+        return selected ? STYLE_SELECTED : STYLE_NORMAL;
+    }
+}
+
 static void add_entry_line(View *v, const Model *m, int i)
 {
     char perms[11];
     mode_to_str(m->entries[i].st.st_mode, perms);
-    StyleTag style = (i == m->selected) ? STYLE_SELECTED : STYLE_NORMAL;
+    StyleTag style = entry_style_tag(m->entries[i].git_status, i == m->selected);
     add_line(v, style, "%s %8ld %s", perms, (long)m->entries[i].st.st_size, m->entries[i].name);
 }
 
@@ -102,7 +118,7 @@ static void append_scroll_marker(Line *line, int term_width, const char *marker)
 
 static void add_virtual_line(View *v, const Model *m)
 {
-    StyleTag style = (m->entry_count == m->selected) ? STYLE_SELECTED : STYLE_NORMAL;
+    StyleTag style = entry_style_tag(GIT_STATUS_NONE, m->entry_count == m->selected);
     add_line(v, style, "          %s", m->edit_buf);
 }
 

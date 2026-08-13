@@ -1,7 +1,7 @@
 ---
 title: "Git status: view-layer style tags (chunk 3/4)"
 description: "Entry.git_status is now populated from real git data, but the view layer has no style tags for it and never looks at the field."
-status: needs-triage
+status: done
 ---
 
 ## Problem Statement
