@@ -1,7 +1,7 @@
 ---
 title: "Unified TTY-aware preview paging"
 description: "Piping a TTY-aware preview command (e.g. chafa) through more breaks it — the command detects a non-tty and renders in a degraded mode, and more miscounts ANSI-escape-padded line widths, causing incorrect pagination."
-status: needs-triage
+status: done
 ---
 
 ## Problem Statement
