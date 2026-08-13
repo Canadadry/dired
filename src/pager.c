@@ -8,23 +8,29 @@
 #include <unistd.h>
 #include <sys/wait.h>
 
-void run_via_pty(char *const primary_argv[], char *const pager_argv[])
+static int pty_alloc_real(int *master_fd, char *slave_path, size_t slave_path_len)
 {
-    int master_fd = posix_openpt(O_RDWR | O_NOCTTY);
-    if (master_fd < 0)
-        return;
+    int fd = posix_openpt(O_RDWR | O_NOCTTY);
+    if (fd < 0)
+        return -1;
 
-    if (grantpt(master_fd) != 0 || unlockpt(master_fd) != 0) {
-        close(master_fd);
-        return;
+    if (grantpt(fd) != 0 || unlockpt(fd) != 0) {
+        close(fd);
+        return -1;
     }
 
-    char slave_path[64];
-    if (ptsname_r(master_fd, slave_path, sizeof(slave_path)) != 0) {
-        close(master_fd);
-        return;
+    if (ptsname_r(fd, slave_path, slave_path_len) != 0) {
+        close(fd);
+        return -1;
     }
 
+    *master_fd = fd;
+    return 0;
+}
+
+static void run_via_pty_fd(char *const primary_argv[], char *const pager_argv[], int master_fd,
+                            const char *slave_path)
+{
     pid_t pid1 = fork();
     if (pid1 < 0) {
         close(master_fd);
@@ -66,4 +72,64 @@ void run_via_pty(char *const primary_argv[], char *const pager_argv[])
     close(master_fd);
     waitpid(pid1, NULL, 0);
     waitpid(pid2, NULL, 0);
+}
+
+void run_via_pty(char *const primary_argv[], char *const pager_argv[])
+{
+    int master_fd;
+    char slave_path[64];
+    if (pty_alloc_real(&master_fd, slave_path, sizeof(slave_path)) != 0)
+        return;
+
+    run_via_pty_fd(primary_argv, pager_argv, master_fd, slave_path);
+}
+
+void run_via_pipe(char *const primary_argv[], char *const pager_argv[])
+{
+    int fd[2];
+    if (pipe(fd) != 0)
+        return;
+
+    pid_t pid1 = fork();
+    if (pid1 == 0) {
+        close(fd[0]);
+        dup2(fd[1], STDOUT_FILENO);
+        dup2(fd[1], STDERR_FILENO);
+        close(fd[1]);
+        execvp(primary_argv[0], primary_argv);
+        _exit(EXIT_FAILURE);
+    }
+
+    pid_t pid2 = fork();
+    if (pid2 == 0) {
+        close(fd[1]);
+        dup2(fd[0], STDIN_FILENO);
+        close(fd[0]);
+        setenv("POSIXLY_CORRECT", "1", 1);
+        execvp(pager_argv[0], pager_argv);
+        _exit(EXIT_FAILURE);
+    }
+
+    close(fd[0]);
+    close(fd[1]);
+    waitpid(pid1, NULL, 0);
+    waitpid(pid2, NULL, 0);
+}
+
+void run_paged_with_alloc(char *const primary_argv[], char *const pty_pager_argv[],
+                           char *const pipe_pager_argv[], PtyAllocFn alloc_fn)
+{
+    int master_fd;
+    char slave_path[64];
+    if (alloc_fn(&master_fd, slave_path, sizeof(slave_path)) == 0) {
+        run_via_pty_fd(primary_argv, pty_pager_argv, master_fd, slave_path);
+        return;
+    }
+
+    run_via_pipe(primary_argv, pipe_pager_argv);
+}
+
+void run_paged(char *const primary_argv[], char *const pty_pager_argv[], char *const pipe_pager_argv[])
+{
+    run_paged_with_alloc(primary_argv, pty_pager_argv, pipe_pager_argv, pty_alloc_real);
 }

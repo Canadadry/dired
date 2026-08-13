@@ -66,7 +66,108 @@ static void test_run_via_pty_forwards_producer_output_intact(void)
     }
 }
 
+static int make_tmp_file(char *out_path, size_t out_path_cap)
+{
+    const char *tmpdir = getenv("TMPDIR");
+    if (!tmpdir)
+        tmpdir = "/tmp";
+    snprintf(out_path, out_path_cap, "%s/pager_test_XXXXXX", tmpdir);
+    int fd = mkstemp(out_path);
+    if (fd < 0)
+        return -1;
+    close(fd);
+    return 0;
+}
+
+static int failing_pty_alloc(int *master_fd, char *slave_path, size_t slave_path_len)
+{
+    (void)master_fd;
+    (void)slave_path;
+    (void)slave_path_len;
+    return -1;
+}
+
+static void test_run_paged_uses_pty_pager_on_alloc_success(void)
+{
+    const char *producer_text = "paged via pty\n";
+
+    char pty_out[256];
+    char pipe_out[256];
+    if (make_tmp_file(pty_out, sizeof(pty_out)) < 0 || make_tmp_file(pipe_out, sizeof(pipe_out)) < 0) {
+        TEST_ERRORF("run_paged success", "mkstemp failed");
+        return;
+    }
+
+    char pty_of_arg[sizeof(pty_out) + 8];
+    char pipe_of_arg[sizeof(pipe_out) + 8];
+    snprintf(pty_of_arg, sizeof(pty_of_arg), "of=%s", pty_out);
+    snprintf(pipe_of_arg, sizeof(pipe_of_arg), "of=%s", pipe_out);
+
+    char *primary_argv[] = { "printf", "%s", (char *)producer_text, NULL };
+    char *pty_pager_argv[] = { "dd", pty_of_arg, "status=none", NULL };
+    char *pipe_pager_argv[] = { "dd", pipe_of_arg, "status=none", NULL };
+
+    run_paged(primary_argv, pty_pager_argv, pipe_pager_argv);
+
+    char got_pty[4096];
+    char got_pipe[4096];
+    int n_pty = read_file_contents(pty_out, got_pty, sizeof(got_pty));
+    int n_pipe = read_file_contents(pipe_out, got_pipe, sizeof(got_pipe));
+    unlink(pty_out);
+    unlink(pipe_out);
+
+    if (n_pty < 0 || n_pipe < 0) {
+        TEST_ERRORF("run_paged success", "failed to read pager output files");
+        return;
+    }
+    if (strcmp(got_pty, producer_text) != 0)
+        TEST_ERRORF("run_paged success", "pty pager received %s, want %s", got_pty, producer_text);
+    if (n_pipe != 0)
+        TEST_ERRORF("run_paged success", "pipe pager received %s, want empty", got_pipe);
+}
+
+static void test_run_paged_falls_back_to_pipe_pager_on_alloc_failure(void)
+{
+    const char *producer_text = "paged via pipe fallback\n";
+
+    char pty_out[256];
+    char pipe_out[256];
+    if (make_tmp_file(pty_out, sizeof(pty_out)) < 0 || make_tmp_file(pipe_out, sizeof(pipe_out)) < 0) {
+        TEST_ERRORF("run_paged fallback", "mkstemp failed");
+        return;
+    }
+
+    char pty_of_arg[sizeof(pty_out) + 8];
+    char pipe_of_arg[sizeof(pipe_out) + 8];
+    snprintf(pty_of_arg, sizeof(pty_of_arg), "of=%s", pty_out);
+    snprintf(pipe_of_arg, sizeof(pipe_of_arg), "of=%s", pipe_out);
+
+    char *primary_argv[] = { "printf", "%s", (char *)producer_text, NULL };
+    char *pty_pager_argv[] = { "dd", pty_of_arg, "status=none", NULL };
+    char *pipe_pager_argv[] = { "dd", pipe_of_arg, "status=none", NULL };
+
+    run_paged_with_alloc(primary_argv, pty_pager_argv, pipe_pager_argv, failing_pty_alloc);
+
+    char got_pty[4096];
+    char got_pipe[4096];
+    int n_pty = read_file_contents(pty_out, got_pty, sizeof(got_pty));
+    int n_pipe = read_file_contents(pipe_out, got_pipe, sizeof(got_pipe));
+    unlink(pty_out);
+    unlink(pipe_out);
+
+    if (n_pty < 0 || n_pipe < 0) {
+        TEST_ERRORF("run_paged fallback", "failed to read pager output files");
+        return;
+    }
+    if (strcmp(got_pipe, producer_text) != 0)
+        TEST_ERRORF("run_paged fallback", "pipe pager received %s, want %s", got_pipe, producer_text);
+    if (n_pty != 0)
+        TEST_ERRORF("run_paged fallback", "pty pager received %s, want empty", got_pty);
+}
+
 void test_pager(void)
 {
     test_run_via_pty_forwards_producer_output_intact();
+    test_run_paged_uses_pty_pager_on_alloc_success();
+    test_run_paged_falls_back_to_pipe_pager_on_alloc_failure();
 }
