@@ -7,6 +7,7 @@
 #include "loaddir.h"
 #include "trash.h"
 #include "archive.h"
+#include "pager.h"
 #include "../vendor/termbox2.h"
 
 #include <ctype.h>
@@ -310,8 +311,9 @@ static Msg execute_preview(const char *path)
         char argv_buf[PREVIEW_ARGV_MAX][PREVIEW_EXEC_TOKEN_MAX];
         char *argv[PREVIEW_ARGV_MAX + 1];
         if (build_preview_argv(rule, path, col_width, argv_buf, argv) > 0) {
-            char *pager_argv[] = { "more", NULL };
-            run_piped(argv, pager_argv, NULL);
+            char *pty_pager_argv[] = { "less", "-R", NULL };
+            char *pipe_pager_argv[] = { "more", NULL };
+            run_paged(argv, pty_pager_argv, pipe_pager_argv);
         }
 
         tb_init();
@@ -330,15 +332,13 @@ static Msg execute_preview(const char *path)
 
     if (is_binary_content(sniff, n)) {
         char *dump_argv[] = { "hexdump", "-C", (char *)path, NULL };
-        char *pager_argv[] = { "more", NULL };
-        run_piped(dump_argv, pager_argv, NULL);
+        char *pty_pager_argv[] = { "less", "-R", NULL };
+        char *pipe_pager_argv[] = { "more", NULL };
+        run_paged(dump_argv, pty_pager_argv, pipe_pager_argv);
     } else {
         pid_t pid = fork();
         if (pid == 0) {
-            /* See run_piped()'s POSIXLY_CORRECT comment: without it, more
-             * exits immediately on short files instead of pausing. */
-            setenv("POSIXLY_CORRECT", "1", 1);
-            execlp("more", "more", path, (char *)NULL);
+            execlp("less", "less", "-R", path, (char *)NULL);
             _exit(EXIT_FAILURE);
         } else {
             wait(NULL);
