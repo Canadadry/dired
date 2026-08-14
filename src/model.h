@@ -127,6 +127,8 @@ typedef struct {
     int scroll_offset;
 
     AppMode mode;
+    unsigned char marked[MAX_ENTRIES];
+    int marked_count;
     int confirm_permanent_delete;
     char edit_buf[NAME_MAX_LEN + 1];
     size_t edit_len;

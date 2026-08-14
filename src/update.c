@@ -913,6 +913,31 @@ static void handle_select(const Msg *msg, Model *out_model)
     case MSG_TOGGLE_SELECT_MODE:
     case MSG_CANCEL:
         out_model->mode = MODE_NAV;
+        memset(out_model->marked, 0, sizeof(out_model->marked));
+        out_model->marked_count = 0;
+        break;
+
+    case MSG_TOGGLE_MARK:
+        if (out_model->selected < out_model->entry_count) {
+            if (out_model->marked[out_model->selected]) {
+                out_model->marked[out_model->selected] = 0;
+                out_model->marked_count--;
+            } else {
+                out_model->marked[out_model->selected] = 1;
+                out_model->marked_count++;
+            }
+        }
+        break;
+
+    case MSG_TOGGLE_MARK_ALL:
+        if (out_model->marked_count < out_model->entry_count) {
+            for (int i = 0; i < out_model->entry_count; i++)
+                out_model->marked[i] = 1;
+            out_model->marked_count = out_model->entry_count;
+        } else {
+            memset(out_model->marked, 0, sizeof(out_model->marked));
+            out_model->marked_count = 0;
+        }
         break;
 
     default:

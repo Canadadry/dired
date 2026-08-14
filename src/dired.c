@@ -874,7 +874,9 @@ static Msg translate_event(struct tb_event ev, AppMode mode)
     else if (ev.ch == 'v')
         msg.type = MSG_TOGGLE_SELECT_MODE;
     else if (ev.ch == ' ')
-        msg.type = MSG_PREVIEW;
+        msg.type = (mode == MODE_SELECT) ? MSG_TOGGLE_MARK : MSG_PREVIEW;
+    else if (ev.ch == 't' && mode == MODE_SELECT)
+        msg.type = MSG_TOGGLE_MARK_ALL;
     else if (ev.ch == 'c')
         msg.type = MSG_YANK_COPY;
     else if (ev.ch == 'm')

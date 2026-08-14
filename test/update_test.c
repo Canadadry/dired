@@ -1637,6 +1637,125 @@ static void test_select_mode_allowed_while_filter_active(void)
     }
 }
 
+static void test_toggle_mark_marks_unmarked_entry(void)
+{
+    Model in = make_nav_model(3, 1);
+    in.mode = MODE_SELECT;
+    Msg msg = { .type = MSG_TOGGLE_MARK };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (!out.marked[1]) {
+        TEST_ERRORF("space marks unmarked entry", "marked[1] = %d, want 1", out.marked[1]);
+    }
+    if (out.marked_count != 1) {
+        TEST_ERRORF("space marks unmarked entry", "marked_count = %d, want 1", out.marked_count);
+    }
+}
+
+static void test_toggle_mark_unmarks_marked_entry(void)
+{
+    Model in = make_nav_model(3, 1);
+    in.mode = MODE_SELECT;
+    in.marked[1] = 1;
+    in.marked_count = 1;
+    Msg msg = { .type = MSG_TOGGLE_MARK };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.marked[1]) {
+        TEST_ERRORF("space unmarks marked entry", "marked[1] = %d, want 0", out.marked[1]);
+    }
+    if (out.marked_count != 0) {
+        TEST_ERRORF("space unmarks marked entry", "marked_count = %d, want 0", out.marked_count);
+    }
+}
+
+static void test_toggle_mark_all_marks_everything_when_not_all_marked(void)
+{
+    Model in = make_nav_model(3, 1);
+    in.mode = MODE_SELECT;
+    in.marked[0] = 1;
+    in.marked_count = 1;
+    Msg msg = { .type = MSG_TOGGLE_MARK_ALL };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    for (int i = 0; i < 3; i++) {
+        if (!out.marked[i]) {
+            TEST_ERRORF("t marks everything when not all marked", "marked[%d] = %d, want 1", i, out.marked[i]);
+        }
+    }
+    if (out.marked_count != 3) {
+        TEST_ERRORF("t marks everything when not all marked", "marked_count = %d, want 3", out.marked_count);
+    }
+}
+
+static void test_toggle_mark_all_clears_everything_when_all_marked(void)
+{
+    Model in = make_nav_model(3, 1);
+    in.mode = MODE_SELECT;
+    in.marked[0] = 1;
+    in.marked[1] = 1;
+    in.marked[2] = 1;
+    in.marked_count = 3;
+    Msg msg = { .type = MSG_TOGGLE_MARK_ALL };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    for (int i = 0; i < 3; i++) {
+        if (out.marked[i]) {
+            TEST_ERRORF("t clears everything when all marked", "marked[%d] = %d, want 0", i, out.marked[i]);
+        }
+    }
+    if (out.marked_count != 0) {
+        TEST_ERRORF("t clears everything when all marked", "marked_count = %d, want 0", out.marked_count);
+    }
+}
+
+static void test_leave_select_mode_clears_marks(void)
+{
+    typedef struct {
+        const char *label;
+        MsgType msg_type;
+    } Case;
+
+    Case cases[] = {
+        {"v clears marks on leaving select mode", MSG_TOGGLE_SELECT_MODE},
+        {"Esc clears marks on leaving select mode", MSG_CANCEL},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model in = make_nav_model(3, 1);
+        in.mode = MODE_SELECT;
+        in.marked[0] = 1;
+        in.marked[2] = 1;
+        in.marked_count = 2;
+        Msg msg = { .type = cases[i].msg_type };
+        Model out;
+        Cmd cmd;
+
+        update(&msg, &in, &out, &cmd);
+
+        if (out.marked_count != 0) {
+            TEST_ERRORF(cases[i].label, "marked_count = %d, want 0", out.marked_count);
+        }
+        for (int j = 0; j < 3; j++) {
+            if (out.marked[j]) {
+                TEST_ERRORF(cases[i].label, "marked[%d] = %d, want 0", j, out.marked[j]);
+            }
+        }
+    }
+}
+
 static Model make_edit_model(AppMode mode, const char *edit_buf, int selected, int entry_count)
 {
     Model m = make_nav_model(entry_count, selected);
@@ -3904,6 +4023,11 @@ void test_update(void)
     test_leave_select_mode();
     test_select_mode_rejected_while_glob_active();
     test_select_mode_allowed_while_filter_active();
+    test_toggle_mark_marks_unmarked_entry();
+    test_toggle_mark_unmarks_marked_entry();
+    test_toggle_mark_all_marks_everything_when_not_all_marked();
+    test_toggle_mark_all_clears_everything_when_all_marked();
+    test_leave_select_mode_clears_marks();
     test_filter_live_recompute_on_text_input();
     test_filter_live_recompute_on_delete();
     test_filter_live_recompute_no_matches_is_empty();
