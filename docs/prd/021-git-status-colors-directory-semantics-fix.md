@@ -1,7 +1,7 @@
 ---
 title: "Git status colors: fix directory semantics and rework the color legend"
 description: "Untracked files inside already-tracked subdirectories render with no color at all, and the shipped color legend doesn't match what the user actually wants."
-status: needs-triage
+status: done
 ---
 
 ## Problem Statement

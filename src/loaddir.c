@@ -38,7 +38,7 @@ static char *read_git_status(const char *path)
     quote_shell_arg(path, quoted_path, sizeof(quoted_path));
 
     char cmd[sizeof(quoted_path) + 64];
-    snprintf(cmd, sizeof(cmd), "git -C %s status --porcelain --ignored -uall 2>/dev/null", quoted_path);
+    snprintf(cmd, sizeof(cmd), "git -C %s status --porcelain --ignored 2>/dev/null", quoted_path);
 
     FILE *fp = popen(cmd, "r");
     if (!fp)

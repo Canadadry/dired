@@ -44,6 +44,18 @@ static void test_classify_git_status(void)
          {{"staged.c", S_IFREG | 0644}}, 1,
          {GIT_STATUS_MODIFIED}},
 
+        {"staged-new file", "A  staged_new.txt\n",
+         {{"staged_new.txt", S_IFREG | 0644}}, 1,
+         {GIT_STATUS_UNTRACKED}},
+
+        {"deleted file, unstaged", " D removed.txt\n",
+         {{"removed.txt", S_IFREG | 0644}}, 1,
+         {GIT_STATUS_DELETED}},
+
+        {"deleted file, staged", "D  removed_staged.txt\n",
+         {{"removed_staged.txt", S_IFREG | 0644}}, 1,
+         {GIT_STATUS_DELETED}},
+
         {"conflicted file, both modified (UU)", "UU conflict.txt\n",
          {{"conflict.txt", S_IFREG | 0644}}, 1,
          {GIT_STATUS_CONFLICTED}},
@@ -56,6 +68,16 @@ static void test_classify_git_status(void)
          {{"clean.c", S_IFREG | 0644}}, 1,
          {GIT_STATUS_NONE}},
 
+        {"directory with an untracked and a deleted descendant picks deleted",
+         "?? proj/untracked.txt\nD  proj/removed.txt\n",
+         {{"proj", S_IFDIR | 0755}}, 1,
+         {GIT_STATUS_DELETED}},
+
+        {"tracked directory containing a wholly-untracked directory renders modified",
+         "?? outer/inner/\n",
+         {{"outer", S_IFDIR | 0755}}, 1,
+         {GIT_STATUS_MODIFIED}},
+
         {"directory picks conflicted over mixed lower-priority siblings",
          "UU proj/conflict.txt\n M proj/modified.txt\n?? proj/untracked.txt\n!! proj/ignored.log\n",
          {{"proj", S_IFDIR | 0755}}, 1,
@@ -66,9 +88,14 @@ static void test_classify_git_status(void)
          {{"proj", S_IFDIR | 0755}}, 1,
          {GIT_STATUS_MODIFIED}},
 
-        {"directory picks untracked over ignored when that's the highest present",
+        {"directory with only an untracked descendant renders modified, not untracked",
          "?? proj/untracked.txt\n!! proj/ignored.log\n",
          {{"proj", S_IFDIR | 0755}}, 1,
+         {GIT_STATUS_MODIFIED}},
+
+        {"wholly-untracked directory reported as a single collapsed porcelain line",
+         "?? newdir/\n",
+         {{"newdir", S_IFDIR | 0755}}, 1,
          {GIT_STATUS_UNTRACKED}},
 
         {"directory aggregates through a deeply nested descendant",
@@ -90,7 +117,7 @@ static void test_classify_git_status(void)
          "path is not treated as a prefix match into that directory",
          "?? node_modules/pkg/file.js\n",
          {{"node", S_IFLNK | 0777}, {"node_modules", S_IFDIR | 0755}}, 2,
-         {GIT_STATUS_NONE, GIT_STATUS_UNTRACKED}},
+         {GIT_STATUS_NONE, GIT_STATUS_MODIFIED}},
 
         {"rename line classifies against the new path, not the old one",
          "R  old_name.txt -> renamed.txt\n",

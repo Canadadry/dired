@@ -10,18 +10,36 @@ static GitStatusTag tag_for_code(char x, char y)
         return GIT_STATUS_IGNORED;
     if (x == 'U' || y == 'U' || (x == 'A' && y == 'A') || (x == 'D' && y == 'D'))
         return GIT_STATUS_CONFLICTED;
+    if (x == 'A' && y == ' ')
+        return GIT_STATUS_UNTRACKED;
+    if (x == 'D' || y == 'D')
+        return GIT_STATUS_DELETED;
     if (x != ' ' || y != ' ')
         return GIT_STATUS_MODIFIED;
     return GIT_STATUS_NONE;
 }
 
-static int entry_matches(const Entry *e, const char *path)
+typedef enum {
+    PATH_MATCH_NONE,
+    PATH_MATCH_EXACT,
+    PATH_MATCH_DESCENDANT,
+} PathMatchKind;
+
+static PathMatchKind path_match_kind(const Entry *e, const char *path)
 {
-    if (S_ISDIR(e->st.st_mode)) {
-        size_t name_len = strlen(e->name);
-        return strncmp(path, e->name, name_len) == 0 && path[name_len] == '/';
-    }
-    return strcmp(path, e->name) == 0;
+    if (!S_ISDIR(e->st.st_mode))
+        return strcmp(path, e->name) == 0 ? PATH_MATCH_EXACT : PATH_MATCH_NONE;
+
+    size_t name_len = strlen(e->name);
+    if (strncmp(path, e->name, name_len) != 0)
+        return PATH_MATCH_NONE;
+    if (path[name_len] == '\0')
+        return PATH_MATCH_EXACT;
+    if (path[name_len] != '/')
+        return PATH_MATCH_NONE;
+    if (path[name_len + 1] == '\0')
+        return PATH_MATCH_EXACT;
+    return PATH_MATCH_DESCENDANT;
 }
 
 void classify_git_status(const char *porcelain_text, Entry *entries, int entry_count)
@@ -53,8 +71,16 @@ void classify_git_status(const char *porcelain_text, Entry *entries, int entry_c
             const char *effective_path = arrow ? arrow + 4 : path;
 
             for (int i = 0; i < entry_count; i++) {
-                if (entry_matches(&entries[i], effective_path) && tag > entries[i].git_status)
-                    entries[i].git_status = tag;
+                PathMatchKind match = path_match_kind(&entries[i], effective_path);
+                if (match == PATH_MATCH_NONE)
+                    continue;
+
+                GitStatusTag applied_tag = tag;
+                if (match == PATH_MATCH_DESCENDANT && applied_tag == GIT_STATUS_UNTRACKED)
+                    applied_tag = GIT_STATUS_MODIFIED;
+
+                if (applied_tag > entries[i].git_status)
+                    entries[i].git_status = applied_tag;
             }
         }
 

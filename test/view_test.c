@@ -70,6 +70,8 @@ static void test_view_git_status_style(void)
         {"modified, selected", GIT_STATUS_MODIFIED, 1, STYLE_MODIFIED_SELECTED},
         {"untracked, unselected", GIT_STATUS_UNTRACKED, 0, STYLE_UNTRACKED},
         {"untracked, selected", GIT_STATUS_UNTRACKED, 1, STYLE_UNTRACKED_SELECTED},
+        {"deleted, unselected", GIT_STATUS_DELETED, 0, STYLE_DELETED},
+        {"deleted, selected", GIT_STATUS_DELETED, 1, STYLE_DELETED_SELECTED},
         {"ignored, unselected", GIT_STATUS_IGNORED, 0, STYLE_IGNORED},
         {"ignored, selected", GIT_STATUS_IGNORED, 1, STYLE_IGNORED_SELECTED},
         {"none, unselected", GIT_STATUS_NONE, 0, STYLE_NORMAL},

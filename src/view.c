@@ -83,6 +83,8 @@ static StyleTag entry_style_tag(GitStatusTag git_status, int selected)
         return selected ? STYLE_MODIFIED_SELECTED : STYLE_MODIFIED;
     case GIT_STATUS_UNTRACKED:
         return selected ? STYLE_UNTRACKED_SELECTED : STYLE_UNTRACKED;
+    case GIT_STATUS_DELETED:
+        return selected ? STYLE_DELETED_SELECTED : STYLE_DELETED;
     case GIT_STATUS_IGNORED:
         return selected ? STYLE_IGNORED_SELECTED : STYLE_IGNORED;
     default:
