@@ -22,6 +22,8 @@ typedef enum {
     STYLE_DELETED_SELECTED,
     STYLE_IGNORED,
     STYLE_IGNORED_SELECTED,
+    STYLE_MARKED,
+    STYLE_MARKED_SELECTED,
 } StyleTag;
 
 typedef struct {

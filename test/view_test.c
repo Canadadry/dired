@@ -93,6 +93,59 @@ static void test_view_git_status_style(void)
     }
 }
 
+static void test_view_marked_style(void)
+{
+    typedef struct {
+        const char *label;
+        GitStatusTag git_status;
+        int marked;
+        int selected;
+        StyleTag expected_style;
+    } Case;
+
+    Case cases[] = {
+        {"marked, unselected, no git status", GIT_STATUS_NONE, 1, 0, STYLE_MARKED},
+        {"marked, selected, no git status", GIT_STATUS_NONE, 1, 1, STYLE_MARKED_SELECTED},
+        {"marked, unselected, overrides conflicted", GIT_STATUS_CONFLICTED, 1, 0, STYLE_MARKED},
+        {"marked, selected, overrides conflicted", GIT_STATUS_CONFLICTED, 1, 1, STYLE_MARKED_SELECTED},
+        {"marked, unselected, overrides modified", GIT_STATUS_MODIFIED, 1, 0, STYLE_MARKED},
+        {"marked, selected, overrides modified", GIT_STATUS_MODIFIED, 1, 1, STYLE_MARKED_SELECTED},
+        {"marked, unselected, overrides untracked", GIT_STATUS_UNTRACKED, 1, 0, STYLE_MARKED},
+        {"marked, selected, overrides untracked", GIT_STATUS_UNTRACKED, 1, 1, STYLE_MARKED_SELECTED},
+        {"marked, unselected, overrides deleted", GIT_STATUS_DELETED, 1, 0, STYLE_MARKED},
+        {"marked, selected, overrides deleted", GIT_STATUS_DELETED, 1, 1, STYLE_MARKED_SELECTED},
+        {"marked, unselected, overrides ignored", GIT_STATUS_IGNORED, 1, 0, STYLE_MARKED},
+        {"marked, selected, overrides ignored", GIT_STATUS_IGNORED, 1, 1, STYLE_MARKED_SELECTED},
+        {"unmarked, unselected, conflicted unaffected", GIT_STATUS_CONFLICTED, 0, 0, STYLE_CONFLICTED},
+        {"unmarked, selected, conflicted unaffected", GIT_STATUS_CONFLICTED, 0, 1, STYLE_CONFLICTED_SELECTED},
+        {"unmarked, unselected, modified unaffected", GIT_STATUS_MODIFIED, 0, 0, STYLE_MODIFIED},
+        {"unmarked, selected, modified unaffected", GIT_STATUS_MODIFIED, 0, 1, STYLE_MODIFIED_SELECTED},
+        {"unmarked, unselected, untracked unaffected", GIT_STATUS_UNTRACKED, 0, 0, STYLE_UNTRACKED},
+        {"unmarked, selected, untracked unaffected", GIT_STATUS_UNTRACKED, 0, 1, STYLE_UNTRACKED_SELECTED},
+        {"unmarked, unselected, deleted unaffected", GIT_STATUS_DELETED, 0, 0, STYLE_DELETED},
+        {"unmarked, selected, deleted unaffected", GIT_STATUS_DELETED, 0, 1, STYLE_DELETED_SELECTED},
+        {"unmarked, unselected, ignored unaffected", GIT_STATUS_IGNORED, 0, 0, STYLE_IGNORED},
+        {"unmarked, selected, ignored unaffected", GIT_STATUS_IGNORED, 0, 1, STYLE_IGNORED_SELECTED},
+        {"unmarked, unselected, none unaffected", GIT_STATUS_NONE, 0, 0, STYLE_NORMAL},
+        {"unmarked, selected, none unaffected", GIT_STATUS_NONE, 0, 1, STYLE_SELECTED},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model m = make_view_model();
+        set_entry(&m, 0, "main.c", S_IFREG | 0644, 512);
+        m.entries[0].git_status = cases[i].git_status;
+        m.entry_count = 1;
+        m.selected = cases[i].selected ? 0 : 1;
+        m.marked[0] = (unsigned char)cases[i].marked;
+
+        View v = view(&m);
+
+        if (v.lines[2].style != cases[i].expected_style) {
+            TEST_ERRORF(cases[i].label, "lines[2].style = %d, want %d", v.lines[2].style, cases[i].expected_style);
+        }
+    }
+}
+
 static void test_view_create_virtual_row(void)
 {
     Model m = make_view_model();
@@ -590,6 +643,7 @@ void test_view(void)
 {
     test_view_nav_listing();
     test_view_git_status_style();
+    test_view_marked_style();
     test_view_paginates_long_list();
     test_view_page_indicator_first_page();
     test_view_page_indicator_middle_page();

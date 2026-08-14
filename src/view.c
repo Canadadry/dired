@@ -77,8 +77,11 @@ static void add_prompt_line(View *v, const Model *m)
     }
 }
 
-static StyleTag entry_style_tag(GitStatusTag git_status, int selected)
+static StyleTag entry_style_tag(GitStatusTag git_status, int selected, int marked)
 {
+    if (marked)
+        return selected ? STYLE_MARKED_SELECTED : STYLE_MARKED;
+
     switch (git_status) {
     case GIT_STATUS_CONFLICTED:
         return selected ? STYLE_CONFLICTED_SELECTED : STYLE_CONFLICTED;
@@ -99,7 +102,7 @@ static void add_entry_line(View *v, const Model *m, int i)
 {
     char perms[11];
     mode_to_str(m->entries[i].st.st_mode, perms);
-    StyleTag style = entry_style_tag(m->entries[i].git_status, i == m->selected);
+    StyleTag style = entry_style_tag(m->entries[i].git_status, i == m->selected, m->marked[i]);
     add_line(v, style, "%s %8ld %s", perms, (long)m->entries[i].st.st_size, m->entries[i].name);
 }
 
@@ -123,7 +126,7 @@ static void append_scroll_marker(Line *line, int term_width, const char *marker)
 
 static void add_virtual_line(View *v, const Model *m)
 {
-    StyleTag style = entry_style_tag(GIT_STATUS_NONE, m->entry_count == m->selected);
+    StyleTag style = entry_style_tag(GIT_STATUS_NONE, m->entry_count == m->selected, 0);
     add_line(v, style, "          %s", m->edit_buf);
 }
 

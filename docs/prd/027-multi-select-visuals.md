@@ -1,7 +1,7 @@
 ---
 title: "Multi-select: marked-entry rendering (chunk 3/4)"
 description: "Marks exist (chunk 1/4) but render invisibly. Add the two new style tags so a marked row is visually distinct and takes precedence over git-status coloring."
-status: needs-triage
+status: done
 ---
 
 ## Problem Statement

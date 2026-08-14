@@ -825,6 +825,14 @@ static void style_colors(StyleTag style, uintattr_t *fg, uintattr_t *bg)
         *fg = TB_WHITE;
         *bg = TB_BLACK | TB_BRIGHT;
         break;
+    case STYLE_MARKED:
+        *fg = TB_BLUE;
+        *bg = TB_DEFAULT;
+        break;
+    case STYLE_MARKED_SELECTED:
+        *fg = TB_WHITE;
+        *bg = TB_BLUE;
+        break;
     default:
         *fg = TB_DEFAULT;
         *bg = TB_DEFAULT;
