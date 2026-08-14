@@ -135,7 +135,14 @@ View view(const Model *model)
     View v;
     v.line_count = 0;
 
-    add_line(&v, STYLE_NORMAL, "Path: %s", model->current_path);
+    if (model->mode == MODE_SELECT) {
+        if (model->marked_count > 0)
+            add_line(&v, STYLE_NORMAL, "VISUAL(%d) : %s", model->marked_count, model->current_path);
+        else
+            add_line(&v, STYLE_NORMAL, "VISUAL : %s", model->current_path);
+    } else {
+        add_line(&v, STYLE_NORMAL, "Path: %s", model->current_path);
+    }
     add_prompt_line(&v, model);
     Line *status_line = &v.lines[v.line_count - 1];
 

@@ -54,6 +54,35 @@ static void test_view_nav_listing(void)
     }
 }
 
+static void test_view_title_line(void)
+{
+    typedef struct {
+        const char *label;
+        AppMode mode;
+        int marked_count;
+        const char *expected_text;
+    } Case;
+
+    Case cases[] = {
+        {"nav mode shows plain path", MODE_NAV, 0, "Path: /tmp/proj"},
+        {"select mode with no marks shows VISUAL with no count", MODE_SELECT, 0, "VISUAL : /tmp/proj"},
+        {"select mode with one mark shows count", MODE_SELECT, 1, "VISUAL(1) : /tmp/proj"},
+        {"select mode with multiple marks shows count", MODE_SELECT, 3, "VISUAL(3) : /tmp/proj"},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model m = make_view_model();
+        m.mode = cases[i].mode;
+        m.marked_count = cases[i].marked_count;
+
+        View v = view(&m);
+
+        if (strcmp(v.lines[0].text, cases[i].expected_text) != 0) {
+            TEST_ERRORF(cases[i].label, "lines[0] = '%s', want '%s'", v.lines[0].text, cases[i].expected_text);
+        }
+    }
+}
+
 static void test_view_git_status_style(void)
 {
     typedef struct {
@@ -642,6 +671,7 @@ static void test_view_page_indicator_during_create_mode(void)
 void test_view(void)
 {
     test_view_nav_listing();
+    test_view_title_line();
     test_view_git_status_style();
     test_view_marked_style();
     test_view_paginates_long_list();
