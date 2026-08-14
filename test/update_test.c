@@ -1661,6 +1661,7 @@ static void test_toggle_mark_unmarks_marked_entry(void)
     in.mode = MODE_SELECT;
     in.marked[1] = 1;
     in.marked_count = 1;
+    strcpy(in.marked_dir, in.current_path);
     Msg msg = { .type = MSG_TOGGLE_MARK };
     Model out;
     Cmd cmd;
@@ -1681,6 +1682,7 @@ static void test_toggle_mark_all_marks_everything_when_not_all_marked(void)
     in.mode = MODE_SELECT;
     in.marked[0] = 1;
     in.marked_count = 1;
+    strcpy(in.marked_dir, in.current_path);
     Msg msg = { .type = MSG_TOGGLE_MARK_ALL };
     Model out;
     Cmd cmd;
@@ -1705,6 +1707,7 @@ static void test_toggle_mark_all_clears_everything_when_all_marked(void)
     in.marked[1] = 1;
     in.marked[2] = 1;
     in.marked_count = 3;
+    strcpy(in.marked_dir, in.current_path);
     Msg msg = { .type = MSG_TOGGLE_MARK_ALL };
     Model out;
     Cmd cmd;
@@ -1817,6 +1820,7 @@ static void test_range_select_from_marked_anchor_unmarks_run_while_moving_up(voi
     in.marked[2] = 1;
     in.marked[3] = 1;
     in.marked_count = 4;
+    strcpy(in.marked_dir, in.current_path);
     Msg start_msg = { .type = MSG_TOGGLE_RANGE_SELECT };
     Model after_start;
     Cmd cmd;
@@ -1900,6 +1904,7 @@ static void test_space_toggles_independently_while_range_active(void)
     in.marked[3] = 1;
     in.marked[4] = 1;
     in.marked_count = 5;
+    strcpy(in.marked_dir, in.current_path);
     Cmd cmd;
 
     Msg start_msg = { .type = MSG_TOGGLE_RANGE_SELECT };
@@ -1986,6 +1991,216 @@ static void test_second_range_select_press_stops_extend_and_keeps_marks(void)
     if (step.selected != 3 || step.marked[3]) {
         TEST_ERRORF("moving after the range stopped no longer sweeps", "selected=%d marked[3]=%d, want 3,0",
                     step.selected, step.marked[3]);
+    }
+}
+
+static void test_go_parent_while_select_mode_keeps_marks_and_mode(void)
+{
+    Model in = make_nav_model(3, 1);
+    in.mode = MODE_SELECT;
+    in.marked[0] = 1;
+    in.marked_count = 1;
+    strcpy(in.marked_dir, in.current_path);
+    Msg msg = { .type = MSG_GO_PARENT };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_LOAD_DIR) {
+        TEST_ERRORF("go parent in select mode issues load", "cmd.type = %d, want CMD_LOAD_DIR", cmd.type);
+    }
+    if (out.mode != MODE_SELECT) {
+        TEST_ERRORF("go parent in select mode keeps mode", "mode = %d, want MODE_SELECT", out.mode);
+    }
+    if (out.marked_count != 1 || !out.marked[0]) {
+        TEST_ERRORF("go parent in select mode keeps marks", "marked_count = %d marked[0] = %d, want 1,1",
+                    out.marked_count, out.marked[0]);
+    }
+
+    Msg loaded_msg = { .type = MSG_DIR_LOADED };
+    strcpy(loaded_msg.dir_loaded.path, "/home");
+    loaded_msg.dir_loaded.entry_count = 0;
+    Model out2;
+    update(&loaded_msg, &out, &out2, &cmd);
+
+    if (out2.mode != MODE_SELECT) {
+        TEST_ERRORF("dir loaded after go parent keeps select mode", "mode = %d, want MODE_SELECT", out2.mode);
+    }
+    if (out2.marked_count != 1 || !out2.marked[0]) {
+        TEST_ERRORF("dir loaded after go parent keeps marks off-screen", "marked_count = %d marked[0] = %d, want 1,1",
+                    out2.marked_count, out2.marked[0]);
+    }
+    if (strcmp(out2.current_path, "/home") != 0) {
+        TEST_ERRORF("dir loaded after go parent updates current_path", "current_path = %s, want /home", out2.current_path);
+    }
+}
+
+static void test_activate_into_subdir_while_select_mode_keeps_marks_and_mode(void)
+{
+    Model in = make_model_with_entry("/home/user", "sub", S_IFDIR | 0755, 0);
+    in.mode = MODE_SELECT;
+    in.marked[0] = 1;
+    in.marked_count = 1;
+    strcpy(in.marked_dir, in.current_path);
+    Msg msg = { .type = MSG_ACTIVATE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_LOAD_DIR || strcmp(cmd.path, "/home/user/sub") != 0) {
+        TEST_ERRORF("activate subdir in select mode issues load", "cmd = {%d, %s}, want {CMD_LOAD_DIR, /home/user/sub}",
+                    cmd.type, cmd.path);
+    }
+    if (out.mode != MODE_SELECT) {
+        TEST_ERRORF("activate subdir in select mode keeps mode", "mode = %d, want MODE_SELECT", out.mode);
+    }
+    if (out.marked_count != 1 || !out.marked[0]) {
+        TEST_ERRORF("activate subdir in select mode keeps marks", "marked_count = %d marked[0] = %d, want 1,1",
+                    out.marked_count, out.marked[0]);
+    }
+}
+
+static void test_marking_in_new_directory_discards_old_marks(void)
+{
+    Model in = make_nav_model(3, 2);
+    in.mode = MODE_SELECT;
+    strcpy(in.marked_dir, "/tmp/old");
+    in.marked[0] = 1;
+    in.marked_count = 1;
+    Msg msg = { .type = MSG_TOGGLE_MARK };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.marked[0]) {
+        TEST_ERRORF("marking in new dir discards old marks", "marked[0] = %d, want 0", out.marked[0]);
+    }
+    if (!out.marked[2] || out.marked_count != 1) {
+        TEST_ERRORF("marking in new dir starts fresh with the interacted entry",
+                    "marked[2] = %d marked_count = %d, want 1,1", out.marked[2], out.marked_count);
+    }
+    if (strcmp(out.marked_dir, "/tmp") != 0) {
+        TEST_ERRORF("marking in new dir records the new owning directory",
+                    "marked_dir = %s, want /tmp", out.marked_dir);
+    }
+}
+
+static void test_range_select_in_new_directory_discards_old_marks(void)
+{
+    Model in = make_nav_model(3, 2);
+    in.mode = MODE_SELECT;
+    strcpy(in.marked_dir, "/tmp/old");
+    in.marked[0] = 1;
+    in.marked_count = 1;
+    Msg msg = { .type = MSG_TOGGLE_RANGE_SELECT };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.marked[0]) {
+        TEST_ERRORF("range select in new dir discards old marks", "marked[0] = %d, want 0", out.marked[0]);
+    }
+    if (!out.range_active || !out.marked[2] || out.marked_count != 1) {
+        TEST_ERRORF("range select in new dir anchors fresh on the interacted entry",
+                    "range_active=%d marked[2]=%d marked_count=%d, want 1,1,1",
+                    out.range_active, out.marked[2], out.marked_count);
+    }
+    if (strcmp(out.marked_dir, "/tmp") != 0) {
+        TEST_ERRORF("range select in new dir records the new owning directory",
+                    "marked_dir = %s, want /tmp", out.marked_dir);
+    }
+}
+
+static void test_mark_all_in_new_directory_discards_old_marks(void)
+{
+    Model in = make_nav_model(3, 2);
+    in.mode = MODE_SELECT;
+    strcpy(in.marked_dir, "/tmp/old");
+    in.marked[0] = 1;
+    in.marked_count = 1;
+    Msg msg = { .type = MSG_TOGGLE_MARK_ALL };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.marked_count != 3 || !out.marked[0] || !out.marked[1] || !out.marked[2]) {
+        TEST_ERRORF("mark-all in new dir starts fresh and marks everything",
+                    "marked_count=%d marked[0..2]=%d,%d,%d, want 3,1,1,1",
+                    out.marked_count, out.marked[0], out.marked[1], out.marked[2]);
+    }
+    if (strcmp(out.marked_dir, "/tmp") != 0) {
+        TEST_ERRORF("mark-all in new dir records the new owning directory",
+                    "marked_dir = %s, want /tmp", out.marked_dir);
+    }
+}
+
+static void test_sort_group_filter_glob_are_noop_in_select_mode_with_marks(void)
+{
+    typedef struct {
+        const char *label;
+        MsgType msg_type;
+    } Case;
+
+    Case cases[] = {
+        {"sort is a no-op with active marks", MSG_CYCLE_SORT},
+        {"group is a no-op with active marks", MSG_CYCLE_GROUP},
+        {"filter-plain is a no-op with active marks", MSG_FILTER_PLAIN},
+        {"filter-regex is a no-op with active marks", MSG_FILTER_REGEX},
+        {"glob-plain is a no-op with active marks", MSG_GLOB_PLAIN},
+        {"glob-regex is a no-op with active marks", MSG_GLOB_REGEX},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model in = make_nav_model(3, 1);
+        in.mode = MODE_SELECT;
+        in.marked[0] = 1;
+        in.marked_count = 1;
+        strcpy(in.marked_dir, in.current_path);
+        Msg msg = { .type = cases[i].msg_type };
+        Model out;
+        Cmd cmd;
+
+        update(&msg, &in, &out, &cmd);
+
+        if (out.mode != MODE_SELECT) {
+            TEST_ERRORF(cases[i].label, "mode = %d, want MODE_SELECT (unchanged)", out.mode);
+        }
+        if (out.marked_count != 1 || !out.marked[0]) {
+            TEST_ERRORF(cases[i].label, "marked_count = %d marked[0] = %d, want 1,1 (unchanged)",
+                        out.marked_count, out.marked[0]);
+        }
+        if (out.sort_mode != in.sort_mode || out.group_mode != in.group_mode) {
+            TEST_ERRORF(cases[i].label, "sort_mode/group_mode changed, want unchanged");
+        }
+        if (out.filter_type != in.filter_type || out.glob_type != in.glob_type) {
+            TEST_ERRORF(cases[i].label, "filter_type/glob_type changed, want unchanged");
+        }
+        if (cmd.type != CMD_NONE) {
+            TEST_ERRORF(cases[i].label, "cmd.type = %d, want CMD_NONE", cmd.type);
+        }
+    }
+}
+
+static void test_sort_works_in_select_mode_without_marks(void)
+{
+    Model in = make_nav_model(3, 1);
+    in.mode = MODE_SELECT;
+    Msg msg = { .type = MSG_CYCLE_SORT };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.mode != MODE_SELECT) {
+        TEST_ERRORF("sort without marks stays in select mode", "mode = %d, want MODE_SELECT", out.mode);
+    }
+    if (out.sort_mode == in.sort_mode) {
+        TEST_ERRORF("sort without marks still cycles", "sort_mode = %d, want changed from %d", out.sort_mode, in.sort_mode);
     }
 }
 
@@ -4266,6 +4481,13 @@ void test_update(void)
     test_range_select_backtracking_over_swept_entry_does_not_revert();
     test_space_toggles_independently_while_range_active();
     test_second_range_select_press_stops_extend_and_keeps_marks();
+    test_go_parent_while_select_mode_keeps_marks_and_mode();
+    test_activate_into_subdir_while_select_mode_keeps_marks_and_mode();
+    test_marking_in_new_directory_discards_old_marks();
+    test_range_select_in_new_directory_discards_old_marks();
+    test_mark_all_in_new_directory_discards_old_marks();
+    test_sort_group_filter_glob_are_noop_in_select_mode_with_marks();
+    test_sort_works_in_select_mode_without_marks();
     test_filter_live_recompute_on_text_input();
     test_filter_live_recompute_on_delete();
     test_filter_live_recompute_no_matches_is_empty();

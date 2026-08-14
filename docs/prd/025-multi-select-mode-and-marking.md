@@ -1,7 +1,7 @@
 ---
 title: "Multi-select: selection mode, marking primitives, scope & persistence (chunk 1/4)"
 description: "No way exists to mark more than one entry at a time. Add MODE_SELECT and the pure state machine for entering/leaving it, marking entries, and scoping marks to a directory — no rendering, no batch actions yet."
-status: needs-triage
+status: done
 ---
 
 ## Problem Statement

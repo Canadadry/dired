@@ -129,6 +129,7 @@ typedef struct {
     AppMode mode;
     unsigned char marked[MAX_ENTRIES];
     int marked_count;
+    char marked_dir[PATH_MAX_LEN];
     int range_active;
     unsigned char range_target;
     int confirm_permanent_delete;

@@ -928,7 +928,19 @@ static void handle_dir_loaded(const Msg *msg, Model *out_model)
     relocate_selected(out_model, prev_name);
 }
 
-static void handle_select(const Msg *msg, Model *out_model)
+static void ensure_marks_scope(Model *out_model)
+{
+    if (strcmp(out_model->marked_dir, out_model->current_path) == 0)
+        return;
+
+    memset(out_model->marked, 0, sizeof(out_model->marked));
+    out_model->marked_count = 0;
+    out_model->range_active = 0;
+    strncpy(out_model->marked_dir, out_model->current_path, sizeof(out_model->marked_dir) - 1);
+    out_model->marked_dir[sizeof(out_model->marked_dir) - 1] = '\0';
+}
+
+static void handle_select(const Msg *msg, Model *out_model, Cmd *out_cmd)
 {
     switch (msg->type) {
     case MSG_TOGGLE_SELECT_MODE:
@@ -937,9 +949,27 @@ static void handle_select(const Msg *msg, Model *out_model)
         memset(out_model->marked, 0, sizeof(out_model->marked));
         out_model->marked_count = 0;
         out_model->range_active = 0;
+        out_model->marked_dir[0] = '\0';
+        break;
+
+    case MSG_GO_PARENT:
+    case MSG_ACTIVATE:
+        handle_nav(msg, out_model, out_cmd);
+        break;
+
+    case MSG_CYCLE_SORT:
+    case MSG_CYCLE_GROUP:
+    case MSG_FILTER_PLAIN:
+    case MSG_FILTER_REGEX:
+    case MSG_GLOB_PLAIN:
+    case MSG_GLOB_REGEX:
+        if (out_model->marked_count > 0)
+            break;
+        handle_nav(msg, out_model, out_cmd);
         break;
 
     case MSG_TOGGLE_MARK:
+        ensure_marks_scope(out_model);
         if (out_model->selected < out_model->entry_count) {
             if (out_model->marked[out_model->selected]) {
                 out_model->marked[out_model->selected] = 0;
@@ -952,6 +982,7 @@ static void handle_select(const Msg *msg, Model *out_model)
         break;
 
     case MSG_TOGGLE_MARK_ALL:
+        ensure_marks_scope(out_model);
         if (out_model->marked_count < out_model->entry_count) {
             for (int i = 0; i < out_model->entry_count; i++)
                 out_model->marked[i] = 1;
@@ -967,6 +998,7 @@ static void handle_select(const Msg *msg, Model *out_model)
             out_model->range_active = 0;
             break;
         }
+        ensure_marks_scope(out_model);
         if (out_model->selected < out_model->entry_count) {
             int target = !out_model->marked[out_model->selected];
             out_model->range_active = 1;
@@ -1043,7 +1075,7 @@ void update(const Msg *msg, const Model *model, Model *out_model, Cmd *out_cmd)
     else if (model->mode == MODE_CONFIRM_DELETE)
         handle_confirm_delete(msg, out_model, out_cmd);
     else if (model->mode == MODE_SELECT)
-        handle_select(msg, out_model);
+        handle_select(msg, out_model, out_cmd);
     else if (model->mode == MODE_ERROR) {
         out_model->mode = MODE_NAV;
     }
