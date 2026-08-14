@@ -107,6 +107,45 @@ static void set_mark(Model *out_model, int idx, int value)
     }
 }
 
+static void yank_set_single(Model *out_model, const char *path, int is_move)
+{
+    out_model->yank_count = 1;
+    snprintf(out_model->yank_paths[0], sizeof(out_model->yank_paths[0]), "%s", path);
+    out_model->yank_is_move = is_move;
+    out_model->yank_from_archive = 0;
+}
+
+static void yank_set_batch(Model *out_model, int is_move)
+{
+    out_model->yank_count = 0;
+    for (int i = 0; i < out_model->marked_count && out_model->yank_count < MAX_ENTRIES; i++) {
+        const MarkedItem *marked_item = &out_model->marked_items[i];
+        char name[NAME_MAX_LEN + 1];
+        basename_of(marked_item->path, name, sizeof(name));
+        if (is_protected_name(name))
+            continue;
+
+        snprintf(out_model->yank_paths[out_model->yank_count], sizeof(out_model->yank_paths[0]),
+                 "%s", marked_item->path);
+        out_model->yank_count++;
+    }
+    out_model->yank_is_move = is_move;
+    out_model->yank_from_archive = 0;
+}
+
+static void yank_discard_path(Model *out_model, const char *path)
+{
+    for (int i = 0; i < out_model->yank_count; i++) {
+        if (strcmp(out_model->yank_paths[i], path) == 0) {
+            int last = out_model->yank_count - 1;
+            if (i != last)
+                memcpy(out_model->yank_paths[i], out_model->yank_paths[last], sizeof(out_model->yank_paths[i]));
+            out_model->yank_count--;
+            return;
+        }
+    }
+}
+
 static void start_edit(Model *out_model, AppMode new_mode)
 {
     out_model->mode = new_mode;
@@ -229,7 +268,7 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
         break;
 
     case MSG_CANCEL:
-        out_model->yank_path[0] = '\0';
+        out_model->yank_count = 0;
         out_model->yank_from_archive = 0;
         break;
 
@@ -288,10 +327,10 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
         }
         if (out_model->selected < out_model->entry_count &&
             !is_protected_name(out_model->entries[out_model->selected].name)) {
+            char path[PATH_MAX_LEN];
             join_path(out_model->current_path, out_model->entries[out_model->selected].name,
-                      out_model->yank_path, sizeof(out_model->yank_path));
-            out_model->yank_is_move = 1;
-            out_model->yank_from_archive = 0;
+                      path, sizeof(path));
+            yank_set_single(out_model, path, 1);
         }
         break;
 
@@ -307,7 +346,7 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
                 }
 
                 ArchiveLevel *level = &out_model->archive_stack[out_model->archive_depth - 1];
-                out_model->yank_path[0] = '\0';
+                out_model->yank_count = 0;
                 out_model->yank_is_move = 0;
                 out_model->yank_from_archive = 1;
                 out_model->yank_archive_format = level->format;
@@ -318,9 +357,9 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
                                           out_model->yank_archive_member_path,
                                           sizeof(out_model->yank_archive_member_path));
             } else {
-                join_path(out_model->current_path, e->name, out_model->yank_path, sizeof(out_model->yank_path));
-                out_model->yank_is_move = 0;
-                out_model->yank_from_archive = 0;
+                char path[PATH_MAX_LEN];
+                join_path(out_model->current_path, e->name, path, sizeof(path));
+                yank_set_single(out_model, path, 0);
             }
         }
         break;
@@ -353,22 +392,28 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
             break;
         }
 
-        if (out_model->yank_path[0] == '\0')
+        if (out_model->yank_count == 0)
             break;
 
-        const char *slash = strrchr(out_model->yank_path, '/');
-        const char *base_name = slash ? slash + 1 : out_model->yank_path;
-
-        char resolved_name[NAME_MAX_LEN + 1];
-        find_available_name(base_name, out_model->unfiltered_entries, out_model->unfiltered_count,
-                             resolved_name, sizeof(resolved_name));
-
         out_cmd->type = out_model->yank_is_move ? CMD_MOVE : CMD_COPY;
-        strncpy(out_cmd->path, out_model->yank_path, sizeof(out_cmd->path) - 1);
-        out_cmd->path[sizeof(out_cmd->path) - 1] = '\0';
-        join_path(out_model->current_path, resolved_name, out_cmd->path2, sizeof(out_cmd->path2));
+        out_cmd->batch_count = 0;
 
-        out_model->yank_path[0] = '\0';
+        for (int i = 0; i < out_model->yank_count && out_cmd->batch_count < MAX_ENTRIES; i++) {
+            const char *src = out_model->yank_paths[i];
+            const char *slash = strrchr(src, '/');
+            const char *base_name = slash ? slash + 1 : src;
+
+            char resolved_name[NAME_MAX_LEN + 1];
+            find_available_name(base_name, out_model->unfiltered_entries, out_model->unfiltered_count,
+                                 resolved_name, sizeof(resolved_name));
+
+            CmdBatchItem *item = &out_cmd->batch_items[out_cmd->batch_count];
+            snprintf(item->path, sizeof(item->path), "%s", src);
+            join_path(out_model->current_path, resolved_name, item->dest, sizeof(item->dest));
+            out_cmd->batch_count++;
+        }
+
+        out_model->yank_count = 0;
         break;
     }
 
@@ -758,8 +803,7 @@ static void handle_edit(const Msg *msg, Model *out_model, Cmd *out_cmd)
                        rename_dir, sizeof(rename_dir));
             join_path(rename_dir, out_model->edit_buf, out_cmd->path2, sizeof(out_cmd->path2));
 
-            if (strcmp(out_cmd->path, out_model->yank_path) == 0)
-                out_model->yank_path[0] = '\0';
+            yank_discard_path(out_model, out_cmd->path);
         } else if (out_model->mode == MODE_CREATE) {
             char name[NAME_MAX_LEN + 1];
             NameKind kind = classify_new_name(out_model->edit_buf, name, sizeof(name));
@@ -816,8 +860,7 @@ static void handle_confirm_delete(const Msg *msg, Model *out_model, Cmd *out_cmd
             snprintf(item->path, sizeof(item->path), "%s", marked_item->path);
             item->is_dir = marked_item->is_dir;
 
-            if (strcmp(item->path, out_model->yank_path) == 0)
-                out_model->yank_path[0] = '\0';
+            yank_discard_path(out_model, item->path);
 
             out_cmd->batch_count++;
         }
@@ -834,8 +877,7 @@ static void handle_confirm_delete(const Msg *msg, Model *out_model, Cmd *out_cmd
     out_cmd->is_dir = S_ISDIR(e->st.st_mode);
     join_path(out_model->current_path, e->name, out_cmd->path, sizeof(out_cmd->path));
 
-    if (strcmp(out_cmd->path, out_model->yank_path) == 0)
-        out_model->yank_path[0] = '\0';
+    yank_discard_path(out_model, out_cmd->path);
 }
 
 static void handle_glob_built(const Msg *msg, Model *out_model)
@@ -1002,6 +1044,7 @@ static void handle_select(const Msg *msg, Model *out_model, Cmd *out_cmd)
 
     case MSG_GO_PARENT:
     case MSG_ACTIVATE:
+    case MSG_PASTE:
         handle_nav(msg, out_model, out_cmd);
         break;
 
@@ -1017,6 +1060,24 @@ static void handle_select(const Msg *msg, Model *out_model, Cmd *out_cmd)
         }
         out_model->mode = MODE_CONFIRM_DELETE;
         out_model->confirm_permanent_delete = (msg->type == MSG_DELETE_PERMANENT);
+        break;
+
+    case MSG_YANK_MOVE:
+    case MSG_YANK_COPY:
+        if (out_model->marked_count == 0) {
+            handle_nav(msg, out_model, out_cmd);
+            break;
+        }
+        if (out_model->archive_depth > 0) {
+            block_in_archive(out_model);
+            break;
+        }
+        yank_set_batch(out_model, msg->type == MSG_YANK_MOVE);
+        out_model->mode = MODE_NAV;
+        memset(out_model->marked, 0, sizeof(out_model->marked));
+        out_model->marked_count = 0;
+        out_model->range_active = 0;
+        out_model->marked_dir[0] = '\0';
         break;
 
     case MSG_CYCLE_SORT:

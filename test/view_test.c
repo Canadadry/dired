@@ -248,7 +248,8 @@ static void test_view_yank_status_takes_priority_over_glob(void)
     Model m = make_view_model();
     set_entry(&m, 0, "main.c", S_IFREG | 0644, 512);
     m.entry_count = 1;
-    strcpy(m.yank_path, "/tmp/other/main.c");
+    strcpy(m.yank_paths[0], "/tmp/other/main.c");
+    m.yank_count = 1;
     m.yank_is_move = 1;
     m.glob_type = GLOB_PLAIN;
     strcpy(m.glob_pattern, "report");
@@ -281,7 +282,8 @@ static void test_view_yank_status_takes_priority_over_filter(void)
     Model m = make_view_model();
     set_entry(&m, 0, "main.c", S_IFREG | 0644, 512);
     m.entry_count = 1;
-    strcpy(m.yank_path, "/tmp/other/main.c");
+    strcpy(m.yank_paths[0], "/tmp/other/main.c");
+    m.yank_count = 1;
     m.yank_is_move = 1;
     m.filter_type = FILTER_PLAIN;
     strcpy(m.filter_pattern, "report");
@@ -355,13 +357,36 @@ static void test_view_yank_pending(void)
     Model m = make_view_model();
     set_entry(&m, 0, "main.c", S_IFREG | 0644, 512);
     m.entry_count = 1;
-    strcpy(m.yank_path, "/tmp/other/main.c");
+    strcpy(m.yank_paths[0], "/tmp/other/main.c");
+    m.yank_count = 1;
     m.yank_is_move = 1;
 
     View v = view(&m);
 
     if (!strstr(v.lines[1].text, "main.c") || !strstr(v.lines[1].text, "move")) {
         TEST_ERRORF("yank pending", "lines[1] = '%s', want it to mention main.c and move", v.lines[1].text);
+    }
+}
+
+static void test_view_yank_pending_batch_shows_count(void)
+{
+    Model m = make_view_model();
+    set_entry(&m, 0, "main.c", S_IFREG | 0644, 512);
+    m.entry_count = 1;
+    strcpy(m.yank_paths[0], "/tmp/other/main.c");
+    strcpy(m.yank_paths[1], "/tmp/other/util.c");
+    strcpy(m.yank_paths[2], "/tmp/other/util.h");
+    m.yank_count = 3;
+    m.yank_is_move = 0;
+
+    View v = view(&m);
+
+    if (!strstr(v.lines[1].text, "3") || !strstr(v.lines[1].text, "items") || !strstr(v.lines[1].text, "copy")) {
+        TEST_ERRORF("yank pending batch", "lines[1] = '%s', want it to mention 3 items and copy", v.lines[1].text);
+    }
+    if (strstr(v.lines[1].text, "main.c")) {
+        TEST_ERRORF("yank pending batch", "lines[1] = '%s', should not name an individual file for a batch yank",
+                    v.lines[1].text);
     }
 }
 
@@ -515,7 +540,8 @@ static void test_view_page_indicator_survives_long_status_text(void)
     char long_path[101];
     memset(long_path, 'x', sizeof(long_path) - 1);
     long_path[sizeof(long_path) - 1] = '\0';
-    strcpy(m.yank_path, long_path);
+    strcpy(m.yank_paths[0], long_path);
+    m.yank_count = 1;
     m.yank_is_move = 0;
 
     View v = view(&m);
@@ -584,6 +610,7 @@ void test_view(void)
     test_view_rename_keeps_old_name_in_row();
     test_view_confirm_delete_prompt();
     test_view_yank_pending();
+    test_view_yank_pending_batch_shows_count();
     test_view_no_yank_pending_is_blank();
     test_view_error_message();
 }

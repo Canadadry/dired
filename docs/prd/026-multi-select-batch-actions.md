@@ -1,7 +1,7 @@
 ---
 title: "Multi-select: batch trash/delete/yank/paste (chunk 2/4)"
 description: "With MODE_SELECT and marking in place (chunk 1/4), the existing single-entry trash/delete/yank/paste handlers need to act on the whole marked set when one exists."
-status: needs-triage
+status: done
 ---
 
 ## Problem Statement

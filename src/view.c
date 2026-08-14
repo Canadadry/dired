@@ -57,10 +57,12 @@ static void add_prompt_line(View *v, const Model *m)
         add_line(v, STYLE_ERROR, "%s", m->error_msg);
         break;
     default:
-        if (m->yank_path[0] != '\0') {
-            const char *slash = strrchr(m->yank_path, '/');
-            const char *name = slash ? slash + 1 : m->yank_path;
+        if (m->yank_count == 1) {
+            const char *slash = strrchr(m->yank_paths[0], '/');
+            const char *name = slash ? slash + 1 : m->yank_paths[0];
             add_line(v, STYLE_NORMAL, "Yanked: %s (%s)", name, m->yank_is_move ? "move" : "copy");
+        } else if (m->yank_count > 1) {
+            add_line(v, STYLE_NORMAL, "Yanked: %d items (%s)", m->yank_count, m->yank_is_move ? "move" : "copy");
         } else if (m->filter_type != FILTER_NONE) {
             add_line(v, STYLE_NORMAL, "Filter: %s", m->filter_pattern);
         } else if (m->glob_type != GLOB_NONE) {

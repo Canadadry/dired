@@ -713,6 +713,36 @@ static Msg execute_cmd_trash(const Cmd *cmd)
     return outcome;
 }
 
+static Msg execute_cmd_copy(const Cmd *cmd)
+{
+    if (cmd->batch_count > 0) {
+        for (int i = 0; i < cmd->batch_count; i++) {
+            const CmdBatchItem *item = &cmd->batch_items[i];
+            Msg outcome = execute_copy(item->path, item->dest);
+            if (outcome.type != MSG_OP_SUCCEEDED)
+                return outcome;
+        }
+        return (Msg){ .type = MSG_OP_SUCCEEDED };
+    }
+
+    return execute_copy(cmd->path, cmd->path2);
+}
+
+static Msg execute_cmd_move(const Cmd *cmd)
+{
+    if (cmd->batch_count > 0) {
+        for (int i = 0; i < cmd->batch_count; i++) {
+            const CmdBatchItem *item = &cmd->batch_items[i];
+            Msg outcome = execute_move(item->path, item->dest);
+            if (outcome.type != MSG_OP_SUCCEEDED)
+                return outcome;
+        }
+        return (Msg){ .type = MSG_OP_SUCCEEDED };
+    }
+
+    return execute_move(cmd->path, cmd->path2);
+}
+
 static Msg execute_cmd(const Cmd *cmd)
 {
     switch (cmd->type) {
@@ -730,8 +760,8 @@ static Msg execute_cmd(const Cmd *cmd)
     case CMD_EXTRACT_MEMBER_TO: return execute_extract_member_to(cmd->path, cmd->archive_format, cmd->path2, cmd->path3);
     case CMD_OPEN_ARCHIVE_MEMBER: return execute_open_archive_member(cmd->path, cmd->archive_format, cmd->path2, 0);
     case CMD_PREVIEW_ARCHIVE_MEMBER: return execute_open_archive_member(cmd->path, cmd->archive_format, cmd->path2, 1);
-    case CMD_COPY:          return execute_copy(cmd->path, cmd->path2);
-    case CMD_MOVE:          return execute_move(cmd->path, cmd->path2);
+    case CMD_COPY:          return execute_cmd_copy(cmd);
+    case CMD_MOVE:          return execute_cmd_move(cmd);
     case CMD_RUN:           return execute_run_cmd(cmd->path, cmd->cmd_text, cmd->selected_path);
     default:                return (Msg){ .type = MSG_NONE };
     }

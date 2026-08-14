@@ -3169,7 +3169,8 @@ static void test_rename_clears_yank_when_source_matches(void)
     Model in = make_edit_model(MODE_RENAME, "new.txt", 1, 3);
     strcpy(in.current_path, "/tmp");
     strcpy(in.entries[1].name, "old.txt");
-    strcpy(in.yank_path, "/tmp/old.txt");
+    strcpy(in.yank_paths[0], "/tmp/old.txt");
+    in.yank_count = 1;
     in.yank_is_move = 1;
 
     Msg msg = { .type = MSG_ACTIVATE };
@@ -3178,8 +3179,8 @@ static void test_rename_clears_yank_when_source_matches(void)
 
     update(&msg, &in, &out, &cmd);
 
-    if (out.yank_path[0] != '\0') {
-        TEST_ERRORF("rename clears matching yank", "yank_path = '%s', want cleared", out.yank_path);
+    if (out.yank_count != 0) {
+        TEST_ERRORF("rename clears matching yank", "yank_count = %d, want 0", out.yank_count);
     }
 }
 
@@ -3188,7 +3189,8 @@ static void test_rename_leaves_yank_for_different_entry(void)
     Model in = make_edit_model(MODE_RENAME, "new.txt", 1, 3);
     strcpy(in.current_path, "/tmp");
     strcpy(in.entries[1].name, "old.txt");
-    strcpy(in.yank_path, "/tmp/other.txt");
+    strcpy(in.yank_paths[0], "/tmp/other.txt");
+    in.yank_count = 1;
     in.yank_is_move = 1;
 
     Msg msg = { .type = MSG_ACTIVATE };
@@ -3197,8 +3199,9 @@ static void test_rename_leaves_yank_for_different_entry(void)
 
     update(&msg, &in, &out, &cmd);
 
-    if (strcmp(out.yank_path, "/tmp/other.txt") != 0) {
-        TEST_ERRORF("rename leaves unrelated yank", "yank_path = '%s', want unchanged '/tmp/other.txt'", out.yank_path);
+    if (out.yank_count != 1 || strcmp(out.yank_paths[0], "/tmp/other.txt") != 0) {
+        TEST_ERRORF("rename leaves unrelated yank", "yank = {count=%d, [0]=%s}, want {1, /tmp/other.txt}",
+                    out.yank_count, out.yank_paths[0]);
     }
 }
 
@@ -3301,7 +3304,8 @@ static void test_confirm_delete_yes_deletes(void)
 static void test_confirm_delete_clears_yank_when_target_matches(void)
 {
     Model in = make_confirm_delete_model("target", S_IFREG | 0644, 1, 3, 0);
-    strcpy(in.yank_path, "/tmp/target");
+    strcpy(in.yank_paths[0], "/tmp/target");
+    in.yank_count = 1;
     in.yank_is_move = 1;
 
     Msg msg = { .type = MSG_TEXT_INPUT, .ch = 'y' };
@@ -3310,15 +3314,16 @@ static void test_confirm_delete_clears_yank_when_target_matches(void)
 
     update(&msg, &in, &out, &cmd);
 
-    if (out.yank_path[0] != '\0') {
-        TEST_ERRORF("confirm delete clears matching yank", "yank_path = '%s', want cleared", out.yank_path);
+    if (out.yank_count != 0) {
+        TEST_ERRORF("confirm delete clears matching yank", "yank_count = %d, want 0", out.yank_count);
     }
 }
 
 static void test_confirm_delete_leaves_yank_for_different_entry(void)
 {
     Model in = make_confirm_delete_model("target", S_IFREG | 0644, 1, 3, 0);
-    strcpy(in.yank_path, "/tmp/other.txt");
+    strcpy(in.yank_paths[0], "/tmp/other.txt");
+    in.yank_count = 1;
     in.yank_is_move = 1;
 
     Msg msg = { .type = MSG_TEXT_INPUT, .ch = 'y' };
@@ -3327,9 +3332,9 @@ static void test_confirm_delete_leaves_yank_for_different_entry(void)
 
     update(&msg, &in, &out, &cmd);
 
-    if (strcmp(out.yank_path, "/tmp/other.txt") != 0) {
-        TEST_ERRORF("confirm delete leaves unrelated yank", "yank_path = '%s', want unchanged '/tmp/other.txt'",
-                    out.yank_path);
+    if (out.yank_count != 1 || strcmp(out.yank_paths[0], "/tmp/other.txt") != 0) {
+        TEST_ERRORF("confirm delete leaves unrelated yank", "yank = {count=%d, [0]=%s}, want {1, /tmp/other.txt}",
+                    out.yank_count, out.yank_paths[0]);
     }
 }
 
@@ -3647,21 +3652,242 @@ static void test_confirm_batch_delete_targets_marks_directory_not_currently_disp
     }
 }
 
+static Model make_batch_yank_model(void)
+{
+    Model m = make_nav_model(3, 1);
+    m.mode = MODE_SELECT;
+    strcpy(m.current_path, "/tmp");
+    strcpy(m.marked_dir, "/tmp");
+    strcpy(m.entries[0].name, "a.txt");
+    m.entries[0].st.st_mode = S_IFREG | 0644;
+    strcpy(m.entries[1].name, "b.txt");
+    m.entries[1].st.st_mode = S_IFREG | 0644;
+    strcpy(m.entries[2].name, "subdir");
+    m.entries[2].st.st_mode = S_IFDIR | 0755;
+    m.marked[0] = 1;
+    m.marked[2] = 1;
+    m.marked_count = 2;
+    strcpy(m.marked_items[0].path, "/tmp/a.txt");
+    m.marked_items[0].is_dir = 0;
+    strcpy(m.marked_items[1].path, "/tmp/subdir");
+    m.marked_items[1].is_dir = 1;
+    m.range_active = 1;
+    return m;
+}
+
+static void test_batch_yank_copy_and_move_capture_all_marked_paths(void)
+{
+    typedef struct {
+        const char *label;
+        MsgType msg_type;
+        int expected_is_move;
+    } Case;
+
+    Case cases[] = {
+        {"batch yank copy with marks captures all marked paths", MSG_YANK_COPY, 0},
+        {"batch yank move with marks captures all marked paths", MSG_YANK_MOVE, 1},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model in = make_batch_yank_model();
+        Msg msg = { .type = cases[i].msg_type };
+        Model out;
+        Cmd cmd;
+
+        update(&msg, &in, &out, &cmd);
+
+        if (out.yank_count != 2) {
+            TEST_ERRORF(cases[i].label, "yank_count = %d, want 2", out.yank_count);
+            continue;
+        }
+
+        int found_a = 0, found_subdir = 0;
+        for (int j = 0; j < out.yank_count; j++) {
+            if (strcmp(out.yank_paths[j], "/tmp/a.txt") == 0)
+                found_a = 1;
+            if (strcmp(out.yank_paths[j], "/tmp/subdir") == 0)
+                found_subdir = 1;
+        }
+        if (!found_a || !found_subdir) {
+            TEST_ERRORF(cases[i].label, "yank_paths = {%s, %s}, want /tmp/a.txt and /tmp/subdir",
+                        out.yank_paths[0], out.yank_paths[1]);
+        }
+        if (out.yank_is_move != cases[i].expected_is_move) {
+            TEST_ERRORF(cases[i].label, "yank_is_move = %d, want %d", out.yank_is_move, cases[i].expected_is_move);
+        }
+        if (out.mode != MODE_NAV) {
+            TEST_ERRORF(cases[i].label, "mode = %d, want MODE_NAV (batch yank leaves select mode)", out.mode);
+        }
+        if (out.marked_count != 0 || out.marked[0] || out.marked[2] || out.range_active) {
+            TEST_ERRORF(cases[i].label,
+                        "marked_count=%d marked[0]=%d marked[2]=%d range_active=%d, want 0,0,0,0 (marks cleared)",
+                        out.marked_count, out.marked[0], out.marked[2], out.range_active);
+        }
+        if (out.marked_dir[0] != '\0') {
+            TEST_ERRORF(cases[i].label, "marked_dir = '%s', want cleared", out.marked_dir);
+        }
+        if (cmd.type != CMD_NONE) {
+            TEST_ERRORF(cases[i].label, "cmd.type = %d, want CMD_NONE (yank issues no cmd)", cmd.type);
+        }
+    }
+}
+
+static void test_yank_in_select_mode_with_zero_marks_targets_cursor(void)
+{
+    typedef struct {
+        const char *label;
+        MsgType msg_type;
+        int expected_is_move;
+    } Case;
+
+    Case cases[] = {
+        {"yank copy in select mode with no marks targets cursor entry", MSG_YANK_COPY, 0},
+        {"yank move in select mode with no marks targets cursor entry", MSG_YANK_MOVE, 1},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model in = make_nav_model(3, 1);
+        in.mode = MODE_SELECT;
+        strcpy(in.entries[1].name, "file.txt");
+        Msg msg = { .type = cases[i].msg_type };
+        Model out;
+        Cmd cmd;
+
+        update(&msg, &in, &out, &cmd);
+
+        if (out.yank_count != 1 || strcmp(out.yank_paths[0], "/tmp/file.txt") != 0) {
+            TEST_ERRORF(cases[i].label, "yank = {count=%d, [0]=%s}, want {1, /tmp/file.txt}",
+                        out.yank_count, out.yank_paths[0]);
+        }
+        if (out.yank_is_move != cases[i].expected_is_move) {
+            TEST_ERRORF(cases[i].label, "yank_is_move = %d, want %d", out.yank_is_move, cases[i].expected_is_move);
+        }
+        if (out.mode != MODE_SELECT) {
+            TEST_ERRORF(cases[i].label, "mode = %d, want MODE_SELECT (single-entry yank doesn't leave select mode)",
+                        out.mode);
+        }
+    }
+}
+
+static void test_yank_outside_select_mode_ignores_stray_marks(void)
+{
+    Model in = make_nav_model(3, 1);
+    strcpy(in.entries[1].name, "file.txt");
+    in.marked[0] = 1;
+    in.marked_count = 1;
+    strcpy(in.marked_dir, in.current_path);
+
+    Msg msg = { .type = MSG_YANK_COPY };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.yank_count != 1 || strcmp(out.yank_paths[0], "/tmp/file.txt") != 0) {
+        TEST_ERRORF("yank outside select mode is single-entry", "yank = {count=%d, [0]=%s}, want {1, /tmp/file.txt}",
+                    out.yank_count, out.yank_paths[0]);
+    }
+    if (out.marked_count != 1) {
+        TEST_ERRORF("yank outside select mode leaves stray marks untouched", "marked_count = %d, want 1",
+                    out.marked_count);
+    }
+}
+
+static void test_batch_yank_targets_marks_directory_not_currently_displayed_dir(void)
+{
+    Model dir_a = make_nav_model(3, 0);
+    dir_a.mode = MODE_SELECT;
+    strcpy(dir_a.current_path, "/dirA");
+    strcpy(dir_a.entries[0].name, "keep.txt");
+    dir_a.entries[0].st.st_mode = S_IFREG | 0644;
+    strcpy(dir_a.entries[1].name, "mid.txt");
+    dir_a.entries[1].st.st_mode = S_IFREG | 0644;
+    strcpy(dir_a.entries[2].name, "target-dir");
+    dir_a.entries[2].st.st_mode = S_IFDIR | 0755;
+
+    Msg mark_msg = { .type = MSG_TOGGLE_MARK };
+    Model after_mark0;
+    Cmd cmd;
+    update(&mark_msg, &dir_a, &after_mark0, &cmd);
+
+    Model before_mark2 = after_mark0;
+    before_mark2.selected = 2;
+    Model after_mark2;
+    update(&mark_msg, &before_mark2, &after_mark2, &cmd);
+
+    if (after_mark2.marked_count != 2 || strcmp(after_mark2.marked_dir, "/dirA") != 0) {
+        TEST_ERRORF("setup: marks placed in dirA", "marked_count=%d marked_dir=%s, want 2,/dirA",
+                    after_mark2.marked_count, after_mark2.marked_dir);
+    }
+
+    static Entry dir_b_entries[MAX_ENTRIES];
+    strcpy(dir_b_entries[0].name, "zz-other-dir");
+    dir_b_entries[0].st.st_mode = S_IFDIR | 0755;
+    strcpy(dir_b_entries[1].name, "zz-other1.txt");
+    dir_b_entries[1].st.st_mode = S_IFREG | 0644;
+    strcpy(dir_b_entries[2].name, "zz-other2.txt");
+    dir_b_entries[2].st.st_mode = S_IFREG | 0644;
+
+    Msg loaded_msg = { .type = MSG_DIR_LOADED };
+    loaded_msg.dir_loaded.entries = dir_b_entries;
+    loaded_msg.dir_loaded.entry_count = 3;
+    strcpy(loaded_msg.dir_loaded.path, "/dirB");
+    Model in_dir_b;
+    update(&loaded_msg, &after_mark2, &in_dir_b, &cmd);
+
+    if (strcmp(in_dir_b.current_path, "/dirB") != 0 || strcmp(in_dir_b.marked_dir, "/dirA") != 0) {
+        TEST_ERRORF("setup: now viewing dirB with marks still owned by dirA",
+                    "current_path=%s marked_dir=%s, want /dirB,/dirA", in_dir_b.current_path, in_dir_b.marked_dir);
+    }
+    if (in_dir_b.marked_count != 2) {
+        TEST_ERRORF("setup: marks survive the directory switch", "marked_count=%d, want 2", in_dir_b.marked_count);
+    }
+
+    Msg yank_msg = { .type = MSG_YANK_COPY };
+    Model out;
+    update(&yank_msg, &in_dir_b, &out, &cmd);
+
+    if (out.yank_count != 2) {
+        TEST_ERRORF("batch yank off-screen targets dirA", "yank_count = %d, want 2", out.yank_count);
+    }
+
+    int found_keep = 0, found_target_dir = 0, found_wrong_dir_path = 0;
+    for (int i = 0; i < out.yank_count; i++) {
+        if (strcmp(out.yank_paths[i], "/dirA/keep.txt") == 0)
+            found_keep = 1;
+        if (strcmp(out.yank_paths[i], "/dirA/target-dir") == 0)
+            found_target_dir = 1;
+        if (strncmp(out.yank_paths[i], "/dirA/zz-other", 15) == 0)
+            found_wrong_dir_path = 1;
+    }
+
+    if (!found_keep || !found_target_dir) {
+        TEST_ERRORF("batch yank off-screen targets dirA",
+                    "yank_paths = {%s, %s}, want /dirA/keep.txt and /dirA/target-dir",
+                    out.yank_paths[0], out.yank_paths[1]);
+    }
+    if (found_wrong_dir_path) {
+        TEST_ERRORF("batch yank off-screen never mixes in dirB's filenames under dirA's path",
+                    "yank_paths = {%s, %s}", out.yank_paths[0], out.yank_paths[1]);
+    }
+}
+
 static void test_yank(void)
 {
     typedef struct {
         const char *label;
         const char *entry_name;
         MsgType msg_type;
-        const char *expected_yank_path;
+        int expected_yank_count;
+        const char *expected_yank_path0;
         int expected_yank_is_move;
     } Case;
 
     Case cases[] = {
-        {"yank copy on unprotected entry", "file.txt", MSG_YANK_COPY, "/tmp/file.txt", 0},
-        {"yank move on unprotected entry", "file.txt", MSG_YANK_MOVE, "/tmp/file.txt", 1},
-        {"yank copy is a no-op on '.'", ".", MSG_YANK_COPY, "", 0},
-        {"yank move is a no-op on '..'", "..", MSG_YANK_MOVE, "", 0},
+        {"yank copy on unprotected entry", "file.txt", MSG_YANK_COPY, 1, "/tmp/file.txt", 0},
+        {"yank move on unprotected entry", "file.txt", MSG_YANK_MOVE, 1, "/tmp/file.txt", 1},
+        {"yank copy is a no-op on '.'", ".", MSG_YANK_COPY, 0, "", 0},
+        {"yank move is a no-op on '..'", "..", MSG_YANK_MOVE, 0, "", 0},
     };
 
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
@@ -3673,9 +3899,12 @@ static void test_yank(void)
 
         update(&msg, &in, &out, &cmd);
 
-        if (strcmp(out.yank_path, cases[i].expected_yank_path) != 0) {
-            TEST_ERRORF(cases[i].label, "yank_path = %s, want %s",
-                        out.yank_path, cases[i].expected_yank_path);
+        if (out.yank_count != cases[i].expected_yank_count) {
+            TEST_ERRORF(cases[i].label, "yank_count = %d, want %d", out.yank_count, cases[i].expected_yank_count);
+        }
+        if (cases[i].expected_yank_count > 0 && strcmp(out.yank_paths[0], cases[i].expected_yank_path0) != 0) {
+            TEST_ERRORF(cases[i].label, "yank_paths[0] = %s, want %s",
+                        out.yank_paths[0], cases[i].expected_yank_path0);
         }
         if (out.yank_is_move != cases[i].expected_yank_is_move) {
             TEST_ERRORF(cases[i].label, "yank_is_move = %d, want %d",
@@ -3698,7 +3927,8 @@ static void test_yank_replaces_pending(void)
 {
     Model in = make_nav_model(3, 1);
     strcpy(in.entries[1].name, "second.txt");
-    strcpy(in.yank_path, "/tmp/first.txt");
+    strcpy(in.yank_paths[0], "/tmp/first.txt");
+    in.yank_count = 1;
     in.yank_is_move = 1;
 
     Msg msg = { .type = MSG_YANK_COPY };
@@ -3707,16 +3937,17 @@ static void test_yank_replaces_pending(void)
 
     update(&msg, &in, &out, &cmd);
 
-    if (strcmp(out.yank_path, "/tmp/second.txt") != 0 || out.yank_is_move != 0) {
-        TEST_ERRORF("re-yank replaces pending", "yank = {%s, move=%d}, want {/tmp/second.txt, move=0}",
-                    out.yank_path, out.yank_is_move);
+    if (out.yank_count != 1 || strcmp(out.yank_paths[0], "/tmp/second.txt") != 0 || out.yank_is_move != 0) {
+        TEST_ERRORF("re-yank replaces pending", "yank = {count=%d, [0]=%s, move=%d}, want {1, /tmp/second.txt, move=0}",
+                    out.yank_count, out.yank_paths[0], out.yank_is_move);
     }
 }
 
 static void test_nav_cancel_clears_pending_yank(void)
 {
     Model in = make_nav_model(3, 1);
-    strcpy(in.yank_path, "/tmp/first.txt");
+    strcpy(in.yank_paths[0], "/tmp/first.txt");
+    in.yank_count = 1;
     in.yank_is_move = 1;
 
     Msg msg = { .type = MSG_CANCEL };
@@ -3725,8 +3956,8 @@ static void test_nav_cancel_clears_pending_yank(void)
 
     update(&msg, &in, &out, &cmd);
 
-    if (out.yank_path[0] != '\0') {
-        TEST_ERRORF("nav cancel clears yank", "yank_path = '%s', want cleared", out.yank_path);
+    if (out.yank_count != 0) {
+        TEST_ERRORF("nav cancel clears yank", "yank_count = %d, want 0", out.yank_count);
     }
     if (out.mode != MODE_NAV) {
         TEST_ERRORF("nav cancel clears yank", "mode = %d, want MODE_NAV", out.mode);
@@ -3746,8 +3977,8 @@ static void test_nav_cancel_with_no_pending_yank_is_noop(void)
 
     update(&msg, &in, &out, &cmd);
 
-    if (out.yank_path[0] != '\0') {
-        TEST_ERRORF("nav cancel noop", "yank_path = '%s', want still empty", out.yank_path);
+    if (out.yank_count != 0) {
+        TEST_ERRORF("nav cancel noop", "yank_count = %d, want still 0", out.yank_count);
     }
     if (out.selected != in.selected || out.entry_count != in.entry_count) {
         TEST_ERRORF("nav cancel noop", "model changed unexpectedly");
@@ -3780,7 +4011,7 @@ static void test_paste_pending(void)
         const char *existing_unfiltered_entry;
         const char *narrowed_entry;
         CmdType expected_cmd_type;
-        const char *expected_path2;
+        const char *expected_dest;
     } Case;
 
     Case cases[] = {
@@ -3801,7 +4032,8 @@ static void test_paste_pending(void)
         strcpy(in.entries[0].name, cases[i].narrowed_entry);
         strcpy(in.unfiltered_entries[0].name, cases[i].existing_unfiltered_entry);
         in.unfiltered_count = 1;
-        strcpy(in.yank_path, cases[i].yank_path);
+        strcpy(in.yank_paths[0], cases[i].yank_path);
+        in.yank_count = 1;
         in.yank_is_move = cases[i].yank_is_move;
 
         Msg msg = { .type = MSG_PASTE };
@@ -3814,15 +4046,93 @@ static void test_paste_pending(void)
             TEST_ERRORF(cases[i].label, "cmd.type = %d, want %d", cmd.type, cases[i].expected_cmd_type);
             continue;
         }
-        if (strcmp(cmd.path, cases[i].yank_path) != 0) {
-            TEST_ERRORF(cases[i].label, "cmd.path = %s, want %s", cmd.path, cases[i].yank_path);
+        if (cmd.batch_count != 1) {
+            TEST_ERRORF(cases[i].label, "cmd.batch_count = %d, want 1", cmd.batch_count);
+            continue;
         }
-        if (strcmp(cmd.path2, cases[i].expected_path2) != 0) {
-            TEST_ERRORF(cases[i].label, "cmd.path2 = %s, want %s", cmd.path2, cases[i].expected_path2);
+        if (strcmp(cmd.batch_items[0].path, cases[i].yank_path) != 0) {
+            TEST_ERRORF(cases[i].label, "cmd.batch_items[0].path = %s, want %s",
+                        cmd.batch_items[0].path, cases[i].yank_path);
         }
-        if (out.yank_path[0] != '\0') {
-            TEST_ERRORF(cases[i].label, "yank_path = %s, want cleared after paste", out.yank_path);
+        if (strcmp(cmd.batch_items[0].dest, cases[i].expected_dest) != 0) {
+            TEST_ERRORF(cases[i].label, "cmd.batch_items[0].dest = %s, want %s",
+                        cmd.batch_items[0].dest, cases[i].expected_dest);
         }
+        if (out.yank_count != 0) {
+            TEST_ERRORF(cases[i].label, "yank_count = %d, want cleared after paste", out.yank_count);
+        }
+    }
+}
+
+static void test_paste_pending_batch_replays_all_yanked_paths(void)
+{
+    Model in = make_nav_model(1, 0);
+    strcpy(in.current_path, "/tmp");
+    strcpy(in.entries[0].name, "placeholder");
+    in.unfiltered_count = 0;
+
+    strcpy(in.yank_paths[0], "/src/a.txt");
+    strcpy(in.yank_paths[1], "/src/b.txt");
+    strcpy(in.yank_paths[2], "/src/c.txt");
+    in.yank_count = 3;
+    in.yank_is_move = 0;
+
+    Msg msg = { .type = MSG_PASTE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_COPY) {
+        TEST_ERRORF("batch paste replays all yanked paths", "cmd.type = %d, want CMD_COPY", cmd.type);
+    }
+    if (cmd.batch_count != 3) {
+        TEST_ERRORF("batch paste replays all yanked paths", "cmd.batch_count = %d, want 3", cmd.batch_count);
+    }
+
+    const char *expected_src[] = { "/src/a.txt", "/src/b.txt", "/src/c.txt" };
+    const char *expected_dest[] = { "/tmp/a.txt", "/tmp/b.txt", "/tmp/c.txt" };
+    for (int i = 0; i < cmd.batch_count && i < 3; i++) {
+        if (strcmp(cmd.batch_items[i].path, expected_src[i]) != 0) {
+            TEST_ERRORF("batch paste replays all yanked paths", "batch_items[%d].path = %s, want %s",
+                        i, cmd.batch_items[i].path, expected_src[i]);
+        }
+        if (strcmp(cmd.batch_items[i].dest, expected_dest[i]) != 0) {
+            TEST_ERRORF("batch paste replays all yanked paths", "batch_items[%d].dest = %s, want %s",
+                        i, cmd.batch_items[i].dest, expected_dest[i]);
+        }
+    }
+    if (out.yank_count != 0) {
+        TEST_ERRORF("batch paste replays all yanked paths", "yank_count = %d, want cleared after paste",
+                    out.yank_count);
+    }
+}
+
+static void test_paste_pending_batch_works_from_select_mode_with_no_marks(void)
+{
+    Model in = make_nav_model(1, 0);
+    in.mode = MODE_SELECT;
+    strcpy(in.current_path, "/tmp");
+    strcpy(in.entries[0].name, "placeholder");
+    in.unfiltered_count = 0;
+
+    strcpy(in.yank_paths[0], "/src/a.txt");
+    strcpy(in.yank_paths[1], "/src/b.txt");
+    in.yank_count = 2;
+    in.yank_is_move = 1;
+
+    Msg msg = { .type = MSG_PASTE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_MOVE || cmd.batch_count != 2) {
+        TEST_ERRORF("paste from select mode replays batch yank", "cmd.type=%d batch_count=%d, want CMD_MOVE,2",
+                    cmd.type, cmd.batch_count);
+    }
+    if (out.yank_count != 0) {
+        TEST_ERRORF("paste from select mode replays batch yank", "yank_count = %d, want cleared", out.yank_count);
     }
 }
 
@@ -3864,8 +4174,8 @@ static void test_yank_copy_on_file_inside_archive_records_archive_yank(void)
         TEST_ERRORF("yank copy on file inside archive", "yank_archive_member_path = '%s', want 'sub1/notes.txt'",
                     out.yank_archive_member_path);
     }
-    if (out.yank_path[0] != '\0') {
-        TEST_ERRORF("yank copy on file inside archive", "yank_path = '%s', want empty sentinel", out.yank_path);
+    if (out.yank_count != 0) {
+        TEST_ERRORF("yank copy on file inside archive", "yank_count = %d, want 0 (empty sentinel)", out.yank_count);
     }
     if (out.mode != MODE_NAV) {
         TEST_ERRORF("yank copy on file inside archive", "mode = %d, want MODE_NAV", out.mode);
@@ -3913,8 +4223,8 @@ static void test_yank_copy_on_directory_inside_archive_is_blocked(void)
     if (out.yank_from_archive) {
         TEST_ERRORF("yank copy on directory inside archive is blocked", "yank_from_archive = 1, want 0");
     }
-    if (out.yank_path[0] != '\0') {
-        TEST_ERRORF("yank copy on directory inside archive is blocked", "yank_path = '%s', want empty", out.yank_path);
+    if (out.yank_count != 0) {
+        TEST_ERRORF("yank copy on directory inside archive is blocked", "yank_count = %d, want 0", out.yank_count);
     }
 
     free(out.archive_stack[0].members);
@@ -4148,8 +4458,8 @@ static void test_yank_move_inside_archive_is_blocked(void)
     if (cmd.type != CMD_NONE) {
         TEST_ERRORF("yank move inside archive is blocked", "cmd.type = %d, want CMD_NONE", cmd.type);
     }
-    if (out.yank_path[0] != '\0') {
-        TEST_ERRORF("yank move inside archive is blocked", "yank_path = '%s', want empty", out.yank_path);
+    if (out.yank_count != 0) {
+        TEST_ERRORF("yank move inside archive is blocked", "yank_count = %d, want 0", out.yank_count);
     }
     if (out.yank_is_move) {
         TEST_ERRORF("yank move inside archive is blocked", "yank_is_move = 1, want 0");
@@ -4163,12 +4473,13 @@ static void test_paste_inside_archive_is_blocked_regardless_of_pending_yank(void
     typedef struct {
         const char *label;
         int yank_from_archive;
-        const char *yank_path;
+        int yank_count;
+        const char *yank_path0;
     } Case;
 
     Case cases[] = {
-        {"paste into archive blocked with real yank_path pending", 0, "/tmp/file.txt"},
-        {"paste into archive blocked with archive-sourced yank pending", 1, ""},
+        {"paste into archive blocked with real yank_path pending", 0, 1, "/tmp/file.txt"},
+        {"paste into archive blocked with archive-sourced yank pending", 1, 0, ""},
     };
 
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
@@ -4185,7 +4496,10 @@ static void test_paste_inside_archive_is_blocked_regardless_of_pending_yank(void
         in.selected = 0;
 
         in.yank_from_archive = cases[i].yank_from_archive;
-        strcpy(in.yank_path, cases[i].yank_path);
+        if (cases[i].yank_count > 0) {
+            strcpy(in.yank_paths[0], cases[i].yank_path0);
+            in.yank_count = cases[i].yank_count;
+        }
         if (cases[i].yank_from_archive) {
             in.yank_archive_format = ARCHIVE_TAR;
             strcpy(in.yank_archive_source_path, "/home/user/other.tar");
@@ -4211,8 +4525,12 @@ static void test_paste_inside_archive_is_blocked_regardless_of_pending_yank(void
             TEST_ERRORF(cases[i].label, "yank_from_archive = %d, want unchanged %d",
                         out.yank_from_archive, cases[i].yank_from_archive);
         }
-        if (strcmp(out.yank_path, cases[i].yank_path) != 0) {
-            TEST_ERRORF(cases[i].label, "yank_path = '%s', want unchanged '%s'", out.yank_path, cases[i].yank_path);
+        if (out.yank_count != cases[i].yank_count) {
+            TEST_ERRORF(cases[i].label, "yank_count = %d, want unchanged %d", out.yank_count, cases[i].yank_count);
+        }
+        if (cases[i].yank_count > 0 && strcmp(out.yank_paths[0], cases[i].yank_path0) != 0) {
+            TEST_ERRORF(cases[i].label, "yank_paths[0] = '%s', want unchanged '%s'",
+                        out.yank_paths[0], cases[i].yank_path0);
         }
         if (cases[i].yank_from_archive) {
             if (strcmp(out.yank_archive_source_path, "/home/user/other.tar") != 0 ||
@@ -4817,12 +5135,18 @@ void test_update(void)
     test_confirm_batch_delete_yes_builds_batch_cmd_and_clears_marks();
     test_confirm_batch_delete_no_leaves_marks_untouched();
     test_confirm_batch_delete_targets_marks_directory_not_currently_displayed_dir();
+    test_batch_yank_copy_and_move_capture_all_marked_paths();
+    test_yank_in_select_mode_with_zero_marks_targets_cursor();
+    test_yank_outside_select_mode_ignores_stray_marks();
+    test_batch_yank_targets_marks_directory_not_currently_displayed_dir();
     test_yank();
     test_yank_replaces_pending();
     test_nav_cancel_clears_pending_yank();
     test_nav_cancel_with_no_pending_yank_is_noop();
     test_paste_nothing_pending_is_noop();
     test_paste_pending();
+    test_paste_pending_batch_replays_all_yanked_paths();
+    test_paste_pending_batch_works_from_select_mode_with_no_marks();
     test_yank_copy_on_file_inside_archive_records_archive_yank();
     test_yank_copy_on_directory_inside_archive_is_blocked();
     test_paste_pending_from_archive_yank();

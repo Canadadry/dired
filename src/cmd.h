@@ -29,6 +29,7 @@ typedef enum {
 
 typedef struct {
     char path[PATH_MAX_LEN];
+    char dest[PATH_MAX_LEN];
     int is_dir;
 } CmdBatchItem;
 

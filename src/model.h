@@ -120,9 +120,6 @@ typedef struct {
     ArchiveLevel archive_stack[ARCHIVE_MAX_DEPTH];
     int archive_depth;
 
-    /* Session-scoped: survive directory navigation like yank_path does, but
-     * never persisted — a fresh process always starts at the defaults
-     * (SORT_NAME_ASC, GROUP_DIRS_FIRST), which are also the zero values. */
     SortMode sort_mode;
     GroupMode group_mode;
     int show_hidden;
@@ -144,8 +141,9 @@ typedef struct {
     size_t edit_len;
 
     /* Pending yank, independent of `mode` — survives normal navigation.
-     * An empty yank_path is the "nothing pending" sentinel. */
-    char yank_path[PATH_MAX_LEN];
+     * A zero yank_count is the "nothing pending" sentinel. */
+    char yank_paths[MAX_ENTRIES][PATH_MAX_LEN];
+    int yank_count;
     int yank_is_move;
 
     int yank_from_archive;
