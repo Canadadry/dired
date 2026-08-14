@@ -20,6 +20,7 @@ typedef enum {
     MODE_RUN_CMD,
     MODE_FILTER,
     MODE_GLOB,
+    MODE_SELECT,
 } AppMode;
 
 typedef enum {

@@ -1544,6 +1544,99 @@ static void test_glob_filter_mutual_exclusion(void)
     }
 }
 
+static void test_enter_select_mode_from_nav(void)
+{
+    Model in = make_nav_model(3, 1);
+    Msg msg = { .type = MSG_TOGGLE_SELECT_MODE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.mode != MODE_SELECT) {
+        TEST_ERRORF("v enters select mode", "mode = %d, want MODE_SELECT", out.mode);
+    }
+    if (out.selected != 1) {
+        TEST_ERRORF("v enters select mode", "selected = %d, want 1 (entering does not mark/move cursor)", out.selected);
+    }
+    if (out.entry_count != 3) {
+        TEST_ERRORF("v enters select mode", "entry_count = %d, want 3 (unaffected)", out.entry_count);
+    }
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("v enters select mode", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+}
+
+static void test_leave_select_mode(void)
+{
+    typedef struct {
+        const char *label;
+        MsgType msg_type;
+    } Case;
+
+    Case cases[] = {
+        {"v toggles back to nav", MSG_TOGGLE_SELECT_MODE},
+        {"Esc returns to nav", MSG_CANCEL},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model in = make_nav_model(3, 1);
+        in.mode = MODE_SELECT;
+        Msg msg = { .type = cases[i].msg_type };
+        Model out;
+        Cmd cmd;
+
+        update(&msg, &in, &out, &cmd);
+
+        if (out.mode != MODE_NAV) {
+            TEST_ERRORF(cases[i].label, "mode = %d, want MODE_NAV", out.mode);
+        }
+    }
+}
+
+static void test_select_mode_rejected_while_glob_active(void)
+{
+    Model in = make_nav_model(3, 1);
+    in.glob_type = GLOB_PLAIN;
+    strcpy(in.glob_pattern, "report");
+    Msg msg = { .type = MSG_TOGGLE_SELECT_MODE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.mode != MODE_ERROR) {
+        TEST_ERRORF("v blocked on active glob", "mode = %d, want MODE_ERROR", out.mode);
+    }
+    if (out.error_msg[0] == '\0') {
+        TEST_ERRORF("v blocked on active glob", "error_msg = '', want a non-empty message");
+    }
+    if (out.glob_type != GLOB_PLAIN || strcmp(out.glob_pattern, "report") != 0) {
+        TEST_ERRORF("v blocked on active glob", "glob = {%d, '%s'}, want {GLOB_PLAIN, 'report'} (untouched)",
+                    out.glob_type, out.glob_pattern);
+    }
+}
+
+static void test_select_mode_allowed_while_filter_active(void)
+{
+    Model in = make_nav_model(3, 1);
+    in.filter_type = FILTER_PLAIN;
+    strcpy(in.filter_pattern, "report");
+    Msg msg = { .type = MSG_TOGGLE_SELECT_MODE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.mode != MODE_SELECT) {
+        TEST_ERRORF("v allowed with active filter", "mode = %d, want MODE_SELECT", out.mode);
+    }
+    if (out.filter_type != FILTER_PLAIN || strcmp(out.filter_pattern, "report") != 0) {
+        TEST_ERRORF("v allowed with active filter", "filter = {%d, '%s'}, want {FILTER_PLAIN, 'report'} (untouched)",
+                    out.filter_type, out.filter_pattern);
+    }
+}
+
 static Model make_edit_model(AppMode mode, const char *edit_buf, int selected, int entry_count)
 {
     Model m = make_nav_model(entry_count, selected);
@@ -3807,6 +3900,10 @@ void test_update(void)
     test_enter_glob_mode();
     test_enter_glob_mode_entries();
     test_glob_filter_mutual_exclusion();
+    test_enter_select_mode_from_nav();
+    test_leave_select_mode();
+    test_select_mode_rejected_while_glob_active();
+    test_select_mode_allowed_while_filter_active();
     test_filter_live_recompute_on_text_input();
     test_filter_live_recompute_on_delete();
     test_filter_live_recompute_no_matches_is_empty();

@@ -88,6 +88,14 @@ static void block_in_archive(Model *out_model)
     out_model->error_msg[sizeof(out_model->error_msg) - 1] = '\0';
 }
 
+static void block_select_on_glob(Model *out_model)
+{
+    out_model->mode = MODE_ERROR;
+    strncpy(out_model->error_msg, "selection mode not available on glob results (spans multiple directories)",
+            sizeof(out_model->error_msg) - 1);
+    out_model->error_msg[sizeof(out_model->error_msg) - 1] = '\0';
+}
+
 static void selected_name(const Model *m, char *out, size_t out_size)
 {
     if (m->selected < m->entry_count)
@@ -207,6 +215,14 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
             out_model->entry_count = 0;
         break;
     }
+
+    case MSG_TOGGLE_SELECT_MODE:
+        if (out_model->glob_type != GLOB_NONE) {
+            block_select_on_glob(out_model);
+            break;
+        }
+        out_model->mode = MODE_SELECT;
+        break;
 
     case MSG_DELETE:
     case MSG_DELETE_PERMANENT:
@@ -891,6 +907,19 @@ static void handle_dir_loaded(const Msg *msg, Model *out_model)
     relocate_selected(out_model, prev_name);
 }
 
+static void handle_select(const Msg *msg, Model *out_model)
+{
+    switch (msg->type) {
+    case MSG_TOGGLE_SELECT_MODE:
+    case MSG_CANCEL:
+        out_model->mode = MODE_NAV;
+        break;
+
+    default:
+        break;
+    }
+}
+
 void update(const Msg *msg, const Model *model, Model *out_model, Cmd *out_cmd)
 {
     *out_model = *model;
@@ -941,6 +970,8 @@ void update(const Msg *msg, const Model *model, Model *out_model, Cmd *out_cmd)
         handle_edit(msg, out_model, out_cmd);
     else if (model->mode == MODE_CONFIRM_DELETE)
         handle_confirm_delete(msg, out_model, out_cmd);
+    else if (model->mode == MODE_SELECT)
+        handle_select(msg, out_model);
     else if (model->mode == MODE_ERROR) {
         out_model->mode = MODE_NAV;
     }

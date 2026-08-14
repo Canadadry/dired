@@ -871,6 +871,8 @@ static Msg translate_event(struct tb_event ev, AppMode mode)
         msg.type = MSG_GLOB_PLAIN;
     else if (ev.ch == 'G')
         msg.type = MSG_GLOB_REGEX;
+    else if (ev.ch == 'v')
+        msg.type = MSG_TOGGLE_SELECT_MODE;
     else if (ev.ch == ' ')
         msg.type = MSG_PREVIEW;
     else if (ev.ch == 'c')
