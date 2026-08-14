@@ -992,7 +992,7 @@ static void print_help(void)
     printf("  up/down       Navigate\n");
     printf("  left          Go to parent directory\n");
     printf("  right/Enter   Open file or enter directory\n");
-    printf("  r             Rename selected file/directory\n");
+    printf("  r             Rename selected file/directory; in selection mode, range-select from an anchor entry to the cursor (press again to stop)\n");
     printf("  n             Create a new file or directory (trailing / for a directory)\n");
     printf("  :             Run a shell command (prefix with !, e.g. !unzip $FILE); $FILE is the selected entry\n");
     printf("                Up/Down while composing recall this folder's command history\n");
@@ -1000,8 +1000,10 @@ static void print_help(void)
     printf("  F             Filter listing by filename (extended regex)\n");
     printf("  g             Recursively glob the current directory tree by filename (plain substring)\n");
     printf("  G             Recursively glob the current directory tree by filename (extended regex)\n");
+    printf("  v             Enter/leave selection mode to mark multiple entries for a batch action (Esc also leaves; marks are discarded on leave)\n");
+    printf("  t             Select all / select none in the current directory (selection mode only)\n");
     printf("  Esc           Cancel a pending yank (nav); cancel composing (Rename/Create/Filter/Run command)\n");
-    printf("  space         Preview selected file (text pages, binary is hex-dumped)\n");
+    printf("  space         Preview selected file (text pages, binary is hex-dumped); in selection mode, toggle a mark on the cursor's entry\n");
     printf("  c             Yank copy\n");
     printf("  m             Yank move\n");
     printf("  p             Paste\n");

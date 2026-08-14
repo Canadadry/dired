@@ -1,7 +1,7 @@
 ---
 title: "Multi-select: title line and help text (chunk 4/4)"
 description: "Selection mode (chunk 1/4) and its keys have no on-screen indicator of mode/progress, and no documentation. Add the VISUAL title-line states and help text for v/space/r/t."
-status: needs-triage
+status: done
 ---
 
 ## Problem Statement
