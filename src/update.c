@@ -63,6 +63,31 @@ static void recompute_scroll(Model *out_model)
     out_model->scroll_offset = page_snap_offset(out_model->selected, out_model->entry_count, visible_rows);
 }
 
+static void move_cursor(Model *out_model, int delta)
+{
+    int max_index = out_model->entry_count > 0 ? out_model->entry_count - 1 : 0;
+    int next = out_model->selected + delta;
+
+    if (next < 0)
+        next = 0;
+    else if (next > max_index)
+        next = max_index;
+
+    out_model->selected = next;
+    recompute_scroll(out_model);
+}
+
+static void set_mark(Model *out_model, int idx, int value)
+{
+    if (idx < 0 || idx >= out_model->entry_count)
+        return;
+    if (out_model->marked[idx] == (unsigned char)value)
+        return;
+
+    out_model->marked[idx] = (unsigned char)value;
+    out_model->marked_count += value ? 1 : -1;
+}
+
 static void start_edit(Model *out_model, AppMode new_mode)
 {
     out_model->mode = new_mode;
@@ -376,15 +401,11 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
         break;
 
     case MSG_MOVE_UP:
-        if (out_model->selected > 0)
-            out_model->selected--;
-        recompute_scroll(out_model);
+        move_cursor(out_model, -1);
         break;
 
     case MSG_MOVE_DOWN:
-        if (out_model->selected < out_model->entry_count - 1)
-            out_model->selected++;
-        recompute_scroll(out_model);
+        move_cursor(out_model, 1);
         break;
 
     case MSG_GO_PARENT: {
@@ -915,6 +936,7 @@ static void handle_select(const Msg *msg, Model *out_model)
         out_model->mode = MODE_NAV;
         memset(out_model->marked, 0, sizeof(out_model->marked));
         out_model->marked_count = 0;
+        out_model->range_active = 0;
         break;
 
     case MSG_TOGGLE_MARK:
@@ -938,6 +960,31 @@ static void handle_select(const Msg *msg, Model *out_model)
             memset(out_model->marked, 0, sizeof(out_model->marked));
             out_model->marked_count = 0;
         }
+        break;
+
+    case MSG_TOGGLE_RANGE_SELECT:
+        if (out_model->range_active) {
+            out_model->range_active = 0;
+            break;
+        }
+        if (out_model->selected < out_model->entry_count) {
+            int target = !out_model->marked[out_model->selected];
+            out_model->range_active = 1;
+            out_model->range_target = (unsigned char)target;
+            set_mark(out_model, out_model->selected, target);
+        }
+        break;
+
+    case MSG_MOVE_UP:
+        move_cursor(out_model, -1);
+        if (out_model->range_active)
+            set_mark(out_model, out_model->selected, out_model->range_target);
+        break;
+
+    case MSG_MOVE_DOWN:
+        move_cursor(out_model, 1);
+        if (out_model->range_active)
+            set_mark(out_model, out_model->selected, out_model->range_target);
         break;
 
     default:

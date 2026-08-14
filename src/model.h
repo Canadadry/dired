@@ -129,6 +129,8 @@ typedef struct {
     AppMode mode;
     unsigned char marked[MAX_ENTRIES];
     int marked_count;
+    int range_active;
+    unsigned char range_target;
     int confirm_permanent_delete;
     char edit_buf[NAME_MAX_LEN + 1];
     size_t edit_len;

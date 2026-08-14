@@ -857,7 +857,9 @@ static Msg translate_event(struct tb_event ev, AppMode mode)
         break;
     }
 
-    if (ev.ch == 'r' || ev.ch == 'R')
+    if (ev.ch == 'r' && mode == MODE_SELECT)
+        msg.type = MSG_TOGGLE_RANGE_SELECT;
+    else if (ev.ch == 'r' || ev.ch == 'R')
         msg.type = MSG_RENAME;
     else if (ev.ch == 'n')
         msg.type = MSG_NEW;

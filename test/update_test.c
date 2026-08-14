@@ -1756,6 +1756,239 @@ static void test_leave_select_mode_clears_marks(void)
     }
 }
 
+static void test_range_select_from_unmarked_anchor_marks_run_while_moving_down(void)
+{
+    Model in = make_nav_model(5, 1);
+    in.mode = MODE_SELECT;
+    Msg start_msg = { .type = MSG_TOGGLE_RANGE_SELECT };
+    Model after_start;
+    Cmd cmd;
+
+    update(&start_msg, &in, &after_start, &cmd);
+
+    if (!after_start.range_active) {
+        TEST_ERRORF("r starts range from unmarked anchor", "range_active = %d, want 1", after_start.range_active);
+    }
+    if (!after_start.marked[1]) {
+        TEST_ERRORF("r starts range from unmarked anchor", "marked[1] = %d, want 1 (anchor swept)", after_start.marked[1]);
+    }
+    if (after_start.marked_count != 1) {
+        TEST_ERRORF("r starts range from unmarked anchor", "marked_count = %d, want 1", after_start.marked_count);
+    }
+
+    Msg down_msg = { .type = MSG_MOVE_DOWN };
+    Model after_down1;
+    update(&down_msg, &after_start, &after_down1, &cmd);
+
+    if (after_down1.selected != 2) {
+        TEST_ERRORF("r sweeps down", "selected = %d, want 2", after_down1.selected);
+    }
+    if (!after_down1.marked[2]) {
+        TEST_ERRORF("r sweeps down", "marked[2] = %d, want 1", after_down1.marked[2]);
+    }
+    if (after_down1.marked_count != 2) {
+        TEST_ERRORF("r sweeps down", "marked_count = %d, want 2", after_down1.marked_count);
+    }
+
+    Model after_down2;
+    update(&down_msg, &after_down1, &after_down2, &cmd);
+
+    if (after_down2.selected != 3) {
+        TEST_ERRORF("r sweeps down further", "selected = %d, want 3", after_down2.selected);
+    }
+    if (!after_down2.marked[3]) {
+        TEST_ERRORF("r sweeps down further", "marked[3] = %d, want 1", after_down2.marked[3]);
+    }
+    if (after_down2.marked_count != 3) {
+        TEST_ERRORF("r sweeps down further", "marked_count = %d, want 3", after_down2.marked_count);
+    }
+    if (after_down2.marked[0] || after_down2.marked[4]) {
+        TEST_ERRORF("r sweeps down further", "marked[0]=%d marked[4]=%d, want 0,0 (untouched)",
+                    after_down2.marked[0], after_down2.marked[4]);
+    }
+}
+
+static void test_range_select_from_marked_anchor_unmarks_run_while_moving_up(void)
+{
+    Model in = make_nav_model(5, 3);
+    in.mode = MODE_SELECT;
+    in.marked[0] = 1;
+    in.marked[1] = 1;
+    in.marked[2] = 1;
+    in.marked[3] = 1;
+    in.marked_count = 4;
+    Msg start_msg = { .type = MSG_TOGGLE_RANGE_SELECT };
+    Model after_start;
+    Cmd cmd;
+
+    update(&start_msg, &in, &after_start, &cmd);
+
+    if (!after_start.range_active) {
+        TEST_ERRORF("r starts range from marked anchor", "range_active = %d, want 1", after_start.range_active);
+    }
+    if (after_start.marked[3]) {
+        TEST_ERRORF("r starts range from marked anchor", "marked[3] = %d, want 0 (anchor swept to unmark)", after_start.marked[3]);
+    }
+    if (after_start.marked_count != 3) {
+        TEST_ERRORF("r starts range from marked anchor", "marked_count = %d, want 3", after_start.marked_count);
+    }
+
+    Msg up_msg = { .type = MSG_MOVE_UP };
+    Model after_up1;
+    update(&up_msg, &after_start, &after_up1, &cmd);
+
+    if (after_up1.selected != 2) {
+        TEST_ERRORF("r sweeps up unmarking", "selected = %d, want 2", after_up1.selected);
+    }
+    if (after_up1.marked[2]) {
+        TEST_ERRORF("r sweeps up unmarking", "marked[2] = %d, want 0", after_up1.marked[2]);
+    }
+    if (after_up1.marked_count != 2) {
+        TEST_ERRORF("r sweeps up unmarking", "marked_count = %d, want 2", after_up1.marked_count);
+    }
+    if (!after_up1.marked[0] || !after_up1.marked[1]) {
+        TEST_ERRORF("r sweeps up unmarking", "marked[0]=%d marked[1]=%d, want 1,1 (untouched)",
+                    after_up1.marked[0], after_up1.marked[1]);
+    }
+}
+
+static void test_range_select_backtracking_over_swept_entry_does_not_revert(void)
+{
+    Model in = make_nav_model(5, 0);
+    in.mode = MODE_SELECT;
+    Cmd cmd;
+
+    Msg start_msg = { .type = MSG_TOGGLE_RANGE_SELECT };
+    Model step;
+    update(&start_msg, &in, &step, &cmd);
+
+    Msg down_msg = { .type = MSG_MOVE_DOWN };
+    Model tmp;
+    update(&down_msg, &step, &tmp, &cmd);
+    step = tmp;
+    update(&down_msg, &step, &tmp, &cmd);
+    step = tmp;
+
+    if (step.selected != 2 || !step.marked[0] || !step.marked[1] || !step.marked[2]) {
+        TEST_ERRORF("range sweeps 0..2 downward", "selected=%d marked[0..2]=%d,%d,%d, want 2,1,1,1",
+                    step.selected, step.marked[0], step.marked[1], step.marked[2]);
+    }
+
+    Msg up_msg = { .type = MSG_MOVE_UP };
+    update(&up_msg, &step, &tmp, &cmd);
+    step = tmp;
+
+    if (step.selected != 1 || !step.marked[1]) {
+        TEST_ERRORF("moving back onto swept entry keeps it marked", "selected=%d marked[1]=%d, want 1,1",
+                    step.selected, step.marked[1]);
+    }
+    if (!step.marked[2]) {
+        TEST_ERRORF("backtracking does not revert entries left behind", "marked[2] = %d, want 1", step.marked[2]);
+    }
+    if (step.marked_count != 3) {
+        TEST_ERRORF("backtracking does not change marked_count", "marked_count = %d, want 3", step.marked_count);
+    }
+}
+
+static void test_space_toggles_independently_while_range_active(void)
+{
+    Model in = make_nav_model(5, 2);
+    in.mode = MODE_SELECT;
+    in.marked[0] = 1;
+    in.marked[1] = 1;
+    in.marked[2] = 1;
+    in.marked[3] = 1;
+    in.marked[4] = 1;
+    in.marked_count = 5;
+    Cmd cmd;
+
+    Msg start_msg = { .type = MSG_TOGGLE_RANGE_SELECT };
+    Model step;
+    update(&start_msg, &in, &step, &cmd);
+
+    if (!step.range_active || step.marked[2] || step.marked_count != 4) {
+        TEST_ERRORF("range starts unmarking from marked anchor", "range_active=%d marked[2]=%d marked_count=%d",
+                    step.range_active, step.marked[2], step.marked_count);
+    }
+
+    Msg down_msg = { .type = MSG_MOVE_DOWN };
+    Model tmp;
+    update(&down_msg, &step, &tmp, &cmd);
+    step = tmp;
+
+    if (step.selected != 3 || step.marked[3] || step.marked_count != 3) {
+        TEST_ERRORF("range sweeps unmark to index 3", "selected=%d marked[3]=%d marked_count=%d",
+                    step.selected, step.marked[3], step.marked_count);
+    }
+
+    Msg space_msg = { .type = MSG_TOGGLE_MARK };
+    update(&space_msg, &step, &tmp, &cmd);
+    step = tmp;
+
+    if (!step.marked[3] || step.marked_count != 4) {
+        TEST_ERRORF("space independently re-marks entry 3", "marked[3]=%d marked_count=%d", step.marked[3], step.marked_count);
+    }
+    if (!step.range_active || step.range_target != 0) {
+        TEST_ERRORF("range stays active and unaffected by space", "range_active=%d range_target=%d",
+                    step.range_active, step.range_target);
+    }
+
+    update(&down_msg, &step, &tmp, &cmd);
+    step = tmp;
+
+    if (step.selected != 4 || step.marked[4] || step.marked_count != 3) {
+        TEST_ERRORF("sweep continues to index 4 after space correction", "selected=%d marked[4]=%d marked_count=%d",
+                    step.selected, step.marked[4], step.marked_count);
+    }
+    if (!step.marked[3]) {
+        TEST_ERRORF("space-corrected entry 3 is not touched again by the sweep", "marked[3] = %d, want 1", step.marked[3]);
+    }
+    if (!step.marked[1]) {
+        TEST_ERRORF("entry never visited by sweep or space stays marked", "marked[1] = %d, want 1", step.marked[1]);
+    }
+}
+
+static void test_second_range_select_press_stops_extend_and_keeps_marks(void)
+{
+    Model in = make_nav_model(5, 0);
+    in.mode = MODE_SELECT;
+    Cmd cmd;
+
+    Msg start_msg = { .type = MSG_TOGGLE_RANGE_SELECT };
+    Model step;
+    update(&start_msg, &in, &step, &cmd);
+
+    Msg down_msg = { .type = MSG_MOVE_DOWN };
+    Model tmp;
+    update(&down_msg, &step, &tmp, &cmd);
+    step = tmp;
+    update(&down_msg, &step, &tmp, &cmd);
+    step = tmp;
+
+    update(&start_msg, &step, &tmp, &cmd);
+    step = tmp;
+
+    if (step.range_active) {
+        TEST_ERRORF("second r press ends the range extend", "range_active = %d, want 0", step.range_active);
+    }
+    if (step.mode != MODE_SELECT) {
+        TEST_ERRORF("second r press returns to plain MODE_SELECT", "mode = %d, want MODE_SELECT", step.mode);
+    }
+    if (!step.marked[0] || !step.marked[1] || !step.marked[2] || step.marked_count != 3) {
+        TEST_ERRORF("marks applied during the sweep stay after stopping",
+                    "marked[0..2]=%d,%d,%d marked_count=%d, want 1,1,1,3",
+                    step.marked[0], step.marked[1], step.marked[2], step.marked_count);
+    }
+
+    update(&down_msg, &step, &tmp, &cmd);
+    step = tmp;
+
+    if (step.selected != 3 || step.marked[3]) {
+        TEST_ERRORF("moving after the range stopped no longer sweeps", "selected=%d marked[3]=%d, want 3,0",
+                    step.selected, step.marked[3]);
+    }
+}
+
 static Model make_edit_model(AppMode mode, const char *edit_buf, int selected, int entry_count)
 {
     Model m = make_nav_model(entry_count, selected);
@@ -4028,6 +4261,11 @@ void test_update(void)
     test_toggle_mark_all_marks_everything_when_not_all_marked();
     test_toggle_mark_all_clears_everything_when_all_marked();
     test_leave_select_mode_clears_marks();
+    test_range_select_from_unmarked_anchor_marks_run_while_moving_down();
+    test_range_select_from_marked_anchor_unmarks_run_while_moving_up();
+    test_range_select_backtracking_over_swept_entry_does_not_revert();
+    test_space_toggles_independently_while_range_active();
+    test_second_range_select_press_stops_extend_and_keeps_marks();
     test_filter_live_recompute_on_text_input();
     test_filter_live_recompute_on_delete();
     test_filter_live_recompute_no_matches_is_empty();
