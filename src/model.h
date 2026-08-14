@@ -86,6 +86,11 @@ typedef struct {
 } Entry;
 
 typedef struct {
+    char path[PATH_MAX_LEN];
+    int is_dir;
+} MarkedItem;
+
+typedef struct {
     ArchiveFormat format;
     char display_name[NAME_MAX_LEN + 1];
     char source_path[PATH_MAX_LEN];
@@ -130,6 +135,8 @@ typedef struct {
     unsigned char marked[MAX_ENTRIES];
     int marked_count;
     char marked_dir[PATH_MAX_LEN];
+    MarkedItem marked_items[MAX_ENTRIES];
+
     int range_active;
     unsigned char range_target;
     int confirm_permanent_delete;

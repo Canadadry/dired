@@ -85,7 +85,26 @@ static void set_mark(Model *out_model, int idx, int value)
         return;
 
     out_model->marked[idx] = (unsigned char)value;
-    out_model->marked_count += value ? 1 : -1;
+
+    if (value) {
+        char path[PATH_MAX_LEN];
+        join_path(out_model->current_path, out_model->entries[idx].name, path, sizeof(path));
+
+        MarkedItem *item = &out_model->marked_items[out_model->marked_count];
+        snprintf(item->path, sizeof(item->path), "%s", path);
+        item->is_dir = S_ISDIR(out_model->entries[idx].st.st_mode);
+        out_model->marked_count++;
+    } else {
+        char path[PATH_MAX_LEN];
+        join_path(out_model->current_path, out_model->entries[idx].name, path, sizeof(path));
+        for (int i = 0; i < out_model->marked_count; i++) {
+            if (strcmp(out_model->marked_items[i].path, path) == 0) {
+                out_model->marked_items[i] = out_model->marked_items[out_model->marked_count - 1];
+                break;
+            }
+        }
+        out_model->marked_count--;
+    }
 }
 
 static void start_edit(Model *out_model, AppMode new_mode)
@@ -776,10 +795,39 @@ static void handle_edit(const Msg *msg, Model *out_model, Cmd *out_cmd)
 
 static void handle_confirm_delete(const Msg *msg, Model *out_model, Cmd *out_cmd)
 {
+    int was_batch = out_model->marked_count > 0;
     out_model->mode = MODE_NAV;
 
     if (msg->type != MSG_TEXT_INPUT || (msg->ch != 'y' && msg->ch != 'Y'))
         return;
+
+    if (was_batch) {
+        out_cmd->type = out_model->confirm_permanent_delete ? CMD_DELETE : CMD_TRASH;
+        out_cmd->batch_count = 0;
+
+        for (int i = 0; i < out_model->marked_count && out_cmd->batch_count < MAX_ENTRIES; i++) {
+            const MarkedItem *marked_item = &out_model->marked_items[i];
+            char name[NAME_MAX_LEN + 1];
+            basename_of(marked_item->path, name, sizeof(name));
+            if (is_protected_name(name))
+                continue;
+
+            CmdBatchItem *item = &out_cmd->batch_items[out_cmd->batch_count];
+            snprintf(item->path, sizeof(item->path), "%s", marked_item->path);
+            item->is_dir = marked_item->is_dir;
+
+            if (strcmp(item->path, out_model->yank_path) == 0)
+                out_model->yank_path[0] = '\0';
+
+            out_cmd->batch_count++;
+        }
+
+        memset(out_model->marked, 0, sizeof(out_model->marked));
+        out_model->marked_count = 0;
+        out_model->marked_dir[0] = '\0';
+        out_model->range_active = 0;
+        return;
+    }
 
     Entry *e = &out_model->entries[out_model->selected];
     out_cmd->type = out_model->confirm_permanent_delete ? CMD_DELETE : CMD_TRASH;
@@ -957,6 +1005,20 @@ static void handle_select(const Msg *msg, Model *out_model, Cmd *out_cmd)
         handle_nav(msg, out_model, out_cmd);
         break;
 
+    case MSG_DELETE:
+    case MSG_DELETE_PERMANENT:
+        if (out_model->marked_count == 0) {
+            handle_nav(msg, out_model, out_cmd);
+            break;
+        }
+        if (out_model->archive_depth > 0) {
+            block_in_archive(out_model);
+            break;
+        }
+        out_model->mode = MODE_CONFIRM_DELETE;
+        out_model->confirm_permanent_delete = (msg->type == MSG_DELETE_PERMANENT);
+        break;
+
     case MSG_CYCLE_SORT:
     case MSG_CYCLE_GROUP:
     case MSG_FILTER_PLAIN:
@@ -970,23 +1032,15 @@ static void handle_select(const Msg *msg, Model *out_model, Cmd *out_cmd)
 
     case MSG_TOGGLE_MARK:
         ensure_marks_scope(out_model);
-        if (out_model->selected < out_model->entry_count) {
-            if (out_model->marked[out_model->selected]) {
-                out_model->marked[out_model->selected] = 0;
-                out_model->marked_count--;
-            } else {
-                out_model->marked[out_model->selected] = 1;
-                out_model->marked_count++;
-            }
-        }
+        if (out_model->selected < out_model->entry_count)
+            set_mark(out_model, out_model->selected, !out_model->marked[out_model->selected]);
         break;
 
     case MSG_TOGGLE_MARK_ALL:
         ensure_marks_scope(out_model);
         if (out_model->marked_count < out_model->entry_count) {
             for (int i = 0; i < out_model->entry_count; i++)
-                out_model->marked[i] = 1;
-            out_model->marked_count = out_model->entry_count;
+                set_mark(out_model, i, 1);
         } else {
             memset(out_model->marked, 0, sizeof(out_model->marked));
             out_model->marked_count = 0;
@@ -1028,6 +1082,7 @@ void update(const Msg *msg, const Model *model, Model *out_model, Cmd *out_cmd)
 {
     *out_model = *model;
     out_cmd->type = CMD_NONE;
+    out_cmd->batch_count = 0;
 
     switch (msg->type) {
     case MSG_DIR_LOADED:

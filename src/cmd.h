@@ -28,6 +28,11 @@ typedef enum {
 } CmdType;
 
 typedef struct {
+    char path[PATH_MAX_LEN];
+    int is_dir;
+} CmdBatchItem;
+
+typedef struct {
     CmdType type;
     char path[PATH_MAX_LEN];   /* load/create/delete/launch target, or rename/copy/move source */
     char path2[PATH_MAX_LEN];  /* CMD_RENAME/CMD_COPY/CMD_MOVE destination */
@@ -38,6 +43,9 @@ typedef struct {
     char selected_path[PATH_MAX_LEN];
     GlobType glob_type;
     ArchiveFormat archive_format;
+
+    CmdBatchItem batch_items[MAX_ENTRIES];
+    int batch_count;
 } Cmd;
 
 #endif // DIRED_CMD_H

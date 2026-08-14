@@ -3364,6 +3364,289 @@ static void test_confirm_delete_anything_else_cancels(void)
     }
 }
 
+static void test_batch_delete_with_marks_triggers_combined_confirm(void)
+{
+    typedef struct {
+        const char *label;
+        MsgType msg_type;
+        int expected_permanent;
+    } Case;
+
+    Case cases[] = {
+        {"backspace with marks asks combined confirm", MSG_DELETE, 0},
+        {"x with marks asks combined confirm", MSG_DELETE_PERMANENT, 1},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model in = make_nav_model(3, 1);
+        in.mode = MODE_SELECT;
+        in.marked[0] = 1;
+        in.marked[2] = 1;
+        in.marked_count = 2;
+        strcpy(in.marked_dir, in.current_path);
+        Msg msg = { .type = cases[i].msg_type };
+        Model out;
+        Cmd cmd;
+
+        update(&msg, &in, &out, &cmd);
+
+        if (out.mode != MODE_CONFIRM_DELETE) {
+            TEST_ERRORF(cases[i].label, "mode = %d, want MODE_CONFIRM_DELETE", out.mode);
+        }
+        if (out.confirm_permanent_delete != cases[i].expected_permanent) {
+            TEST_ERRORF(cases[i].label, "confirm_permanent_delete = %d, want %d",
+                        out.confirm_permanent_delete, cases[i].expected_permanent);
+        }
+        if (out.marked_count != 2) {
+            TEST_ERRORF(cases[i].label, "marked_count = %d, want 2 (marks not yet cleared)", out.marked_count);
+        }
+        if (cmd.type != CMD_NONE) {
+            TEST_ERRORF(cases[i].label, "cmd.type = %d, want CMD_NONE", cmd.type);
+        }
+    }
+}
+
+static void test_delete_in_select_mode_with_zero_marks_targets_cursor(void)
+{
+    typedef struct {
+        const char *label;
+        MsgType msg_type;
+        int expected_permanent;
+    } Case;
+
+    Case cases[] = {
+        {"backspace with no marks targets cursor entry", MSG_DELETE, 0},
+        {"x with no marks targets cursor entry", MSG_DELETE_PERMANENT, 1},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model in = make_nav_model(3, 1);
+        in.mode = MODE_SELECT;
+        strcpy(in.entries[1].name, "file.txt");
+        Msg msg = { .type = cases[i].msg_type };
+        Model out;
+        Cmd cmd;
+
+        update(&msg, &in, &out, &cmd);
+
+        if (out.mode != MODE_CONFIRM_DELETE) {
+            TEST_ERRORF(cases[i].label, "mode = %d, want MODE_CONFIRM_DELETE", out.mode);
+        }
+        if (out.confirm_permanent_delete != cases[i].expected_permanent) {
+            TEST_ERRORF(cases[i].label, "confirm_permanent_delete = %d, want %d",
+                        out.confirm_permanent_delete, cases[i].expected_permanent);
+        }
+        if (cmd.type != CMD_NONE) {
+            TEST_ERRORF(cases[i].label, "cmd.type = %d, want CMD_NONE", cmd.type);
+        }
+    }
+}
+
+static void test_delete_outside_select_mode_ignores_stray_marks(void)
+{
+    Model in = make_nav_model(3, 1);
+    strcpy(in.entries[1].name, "file.txt");
+    in.marked[0] = 1;
+    in.marked_count = 1;
+    strcpy(in.marked_dir, in.current_path);
+    Msg msg = { .type = MSG_DELETE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.mode != MODE_CONFIRM_DELETE) {
+        TEST_ERRORF("delete outside select mode is single-entry", "mode = %d, want MODE_CONFIRM_DELETE", out.mode);
+    }
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("delete outside select mode issues no cmd yet", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+}
+
+static Model make_batch_confirm_delete_model(int confirm_permanent)
+{
+    Model m = make_nav_model(3, 1);
+    m.mode = MODE_CONFIRM_DELETE;
+    m.confirm_permanent_delete = confirm_permanent;
+    strcpy(m.current_path, "/tmp");
+    strcpy(m.marked_dir, "/tmp");
+    strcpy(m.entries[0].name, "a.txt");
+    m.entries[0].st.st_mode = S_IFREG | 0644;
+    strcpy(m.entries[1].name, "b.txt");
+    m.entries[1].st.st_mode = S_IFREG | 0644;
+    strcpy(m.entries[2].name, "subdir");
+    m.entries[2].st.st_mode = S_IFDIR | 0755;
+    m.marked[0] = 1;
+    m.marked[2] = 1;
+    m.marked_count = 2;
+    strcpy(m.marked_items[0].path, "/tmp/a.txt");
+    m.marked_items[0].is_dir = 0;
+    strcpy(m.marked_items[1].path, "/tmp/subdir");
+    m.marked_items[1].is_dir = 1;
+    m.range_active = 1;
+    return m;
+}
+
+static void test_confirm_batch_delete_yes_builds_batch_cmd_and_clears_marks(void)
+{
+    typedef struct {
+        const char *label;
+        int confirm_permanent;
+        CmdType expected_cmd_type;
+    } Case;
+
+    Case cases[] = {
+        {"confirming batch trash", 0, CMD_TRASH},
+        {"confirming batch permanent delete", 1, CMD_DELETE},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model in = make_batch_confirm_delete_model(cases[i].confirm_permanent);
+        Msg msg = { .type = MSG_TEXT_INPUT, .ch = 'y' };
+        Model out;
+        Cmd cmd;
+
+        update(&msg, &in, &out, &cmd);
+
+        if (cmd.type != cases[i].expected_cmd_type) {
+            TEST_ERRORF(cases[i].label, "cmd.type = %d, want %d", cmd.type, cases[i].expected_cmd_type);
+        }
+        if (cmd.batch_count != 2) {
+            TEST_ERRORF(cases[i].label, "cmd.batch_count = %d, want 2", cmd.batch_count);
+        }
+        if (strcmp(cmd.batch_items[0].path, "/tmp/a.txt") != 0 || cmd.batch_items[0].is_dir != 0) {
+            TEST_ERRORF(cases[i].label, "batch_items[0] = {%s, is_dir=%d}, want {/tmp/a.txt, is_dir=0}",
+                        cmd.batch_items[0].path, cmd.batch_items[0].is_dir);
+        }
+        if (strcmp(cmd.batch_items[1].path, "/tmp/subdir") != 0 || cmd.batch_items[1].is_dir != 1) {
+            TEST_ERRORF(cases[i].label, "batch_items[1] = {%s, is_dir=%d}, want {/tmp/subdir, is_dir=1}",
+                        cmd.batch_items[1].path, cmd.batch_items[1].is_dir);
+        }
+        if (out.mode != MODE_NAV) {
+            TEST_ERRORF(cases[i].label, "mode = %d, want MODE_NAV", out.mode);
+        }
+        if (out.marked_count != 0 || out.marked[0] || out.marked[2] || out.range_active) {
+            TEST_ERRORF(cases[i].label,
+                        "marked_count=%d marked[0]=%d marked[2]=%d range_active=%d, want 0,0,0,0",
+                        out.marked_count, out.marked[0], out.marked[2], out.range_active);
+        }
+        if (out.marked_dir[0] != '\0') {
+            TEST_ERRORF(cases[i].label, "marked_dir = '%s', want cleared", out.marked_dir);
+        }
+    }
+}
+
+static void test_confirm_batch_delete_no_leaves_marks_untouched(void)
+{
+    Model in = make_batch_confirm_delete_model(0);
+    Msg msg = { .type = MSG_TEXT_INPUT, .ch = 'n' };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("declining a batch delete issues no cmd", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+    if (out.marked_count != 2 || !out.marked[0] || !out.marked[2]) {
+        TEST_ERRORF("declining a batch delete leaves marks untouched",
+                    "marked_count=%d marked[0]=%d marked[2]=%d, want 2,1,1",
+                    out.marked_count, out.marked[0], out.marked[2]);
+    }
+}
+
+static void test_confirm_batch_delete_targets_marks_directory_not_currently_displayed_dir(void)
+{
+    Model dir_a = make_nav_model(3, 0);
+    dir_a.mode = MODE_SELECT;
+    strcpy(dir_a.current_path, "/dirA");
+    strcpy(dir_a.entries[0].name, "keep.txt");
+    dir_a.entries[0].st.st_mode = S_IFREG | 0644;
+    strcpy(dir_a.entries[1].name, "mid.txt");
+    dir_a.entries[1].st.st_mode = S_IFREG | 0644;
+    strcpy(dir_a.entries[2].name, "target-dir");
+    dir_a.entries[2].st.st_mode = S_IFDIR | 0755;
+
+    Msg mark_msg = { .type = MSG_TOGGLE_MARK };
+    Model after_mark0;
+    Cmd cmd;
+    update(&mark_msg, &dir_a, &after_mark0, &cmd);
+
+    Model before_mark2 = after_mark0;
+    before_mark2.selected = 2;
+    Model after_mark2;
+    update(&mark_msg, &before_mark2, &after_mark2, &cmd);
+
+    if (after_mark2.marked_count != 2 || strcmp(after_mark2.marked_dir, "/dirA") != 0) {
+        TEST_ERRORF("setup: marks placed in dirA", "marked_count=%d marked_dir=%s, want 2,/dirA",
+                    after_mark2.marked_count, after_mark2.marked_dir);
+    }
+
+    static Entry dir_b_entries[MAX_ENTRIES];
+    strcpy(dir_b_entries[0].name, "zz-other-dir");
+    dir_b_entries[0].st.st_mode = S_IFDIR | 0755;
+    strcpy(dir_b_entries[1].name, "zz-other1.txt");
+    dir_b_entries[1].st.st_mode = S_IFREG | 0644;
+    strcpy(dir_b_entries[2].name, "zz-other2.txt");
+    dir_b_entries[2].st.st_mode = S_IFREG | 0644;
+
+    Msg loaded_msg = { .type = MSG_DIR_LOADED };
+    loaded_msg.dir_loaded.entries = dir_b_entries;
+    loaded_msg.dir_loaded.entry_count = 3;
+    strcpy(loaded_msg.dir_loaded.path, "/dirB");
+    Model in_dir_b;
+    update(&loaded_msg, &after_mark2, &in_dir_b, &cmd);
+
+    if (strcmp(in_dir_b.current_path, "/dirB") != 0 || strcmp(in_dir_b.marked_dir, "/dirA") != 0) {
+        TEST_ERRORF("setup: now viewing dirB with marks still owned by dirA",
+                    "current_path=%s marked_dir=%s, want /dirB,/dirA", in_dir_b.current_path, in_dir_b.marked_dir);
+    }
+    if (in_dir_b.marked_count != 2) {
+        TEST_ERRORF("setup: marks survive the directory switch", "marked_count=%d, want 2", in_dir_b.marked_count);
+    }
+
+    Msg delete_msg = { .type = MSG_DELETE };
+    Model confirming;
+    update(&delete_msg, &in_dir_b, &confirming, &cmd);
+
+    if (confirming.mode != MODE_CONFIRM_DELETE) {
+        TEST_ERRORF("delete while viewing dirB asks combined confirm", "mode = %d, want MODE_CONFIRM_DELETE",
+                    confirming.mode);
+    }
+
+    Msg confirm_msg = { .type = MSG_TEXT_INPUT, .ch = 'y' };
+    Model out;
+    update(&confirm_msg, &confirming, &out, &cmd);
+
+    if (cmd.type != CMD_TRASH) {
+        TEST_ERRORF("confirming batch delete off-screen targets dirA", "cmd.type = %d, want CMD_TRASH", cmd.type);
+    }
+    if (cmd.batch_count != 2) {
+        TEST_ERRORF("confirming batch delete off-screen targets dirA", "cmd.batch_count = %d, want 2",
+                    cmd.batch_count);
+    }
+
+    int found_keep = 0, found_target_dir = 0, found_wrong_dir_path = 0;
+    for (int i = 0; i < cmd.batch_count; i++) {
+        if (strcmp(cmd.batch_items[i].path, "/dirA/keep.txt") == 0 && cmd.batch_items[i].is_dir == 0)
+            found_keep = 1;
+        if (strcmp(cmd.batch_items[i].path, "/dirA/target-dir") == 0 && cmd.batch_items[i].is_dir == 1)
+            found_target_dir = 1;
+        if (strncmp(cmd.batch_items[i].path, "/dirA/zz-other", 15) == 0)
+            found_wrong_dir_path = 1;
+    }
+
+    if (!found_keep || !found_target_dir) {
+        TEST_ERRORF("confirming batch delete off-screen targets dirA",
+                    "batch items = {%s, %s}, want /dirA/keep.txt and /dirA/target-dir",
+                    cmd.batch_items[0].path, cmd.batch_items[1].path);
+    }
+    if (found_wrong_dir_path) {
+        TEST_ERRORF("confirming batch delete off-screen never mixes in dirB's filenames under dirA's path",
+                    "batch items = {%s, %s}", cmd.batch_items[0].path, cmd.batch_items[1].path);
+    }
+}
+
 static void test_yank(void)
 {
     typedef struct {
@@ -4528,6 +4811,12 @@ void test_update(void)
     test_confirm_delete_clears_yank_when_target_matches();
     test_confirm_delete_leaves_yank_for_different_entry();
     test_confirm_delete_anything_else_cancels();
+    test_batch_delete_with_marks_triggers_combined_confirm();
+    test_delete_in_select_mode_with_zero_marks_targets_cursor();
+    test_delete_outside_select_mode_ignores_stray_marks();
+    test_confirm_batch_delete_yes_builds_batch_cmd_and_clears_marks();
+    test_confirm_batch_delete_no_leaves_marks_untouched();
+    test_confirm_batch_delete_targets_marks_directory_not_currently_displayed_dir();
     test_yank();
     test_yank_replaces_pending();
     test_nav_cancel_clears_pending_yank();

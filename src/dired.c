@@ -673,19 +673,43 @@ static void forget_deleted_folder_history(const char *path)
         history_delete_folder_slot(g_history_path, path);
 }
 
-static Msg execute_cmd_delete(const char *path, int is_dir)
+static Msg execute_cmd_delete(const Cmd *cmd)
 {
-    Msg outcome = execute_delete(path, is_dir);
-    if (outcome.type == MSG_OP_SUCCEEDED && is_dir)
-        forget_deleted_folder_history(path);
+    if (cmd->batch_count > 0) {
+        for (int i = 0; i < cmd->batch_count; i++) {
+            const CmdBatchItem *item = &cmd->batch_items[i];
+            Msg outcome = execute_delete(item->path, item->is_dir);
+            if (outcome.type != MSG_OP_SUCCEEDED)
+                return outcome;
+            if (item->is_dir)
+                forget_deleted_folder_history(item->path);
+        }
+        return (Msg){ .type = MSG_OP_SUCCEEDED };
+    }
+
+    Msg outcome = execute_delete(cmd->path, cmd->is_dir);
+    if (outcome.type == MSG_OP_SUCCEEDED && cmd->is_dir)
+        forget_deleted_folder_history(cmd->path);
     return outcome;
 }
 
-static Msg execute_cmd_trash(const char *path, int is_dir)
+static Msg execute_cmd_trash(const Cmd *cmd)
 {
-    Msg outcome = trash_item(path);
-    if (outcome.type == MSG_OP_SUCCEEDED && is_dir)
-        forget_deleted_folder_history(path);
+    if (cmd->batch_count > 0) {
+        for (int i = 0; i < cmd->batch_count; i++) {
+            const CmdBatchItem *item = &cmd->batch_items[i];
+            Msg outcome = trash_item(item->path);
+            if (outcome.type != MSG_OP_SUCCEEDED)
+                return outcome;
+            if (item->is_dir)
+                forget_deleted_folder_history(item->path);
+        }
+        return (Msg){ .type = MSG_OP_SUCCEEDED };
+    }
+
+    Msg outcome = trash_item(cmd->path);
+    if (outcome.type == MSG_OP_SUCCEEDED && cmd->is_dir)
+        forget_deleted_folder_history(cmd->path);
     return outcome;
 }
 
@@ -697,8 +721,8 @@ static Msg execute_cmd(const Cmd *cmd)
     case CMD_RENAME:        return execute_rename(cmd->path, cmd->path2);
     case CMD_CREATE_FILE:   return execute_create_file(cmd->path);
     case CMD_CREATE_DIR:    return execute_create_dir(cmd->path);
-    case CMD_DELETE:        return execute_cmd_delete(cmd->path, cmd->is_dir);
-    case CMD_TRASH:         return execute_cmd_trash(cmd->path, cmd->is_dir);
+    case CMD_DELETE:        return execute_cmd_delete(cmd);
+    case CMD_TRASH:         return execute_cmd_trash(cmd);
     case CMD_LAUNCH_EDITOR: return execute_launch_editor(cmd->path);
     case CMD_PREVIEW:       return execute_preview(cmd->path);
     case CMD_LIST_ARCHIVE:  return execute_list_archive(cmd->path, cmd->archive_format, cmd->path2, cmd->is_dir);
