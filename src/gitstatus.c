@@ -42,7 +42,7 @@ static PathMatchKind path_match_kind(const Entry *e, const char *path)
     return PATH_MATCH_DESCENDANT;
 }
 
-void classify_git_status(const char *porcelain_text, Entry *entries, int entry_count)
+void classify_git_status(const char *porcelain_text, const char *prefix, Entry *entries, int entry_count)
 {
     for (int i = 0; i < entry_count; i++)
         entries[i].git_status = GIT_STATUS_NONE;
@@ -50,6 +50,7 @@ void classify_git_status(const char *porcelain_text, Entry *entries, int entry_c
     if (!porcelain_text)
         return;
 
+    size_t prefix_len = prefix ? strlen(prefix) : 0;
     const char *p = porcelain_text;
     while (*p) {
         const char *nl = strchr(p, '\n');
@@ -69,6 +70,14 @@ void classify_git_status(const char *porcelain_text, Entry *entries, int entry_c
 
             const char *arrow = strstr(path, " -> ");
             const char *effective_path = arrow ? arrow + 4 : path;
+
+            if (prefix_len > 0) {
+                if (strncmp(effective_path, prefix, prefix_len) != 0) {
+                    p = nl ? nl + 1 : p + line_len;
+                    continue;
+                }
+                effective_path += prefix_len;
+            }
 
             for (int i = 0; i < entry_count; i++) {
                 PathMatchKind match = path_match_kind(&entries[i], effective_path);

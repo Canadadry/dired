@@ -60,6 +60,40 @@ static char *read_git_status(const char *path)
     return buf;
 }
 
+static char *read_git_prefix(const char *path)
+{
+    static char buf[PATH_MAX_LEN];
+
+    char quoted_path[PATH_MAX_LEN * 4];
+    quote_shell_arg(path, quoted_path, sizeof(quoted_path));
+
+    char cmd[sizeof(quoted_path) + 64];
+    snprintf(cmd, sizeof(cmd), "git -C %s rev-parse --show-prefix 2>/dev/null", quoted_path);
+
+    FILE *fp = popen(cmd, "r");
+    if (!fp)
+        return NULL;
+
+    size_t len = 0;
+    while (len < sizeof(buf) - 1) {
+        size_t n = fread(buf + len, 1, sizeof(buf) - 1 - len, fp);
+        if (n == 0)
+            break;
+        len += n;
+    }
+    buf[len] = '\0';
+
+    int status = pclose(fp);
+    if (status == -1 || !WIFEXITED(status) || WEXITSTATUS(status) != 0)
+        return NULL;
+
+    size_t out_len = strlen(buf);
+    if (out_len > 0 && buf[out_len - 1] == '\n')
+        buf[out_len - 1] = '\0';
+
+    return buf;
+}
+
 Msg load_directory(const char *path, int show_hidden)
 {
     static Entry loaded[MAX_ENTRIES];
@@ -90,7 +124,7 @@ Msg load_directory(const char *path, int show_hidden)
     }
     closedir(dir);
 
-    classify_git_status(read_git_status(path), loaded, count);
+    classify_git_status(read_git_status(path), read_git_prefix(path), loaded, count);
 
     Msg msg = { .type = MSG_DIR_LOADED };
     msg.dir_loaded.entries = loaded;

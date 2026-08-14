@@ -1,7 +1,7 @@
 ---
 title: "Git status colors: fix coloring below the repo's top-level directory"
 description: "Git status colors stop propagating as soon as you navigate below the repo's top-level directory, because git always reports changed-file paths relative to the repo root, not to the directory dired queried."
-status: needs-triage
+status: done
 ---
 
 ## Problem Statement
