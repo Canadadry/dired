@@ -29,12 +29,15 @@ int history_arena_push(unsigned char *buf, int n, const char *cmd);
 int history_arena_dedup(unsigned char *buf, int n, const char *cmd);
 int history_arena_evict_oldest(unsigned char *buf, int n);
 int history_arena_record(unsigned char *buf, int n, const char *cmd);
+const char *history_arena_command_at(const unsigned char *buf, int n, int position_from_newest);
 
 History history_create(void);
 void history_free(History *h);
 void history_record_command(History *h, const char *folder_path, const char *cmd);
 const CommandArena *history_lookup(History *h, const char *folder_path);
 void history_delete_folder(History *h, const char *folder_path);
+int history_folder_count(const History *h);
+const char *history_folder_path_at(const History *h, int index);
 
 int history_default_path(char *out, size_t out_size);
 int history_load_file(const char *path, History *out);

@@ -1,6 +1,7 @@
 #include "update.h"
 #include "helpers.h"
 #include "archive.h"
+#include "history.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -67,6 +68,7 @@ static void start_edit(Model *out_model, AppMode new_mode)
     out_model->mode = new_mode;
     out_model->edit_buf[0] = '\0';
     out_model->edit_len = 0;
+    out_model->recall_cursor = 0;
 
     if (new_mode == MODE_CREATE)
         out_model->selected = out_model->entry_count;
@@ -537,9 +539,83 @@ static void recompute_filter_live(Model *out_model)
     recompute_scroll(out_model);
 }
 
+static void set_recalled_command(Model *out_model, const char *cmd)
+{
+    out_model->edit_buf[0] = '!';
+    strncpy(out_model->edit_buf + 1, cmd, sizeof(out_model->edit_buf) - 2);
+    out_model->edit_buf[sizeof(out_model->edit_buf) - 1] = '\0';
+    out_model->edit_len = strlen(out_model->edit_buf);
+}
+
+static void handle_recall_prev(Model *out_model)
+{
+    if (!out_model->history)
+        return;
+
+    const CommandArena *arena = history_lookup(out_model->history, out_model->current_path);
+    if (!arena)
+        return;
+
+    HistoryArenaState state = history_arena_state(arena->data, HISTORY_ARENA_BYTES);
+    if (state.count == 0)
+        return;
+
+    if (out_model->recall_cursor == 0) {
+        strncpy(out_model->recall_stash, out_model->edit_buf, sizeof(out_model->recall_stash) - 1);
+        out_model->recall_stash[sizeof(out_model->recall_stash) - 1] = '\0';
+        out_model->recall_stash_len = out_model->edit_len;
+        out_model->recall_cursor = 1;
+    } else if (out_model->recall_cursor < state.count) {
+        out_model->recall_cursor++;
+    } else {
+        return;
+    }
+
+    const char *cmd = history_arena_command_at(arena->data, HISTORY_ARENA_BYTES, out_model->recall_cursor - 1);
+    if (cmd)
+        set_recalled_command(out_model, cmd);
+}
+
+static void handle_recall_next(Model *out_model)
+{
+    if (out_model->recall_cursor == 0)
+        return;
+
+    if (out_model->recall_cursor == 1) {
+        strncpy(out_model->edit_buf, out_model->recall_stash, sizeof(out_model->edit_buf) - 1);
+        out_model->edit_buf[sizeof(out_model->edit_buf) - 1] = '\0';
+        out_model->edit_len = out_model->recall_stash_len;
+        out_model->recall_cursor = 0;
+        return;
+    }
+
+    out_model->recall_cursor--;
+
+    if (!out_model->history)
+        return;
+
+    const CommandArena *arena = history_lookup(out_model->history, out_model->current_path);
+    if (!arena)
+        return;
+
+    const char *cmd = history_arena_command_at(arena->data, HISTORY_ARENA_BYTES, out_model->recall_cursor - 1);
+    if (cmd)
+        set_recalled_command(out_model, cmd);
+}
+
 static void handle_edit(const Msg *msg, Model *out_model, Cmd *out_cmd)
 {
     switch (msg->type) {
+    case MSG_RECALL_PREV:
+        if (out_model->mode == MODE_RUN_CMD)
+            handle_recall_prev(out_model);
+        break;
+
+    case MSG_RECALL_NEXT:
+        if (out_model->mode == MODE_RUN_CMD)
+            handle_recall_next(out_model);
+        break;
+
     case MSG_CANCEL:
         if (out_model->mode == MODE_FILTER) {
             out_model->filter_type = FILTER_NONE;

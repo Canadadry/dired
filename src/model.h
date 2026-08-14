@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <sys/stat.h>
 #include <time.h>
+#include "history.h"
 
 #define MAX_ENTRIES 1024
 #define NAME_MAX_LEN 1024
@@ -140,6 +141,11 @@ typedef struct {
     char yank_archive_member_path[PATH_MAX_LEN];
 
     char error_msg[256];
+
+    History *history;
+    int recall_cursor;
+    char recall_stash[NAME_MAX_LEN + 1];
+    size_t recall_stash_len;
 
     int should_quit;
 } Model;

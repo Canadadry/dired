@@ -12,7 +12,7 @@ A lightweight terminal-based file manager written in C using termbox2 (vendored 
 * Delete files and directories with confirmation — moved to `~/.trash` by default, or permanently with a separate key.
 * Preview a file's contents (paged as text, or hex-dumped if binary) without leaving the app.
 * Configure custom preview commands per file extension (e.g. render markdown or images) via `~/.config/dired`.
-* Run an ad-hoc shell command against the current directory without leaving the app.
+* Run an ad-hoc shell command against the current directory without leaving the app, with Up/Down recall of that folder's previously run commands.
 * Filter the listing live by filename, either a plain substring or an extended regex.
 * Recursively glob the current directory tree by filename, either a plain substring or an extended regex.
 * Sort by name, date, size, or extension, with independent directory grouping.
@@ -50,6 +50,7 @@ r: Rename selected file/directory
 n: Create a new file or directory (trailing / for a directory)
 Space: Preview selected file (text pages, binary is hex-dumped — both paged via less)
 :: Run a shell command (prefix with !, e.g. !unzip $FILE), output paged. $FILE is the selected entry's path
+   Up/Down while composing recall this folder's previously run commands
 f: Filter listing by filename (plain substring)
 F: Filter listing by filename (extended regex)
 g: Recursively glob the current directory tree by filename (plain substring), Enter to search

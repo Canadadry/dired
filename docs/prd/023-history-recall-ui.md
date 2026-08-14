@@ -1,7 +1,7 @@
 ---
 title: "Command history recall in the `:` prompt"
 description: "Typing a `:!command` in dired has no memory of commands run before, forcing users to retype the same ad-hoc shell commands over and over in the same folder."
-status: needs-triage
+status: done
 ---
 
 ## Problem Statement

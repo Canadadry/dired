@@ -191,6 +191,18 @@ int history_arena_record(unsigned char *buf, int n, const char *cmd)
     return history_arena_push(buf, n, cmd);
 }
 
+const char *history_arena_command_at(const unsigned char *buf, int n, int position_from_newest)
+{
+    int count = arena_count(buf, n);
+    if (position_from_newest < 0 || position_from_newest >= count)
+        return NULL;
+
+    int i = count - 1 - position_from_newest;
+    int addr = n - 4 - 2 * i;
+    int offset = read_u16(buf + addr);
+    return (const char *)(buf + offset);
+}
+
 History history_create(void)
 {
     History h;
@@ -223,6 +235,29 @@ const CommandArena *history_lookup(History *h, const char *folder_path)
 void history_delete_folder(History *h, const char *folder_path)
 {
     CommandArena_upsert(h, folder_path, UpsertActionDelete);
+}
+
+int history_folder_count(const History *h)
+{
+    int count = 0;
+    for (int i = 0; i < h->data.len; i++) {
+        if (h->data.data[i].key[0] != 0x01)
+            count++;
+    }
+    return count;
+}
+
+const char *history_folder_path_at(const History *h, int index)
+{
+    int seen = 0;
+    for (int i = 0; i < h->data.len; i++) {
+        if (h->data.data[i].key[0] == 0x01)
+            continue;
+        if (seen == index)
+            return h->data.data[i].key;
+        seen++;
+    }
+    return NULL;
 }
 
 int history_default_path(char *out, size_t out_size)

@@ -115,6 +115,44 @@ static void test_arena_evict_drops_oldest_and_reclaims_space(void)
         TEST_ERRORF("push after evict", "expected reclaimed space to allow push, got rc=%d", rc);
 }
 
+static void test_arena_command_at_indexes_by_recency(void)
+{
+    unsigned char buf[64];
+    int n = (int)sizeof(buf);
+    history_arena_reset(buf, n);
+
+    history_arena_push(buf, n, "ls");
+    history_arena_push(buf, n, "cd ..");
+    history_arena_push(buf, n, "pwd");
+
+    const char *newest = history_arena_command_at(buf, n, 0);
+    if (!newest || strcmp(newest, "pwd") != 0)
+        TEST_ERRORF("position 0", "expected 'pwd', got '%s'", newest ? newest : "(null)");
+
+    const char *middle = history_arena_command_at(buf, n, 1);
+    if (!middle || strcmp(middle, "cd ..") != 0)
+        TEST_ERRORF("position 1", "expected 'cd ..', got '%s'", middle ? middle : "(null)");
+
+    const char *oldest = history_arena_command_at(buf, n, 2);
+    if (!oldest || strcmp(oldest, "ls") != 0)
+        TEST_ERRORF("position 2 (oldest)", "expected 'ls', got '%s'", oldest ? oldest : "(null)");
+
+    if (history_arena_command_at(buf, n, 3) != NULL)
+        TEST_ERRORF("out of range", "expected NULL past the oldest entry");
+    if (history_arena_command_at(buf, n, -1) != NULL)
+        TEST_ERRORF("negative position", "expected NULL for negative position");
+}
+
+static void test_arena_command_at_on_empty_arena_is_null(void)
+{
+    unsigned char buf[64];
+    int n = (int)sizeof(buf);
+    history_arena_reset(buf, n);
+
+    if (history_arena_command_at(buf, n, 0) != NULL)
+        TEST_ERRORF("empty arena", "expected NULL for position 0 with no entries");
+}
+
 static void test_history_record_lookup_delete(void)
 {
     History h = history_create();
@@ -141,6 +179,43 @@ static void test_history_record_lookup_delete(void)
         TEST_ERRORF("delete", "folder entry should be gone after delete");
     if (history_lookup(&h, "/home/user/other") == NULL)
         TEST_ERRORF("delete unrelated", "unrelated folder should survive delete");
+
+    history_free(&h);
+}
+
+static void test_folder_enumeration_covers_every_recorded_folder(void)
+{
+    History h = history_create();
+
+    if (history_folder_count(&h) != 0)
+        TEST_ERRORF("empty history", "folder_count = %d, want 0", history_folder_count(&h));
+    if (history_folder_path_at(&h, 0) != NULL)
+        TEST_ERRORF("empty history", "expected NULL path at index 0");
+
+    history_record_command(&h, "/folder/a", "cmd");
+    history_record_command(&h, "/folder/b", "cmd");
+    history_record_command(&h, "/folder/c", "cmd");
+
+    if (history_folder_count(&h) != 3)
+        TEST_ERRORF("populated history", "folder_count = %d, want 3", history_folder_count(&h));
+
+    int seen_a = 0, seen_b = 0, seen_c = 0;
+    for (int i = 0; i < history_folder_count(&h); i++) {
+        const char *path = history_folder_path_at(&h, i);
+        if (!path)
+            TEST_ERRORF("populated history", "unexpected NULL path at index %d", i);
+        else if (strcmp(path, "/folder/a") == 0)
+            seen_a = 1;
+        else if (strcmp(path, "/folder/b") == 0)
+            seen_b = 1;
+        else if (strcmp(path, "/folder/c") == 0)
+            seen_c = 1;
+    }
+    if (!seen_a || !seen_b || !seen_c)
+        TEST_ERRORF("populated history", "expected all three folders to be enumerated");
+
+    if (history_folder_path_at(&h, 3) != NULL)
+        TEST_ERRORF("out of range", "expected NULL past the last folder");
 
     history_free(&h);
 }
@@ -375,7 +450,10 @@ void test_history(void)
     test_arena_push_no_room_fails();
     test_arena_dedup_reorders_without_duplicating_text();
     test_arena_evict_drops_oldest_and_reclaims_space();
+    test_arena_command_at_indexes_by_recency();
+    test_arena_command_at_on_empty_arena_is_null();
     test_history_record_lookup_delete();
+    test_folder_enumeration_covers_every_recorded_folder();
     test_persistence_write_then_load_round_trip_single_folder();
     test_persistence_write_then_load_round_trip_multiple_folders();
     test_persistence_missing_file_means_empty();

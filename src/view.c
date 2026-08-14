@@ -8,7 +8,8 @@
     "up/down: Navigate  left: Parent  right/Enter: Open  r: Rename  " \
     "n: New  space: Preview  c: Yank copy  m: Yank move  " \
     "p: Paste  s: Sort  d: Group  o: Next page  a: Toggle hidden  Backspace: Trash  x: Delete  " \
-    ": Run command  f: Filter  F: Filter (regex)  g: Glob  G: Glob (regex)  Esc: Cancel yank  q: Quit"
+    ": Run command  Up/Down (in command prompt): Recall history  " \
+    "f: Filter  F: Filter (regex)  g: Glob  G: Glob (regex)  Esc: Cancel yank  q: Quit"
 
 static void add_line(View *v, StyleTag style, const char *fmt, ...)
 {

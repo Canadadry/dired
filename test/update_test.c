@@ -4,6 +4,7 @@
 #include "../src/cmd.h"
 #include "../src/update.h"
 #include "../src/helpers.h"
+#include "../src/history.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -2294,6 +2295,175 @@ static void test_validate_run_cmd_carries_selected_path(void)
     }
 }
 
+static History make_recall_history_fixture(void)
+{
+    History h = history_create();
+    history_record_command(&h, "/tmp", "ls");
+    history_record_command(&h, "/tmp", "git status");
+    history_record_command(&h, "/tmp", "make test");
+    return h;
+}
+
+static Model make_recall_model(History *h, const char *edit_buf, int recall_cursor,
+                                const char *stash, size_t stash_len)
+{
+    Model m = make_edit_model(MODE_RUN_CMD, edit_buf, 1, 3);
+    m.history = h;
+    m.recall_cursor = recall_cursor;
+    strcpy(m.recall_stash, stash);
+    m.recall_stash_len = stash_len;
+    return m;
+}
+
+static void test_recall_prev_first_press_recalls_most_recent_and_stashes_draft(void)
+{
+    History h = make_recall_history_fixture();
+    Model in = make_recall_model(&h, "draft", 0, "", 0);
+    Msg msg = { .type = MSG_RECALL_PREV };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (strcmp(out.edit_buf, "!make test") != 0)
+        TEST_ERRORF("recall prev first press", "edit_buf = '%s', want '!make test'", out.edit_buf);
+    if (out.edit_len != strlen("!make test"))
+        TEST_ERRORF("recall prev first press", "edit_len = %zu, want %zu", out.edit_len, strlen("!make test"));
+    if (out.recall_cursor != 1)
+        TEST_ERRORF("recall prev first press", "recall_cursor = %d, want 1", out.recall_cursor);
+    if (strcmp(out.recall_stash, "draft") != 0)
+        TEST_ERRORF("recall prev first press", "recall_stash = '%s', want 'draft'", out.recall_stash);
+    if (out.recall_stash_len != strlen("draft"))
+        TEST_ERRORF("recall prev first press", "recall_stash_len = %zu, want %zu", out.recall_stash_len, strlen("draft"));
+
+    history_free(&h);
+}
+
+static void test_recall_prev_repeated_walks_older_and_clamps_at_oldest(void)
+{
+    History h = make_recall_history_fixture();
+
+    Model second = make_recall_model(&h, "!make test", 1, "draft", 5);
+    Msg msg = { .type = MSG_RECALL_PREV };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &second, &out, &cmd);
+
+    if (strcmp(out.edit_buf, "!git status") != 0)
+        TEST_ERRORF("recall prev second press", "edit_buf = '%s', want '!git status'", out.edit_buf);
+    if (out.recall_cursor != 2)
+        TEST_ERRORF("recall prev second press", "recall_cursor = %d, want 2", out.recall_cursor);
+
+    Model third = make_recall_model(&h, "!git status", 2, "draft", 5);
+    update(&msg, &third, &out, &cmd);
+
+    if (strcmp(out.edit_buf, "!ls") != 0)
+        TEST_ERRORF("recall prev third press (oldest)", "edit_buf = '%s', want '!ls'", out.edit_buf);
+    if (out.recall_cursor != 3)
+        TEST_ERRORF("recall prev third press (oldest)", "recall_cursor = %d, want 3", out.recall_cursor);
+
+    Model at_oldest = make_recall_model(&h, "!ls", 3, "draft", 5);
+    update(&msg, &at_oldest, &out, &cmd);
+
+    if (strcmp(out.edit_buf, "!ls") != 0)
+        TEST_ERRORF("recall prev clamps at oldest", "edit_buf = '%s', want '!ls' (unchanged)", out.edit_buf);
+    if (out.recall_cursor != 3)
+        TEST_ERRORF("recall prev clamps at oldest", "recall_cursor = %d, want 3 (unchanged)", out.recall_cursor);
+
+    history_free(&h);
+}
+
+static void test_recall_next_walks_toward_newest(void)
+{
+    History h = make_recall_history_fixture();
+    Model in = make_recall_model(&h, "!ls", 3, "draft", 5);
+    Msg msg = { .type = MSG_RECALL_NEXT };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (strcmp(out.edit_buf, "!git status") != 0)
+        TEST_ERRORF("recall next", "edit_buf = '%s', want '!git status'", out.edit_buf);
+    if (out.recall_cursor != 2)
+        TEST_ERRORF("recall next", "recall_cursor = %d, want 2", out.recall_cursor);
+
+    history_free(&h);
+}
+
+static void test_recall_next_past_newest_restores_stash_and_resets(void)
+{
+    History h = make_recall_history_fixture();
+    Model in = make_recall_model(&h, "!make test", 1, "draft", 5);
+    Msg msg = { .type = MSG_RECALL_NEXT };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (strcmp(out.edit_buf, "draft") != 0)
+        TEST_ERRORF("recall next past newest", "edit_buf = '%s', want 'draft'", out.edit_buf);
+    if (out.edit_len != 5)
+        TEST_ERRORF("recall next past newest", "edit_len = %zu, want 5", out.edit_len);
+    if (out.recall_cursor != 0)
+        TEST_ERRORF("recall next past newest", "recall_cursor = %d, want 0 (not cycling)", out.recall_cursor);
+
+    history_free(&h);
+}
+
+static void test_recall_prev_and_next_on_zero_history_folder_is_noop(void)
+{
+    History h = history_create();
+    Model prev_in = make_recall_model(&h, "draft", 0, "", 0);
+    Msg prev_msg = { .type = MSG_RECALL_PREV };
+    Model out;
+    Cmd cmd;
+
+    update(&prev_msg, &prev_in, &out, &cmd);
+
+    if (strcmp(out.edit_buf, "draft") != 0)
+        TEST_ERRORF("recall prev zero history", "edit_buf = '%s', want 'draft' (unchanged)", out.edit_buf);
+    if (out.recall_cursor != 0)
+        TEST_ERRORF("recall prev zero history", "recall_cursor = %d, want 0 (unchanged)", out.recall_cursor);
+
+    Model next_in = make_recall_model(&h, "draft", 0, "", 0);
+    Msg next_msg = { .type = MSG_RECALL_NEXT };
+    update(&next_msg, &next_in, &out, &cmd);
+
+    if (strcmp(out.edit_buf, "draft") != 0)
+        TEST_ERRORF("recall next zero history", "edit_buf = '%s', want 'draft' (unchanged)", out.edit_buf);
+    if (out.recall_cursor != 0)
+        TEST_ERRORF("recall next zero history", "recall_cursor = %d, want 0 (unchanged)", out.recall_cursor);
+
+    history_free(&h);
+}
+
+static void test_recall_is_scoped_to_mode_run_cmd(void)
+{
+    History h = make_recall_history_fixture();
+    AppMode other_modes[] = { MODE_FILTER, MODE_GLOB, MODE_RENAME, MODE_CREATE };
+
+    for (size_t i = 0; i < sizeof(other_modes) / sizeof(other_modes[0]); i++) {
+        Model in = make_recall_model(&h, "draft", 0, "", 0);
+        in.mode = other_modes[i];
+        Msg msg = { .type = MSG_RECALL_PREV };
+        Model out;
+        Cmd cmd;
+
+        update(&msg, &in, &out, &cmd);
+
+        if (strcmp(out.edit_buf, "draft") != 0)
+            TEST_ERRORF("recall scoped to run cmd", "mode %d: edit_buf = '%s', want 'draft' (unchanged)",
+                        other_modes[i], out.edit_buf);
+        if (out.recall_cursor != 0)
+            TEST_ERRORF("recall scoped to run cmd", "mode %d: recall_cursor = %d, want 0 (unchanged)",
+                        other_modes[i], out.recall_cursor);
+    }
+
+    history_free(&h);
+}
+
 static void test_validate_rename(void)
 {
     typedef struct {
@@ -3663,6 +3833,12 @@ void test_update(void)
     test_validate_create();
     test_validate_run_cmd();
     test_validate_run_cmd_carries_selected_path();
+    test_recall_prev_first_press_recalls_most_recent_and_stashes_draft();
+    test_recall_prev_repeated_walks_older_and_clamps_at_oldest();
+    test_recall_next_walks_toward_newest();
+    test_recall_next_past_newest_restores_stash_and_resets();
+    test_recall_prev_and_next_on_zero_history_folder_is_noop();
+    test_recall_is_scoped_to_mode_run_cmd();
     test_validate_rename();
     test_rename_clears_yank_when_source_matches();
     test_rename_leaves_yank_for_different_entry();

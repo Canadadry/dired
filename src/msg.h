@@ -23,6 +23,8 @@ typedef enum {
     MSG_RENAME,
     MSG_NEW,
     MSG_RUN_CMD,
+    MSG_RECALL_PREV,
+    MSG_RECALL_NEXT,
     MSG_FILTER_PLAIN,
     MSG_FILTER_REGEX,
     MSG_GLOB_PLAIN,

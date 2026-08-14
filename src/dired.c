@@ -8,6 +8,7 @@
 #include "trash.h"
 #include "archive.h"
 #include "pager.h"
+#include "history.h"
 #include "../vendor/termbox2.h"
 
 #include <ctype.h>
@@ -29,6 +30,9 @@
 
 static PreviewRule g_preview_rules[PREVIEW_RULE_MAX];
 static int g_preview_rule_count = 0;
+
+static History g_history;
+static char g_history_path[PATH_MAX_LEN];
 
 static const char PREVIEW_CONFIG_TEMPLATE[] =
     "# ~/.config/dired -- per-extension preview commands\n"
@@ -634,6 +638,14 @@ static Msg execute_build_glob(const char *cwd, GlobType glob_type, const char *p
     return msg;
 }
 
+static void record_run_cmd(const char *cwd, const char *cmd_text)
+{
+    history_record_command(&g_history, cwd, cmd_text);
+    const CommandArena *arena = history_lookup(&g_history, cwd);
+    if (arena && g_history_path[0] != '\0')
+        history_write_folder_slot(g_history_path, cwd, arena);
+}
+
 static Msg execute_run_cmd(const char *cwd, const char *cmd_text, const char *selected_path)
 {
     tb_shutdown();
@@ -648,7 +660,33 @@ static Msg execute_run_cmd(const char *cwd, const char *cmd_text, const char *se
     run_piped(sh_argv, pager_argv, cwd);
 
     tb_init();
+
+    record_run_cmd(cwd, cmd_text);
+
     return (Msg){ .type = MSG_OP_SUCCEEDED };
+}
+
+static void forget_deleted_folder_history(const char *path)
+{
+    history_delete_folder(&g_history, path);
+    if (g_history_path[0] != '\0')
+        history_delete_folder_slot(g_history_path, path);
+}
+
+static Msg execute_cmd_delete(const char *path, int is_dir)
+{
+    Msg outcome = execute_delete(path, is_dir);
+    if (outcome.type == MSG_OP_SUCCEEDED && is_dir)
+        forget_deleted_folder_history(path);
+    return outcome;
+}
+
+static Msg execute_cmd_trash(const char *path, int is_dir)
+{
+    Msg outcome = trash_item(path);
+    if (outcome.type == MSG_OP_SUCCEEDED && is_dir)
+        forget_deleted_folder_history(path);
+    return outcome;
 }
 
 static Msg execute_cmd(const Cmd *cmd)
@@ -659,8 +697,8 @@ static Msg execute_cmd(const Cmd *cmd)
     case CMD_RENAME:        return execute_rename(cmd->path, cmd->path2);
     case CMD_CREATE_FILE:   return execute_create_file(cmd->path);
     case CMD_CREATE_DIR:    return execute_create_dir(cmd->path);
-    case CMD_DELETE:        return execute_delete(cmd->path, cmd->is_dir);
-    case CMD_TRASH:         return trash_item(cmd->path);
+    case CMD_DELETE:        return execute_cmd_delete(cmd->path, cmd->is_dir);
+    case CMD_TRASH:         return execute_cmd_trash(cmd->path, cmd->is_dir);
     case CMD_LAUNCH_EDITOR: return execute_launch_editor(cmd->path);
     case CMD_PREVIEW:       return execute_preview(cmd->path);
     case CMD_LIST_ARCHIVE:  return execute_list_archive(cmd->path, cmd->archive_format, cmd->path2, cmd->is_dir);
@@ -782,6 +820,10 @@ static Msg translate_event(struct tb_event ev, AppMode mode)
             msg.type = MSG_ACTIVATE;
         else if (ev.key == TB_KEY_BACKSPACE || ev.key == TB_KEY_BACKSPACE2 || ev.key == TB_KEY_DELETE)
             msg.type = MSG_DELETE;
+        else if (mode == MODE_RUN_CMD && ev.key == TB_KEY_ARROW_UP)
+            msg.type = MSG_RECALL_PREV;
+        else if (mode == MODE_RUN_CMD && ev.key == TB_KEY_ARROW_DOWN)
+            msg.type = MSG_RECALL_NEXT;
         else if (ev.ch != 0 && isprint((int)ev.ch)) {
             msg.type = MSG_TEXT_INPUT;
             msg.ch = (char)ev.ch;
@@ -885,6 +927,7 @@ static void print_help(void)
     printf("  r             Rename selected file/directory\n");
     printf("  n             Create a new file or directory (trailing / for a directory)\n");
     printf("  :             Run a shell command (prefix with !, e.g. !unzip $FILE); $FILE is the selected entry\n");
+    printf("                Up/Down while composing recall this folder's command history\n");
     printf("  f             Filter listing by filename (plain substring)\n");
     printf("  F             Filter listing by filename (extended regex)\n");
     printf("  g             Recursively glob the current directory tree by filename (plain substring)\n");
@@ -954,6 +997,36 @@ static void load_preview_config(void)
     g_preview_rule_count = count;
 }
 
+static void sweep_deleted_history_folders(void)
+{
+    int deleted;
+    do {
+        deleted = 0;
+        int count = history_folder_count(&g_history);
+        for (int i = 0; i < count; i++) {
+            const char *path = history_folder_path_at(&g_history, i);
+            struct stat st;
+            if (stat(path, &st) != 0 || !S_ISDIR(st.st_mode)) {
+                char path_copy[PATH_MAX_LEN];
+                snprintf(path_copy, sizeof(path_copy), "%s", path);
+                forget_deleted_folder_history(path_copy);
+                deleted = 1;
+                break;
+            }
+        }
+    } while (deleted);
+}
+
+static void load_history(void)
+{
+    history_load_default(&g_history);
+
+    if (history_default_path(g_history_path, sizeof(g_history_path)) != 0)
+        g_history_path[0] = '\0';
+
+    sweep_deleted_history_folders();
+}
+
 int main(int argc, char **argv)
 {
     for (int i = 1; i < argc; i++) {
@@ -964,12 +1037,14 @@ int main(int argc, char **argv)
     }
 
     load_preview_config();
+    load_history();
 
     tb_init();
 
     Model model;
     memset(&model, 0, sizeof(model));
     model.mode = MODE_NAV;
+    model.history = &g_history;
     getcwd(model.current_path, sizeof(model.current_path));
     model.term_height = tb_height();
     model.term_width = tb_width();
