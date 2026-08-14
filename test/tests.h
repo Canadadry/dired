@@ -9,5 +9,7 @@ void test_trash(void);
 void test_archive(void);
 void test_pager(void);
 void test_gitstatus(void);
+void test_hashmap(void);
+void test_history(void);
 
 #endif // DIRED_TESTS_H

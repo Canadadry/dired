@@ -1,7 +1,7 @@
 ---
 title: "Per-folder history storage: hashmap + compact arena + disk persistence"
 description: "dired needs a fast, disk-persisted way to map an absolute folder path to a compact, self-limiting list of past commands, as the storage foundation for a future command-history-recall feature."
-status: needs-triage
+status: done
 ---
 
 ## Problem Statement

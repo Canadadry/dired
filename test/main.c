@@ -11,6 +11,8 @@ int main(void) {
     TEST_GROUP(test_archive);
     TEST_GROUP(test_pager);
     TEST_GROUP(test_gitstatus);
+    TEST_GROUP(test_hashmap);
+    TEST_GROUP(test_history);
 
     test_done();
     return 0;
