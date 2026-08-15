@@ -272,10 +272,10 @@ static void test_visible_entry_rows(void)
     } Case;
 
     Case cases[] = {
-        {"typical terminal, no virtual line", 24, 0, 21},
-        {"typical terminal, with virtual line", 24, 1, 20},
-        {"short terminal, no virtual line", 10, 0, 7},
-        {"minimum chrome-only terminal", 3, 0, 0},
+        {"typical terminal, no virtual line", 24, 0, 22},
+        {"typical terminal, with virtual line", 24, 1, 21},
+        {"short terminal, no virtual line", 10, 0, 8},
+        {"minimum chrome-only terminal", 2, 0, 0},
     };
 
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {

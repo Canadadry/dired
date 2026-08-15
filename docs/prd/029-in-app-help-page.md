@@ -1,7 +1,7 @@
 ---
 title: "In-app help page (h key)"
 description: "The only way to see the full key-binding list is the -help CLI flag (before dired starts) or a cramped, truncated one-line footer while running; there's no way to review the controls from inside a running session."
-status: needs-triage
+status: done
 ---
 
 ## Problem Statement

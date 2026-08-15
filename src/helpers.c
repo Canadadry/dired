@@ -116,7 +116,7 @@ static const char *entry_ext(const char *name)
 
 int visible_entry_rows(int term_height, int has_virtual_line)
 {
-    return term_height - 3 - (has_virtual_line ? 1 : 0);
+    return term_height - 2 - (has_virtual_line ? 1 : 0);
 }
 
 int page_snap_offset(int selected, int entry_count, int visible_rows)

@@ -34,6 +34,7 @@ typedef enum {
     MSG_TOGGLE_MARK_ALL,
     MSG_TOGGLE_RANGE_SELECT,
     MSG_PREVIEW,
+    MSG_HELP,
     MSG_YANK_COPY,
     MSG_YANK_MOVE,
     MSG_PASTE,

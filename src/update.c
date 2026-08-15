@@ -549,6 +549,11 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
         break;
     }
 
+    case MSG_HELP: {
+        out_cmd->type = CMD_HELP;
+        break;
+    }
+
     case MSG_ACTIVATE: {
         if (out_model->selected >= out_model->entry_count)
             break;

@@ -4,16 +4,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#define HELP_TEXT \
-    "up/down: Navigate  left: Parent  right/Enter: Open  r: Rename  " \
-    "n: New  space: Preview  c: Yank copy  m: Yank move  " \
-    "p: Paste  s: Sort  d: Group  o: Next page  a: Toggle hidden  Backspace: Trash  x: Delete  " \
-    ": Run command  Up/Down (in command prompt): Recall history  " \
-    "f: Filter  F: Filter (regex)  g: Glob  G: Glob (regex)  " \
-    "v: Toggle selection mode  space (in selection mode): Toggle mark  " \
-    "r (in selection mode): Range select  t (in selection mode): Select all/none  " \
-    "Esc: Cancel yank  q: Quit"
-
 static void add_line(View *v, StyleTag style, const char *fmt, ...)
 {
     Line *line = &v->lines[v->line_count++];
@@ -168,8 +158,6 @@ View view(const Model *model)
 
     if (model_has_virtual_line(model))
         add_virtual_line(&v, model);
-
-    add_line(&v, STYLE_NORMAL, HELP_TEXT);
 
     return v;
 }

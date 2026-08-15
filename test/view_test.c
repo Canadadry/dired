@@ -211,8 +211,8 @@ static void test_view_run_cmd_echoes_on_prompt_line(void)
     if (strcmp(v.lines[1].text, ":!ls -la") != 0) {
         TEST_ERRORF("run cmd", "lines[1] = '%s', want ':!ls -la'", v.lines[1].text);
     }
-    if (v.line_count != 4) {
-        TEST_ERRORF("run cmd", "line_count = %d, want 4 (path, prompt, 1 entry, help - no virtual row)", v.line_count);
+    if (v.line_count != 3) {
+        TEST_ERRORF("run cmd", "line_count = %d, want 3 (path, prompt, 1 entry - no virtual row)", v.line_count);
     }
 }
 
@@ -512,12 +512,12 @@ static void test_view_paginates_long_list(void)
 
     View v = view(&m);
 
-    int entry_lines = v.line_count - 3;
-    if (entry_lines != 21) {
-        TEST_ERRORF("paginate long list", "entry line count = %d, want 21", entry_lines);
+    int entry_lines = v.line_count - 2;
+    if (entry_lines != 22) {
+        TEST_ERRORF("paginate long list", "entry line count = %d, want 22", entry_lines);
         return;
     }
-    for (int i = 0; i < 21; i++) {
+    for (int i = 0; i < 22; i++) {
         char name[16];
         snprintf(name, sizeof(name), "file%d", i);
         if (!strstr(v.lines[2 + i].text, name)) {
@@ -525,7 +525,7 @@ static void test_view_paginates_long_list(void)
                         2 + i, v.lines[2 + i].text, name);
         }
     }
-    for (int i = 21; i < 25; i++) {
+    for (int i = 22; i < 25; i++) {
         char name[16];
         snprintf(name, sizeof(name), "file%d", i);
         for (int l = 0; l < v.line_count; l++) {
@@ -558,7 +558,7 @@ static void set_paged_entries(Model *m, int count)
 
 static void assert_no_entry_row_has_marker(View *v, const char *label)
 {
-    for (int i = 2; i < v->line_count - 1; i++) {
+    for (int i = 2; i < v->line_count; i++) {
         if (strstr(v->lines[i].text, "<-") || strstr(v->lines[i].text, "->")) {
             TEST_ERRORF(label, "lines[%d] = '%s', want no marker on an entry/virtual row", i, v->lines[i].text);
         }

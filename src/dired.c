@@ -57,6 +57,35 @@ static const char PREVIEW_CONFIG_TEMPLATE[] =
     "# tar.gz=tar -tzvf $FILE\n"
     "# gz=zcat $FILE\n";
 
+static const char HELP_CONTENT[] =
+    "dired - terminal file explorer\n\n"
+    "Controls:\n"
+    "  up/down       Navigate\n"
+    "  left          Go to parent directory\n"
+    "  right/Enter   Open file or enter directory\n"
+    "  r             Rename selected file/directory; in selection mode, range-select from an anchor entry to the cursor (press again to stop)\n"
+    "  n             Create a new file or directory (trailing / for a directory)\n"
+    "  :             Run a shell command (prefix with !, e.g. !unzip $FILE); $FILE is the selected entry\n"
+    "                Up/Down while composing recall this folder's command history\n"
+    "  f             Filter listing by filename (plain substring)\n"
+    "  F             Filter listing by filename (extended regex)\n"
+    "  g             Recursively glob the current directory tree by filename (plain substring)\n"
+    "  G             Recursively glob the current directory tree by filename (extended regex)\n"
+    "  v             Enter/leave selection mode to mark multiple entries for a batch action (Esc also leaves; marks are discarded on leave)\n"
+    "  t             Select all / select none in the current directory (selection mode only)\n"
+    "  Esc           Cancel a pending yank (nav); cancel composing (Rename/Create/Filter/Run command)\n"
+    "  space         Preview selected file (text pages, binary is hex-dumped); in selection mode, toggle a mark on the cursor's entry\n"
+    "  c             Yank copy\n"
+    "  m             Yank move\n"
+    "  p             Paste\n"
+    "  s             Cycle sort key/direction (name, date, size, extension)\n"
+    "  d             Cycle directory grouping (first, last, mixed)\n"
+    "  o             Jump to the next page (wraps to the first page)\n"
+    "  a             Toggle hidden files\n"
+    "  Backspace     Move selected file/directory to trash (~/.trash)\n"
+    "  x             Permanently delete selected file/directory (bypasses trash)\n"
+    "  q             Quit\n";
+
 /* main() is the only impure code in the program: the only place that calls
  * a tb_* function, and the only place that touches the filesystem or spawns
  * a process. Everything it decides is delegated to the pure update()/view()
@@ -567,6 +596,39 @@ static Msg execute_open_archive_member(const char *archive_path, ArchiveFormat f
     return result;
 }
 
+static Msg execute_help(void)
+{
+    const char *tmpdir = getenv("TMPDIR");
+    if (!tmpdir || tmpdir[0] == '\0')
+        tmpdir = "/tmp";
+
+    char tmp_dir[PATH_MAX_LEN];
+    snprintf(tmp_dir, sizeof(tmp_dir), "%s/dired-help-XXXXXX", tmpdir);
+
+    if (!mkdtemp(tmp_dir))
+        return msg_failed("help: %s", strerror(errno));
+
+    char tmp_path[PATH_MAX_LEN];
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+    snprintf(tmp_path, sizeof(tmp_path), "%s/help.txt", tmp_dir);
+#pragma GCC diagnostic pop
+
+    FILE *f = fopen(tmp_path, "w");
+    if (!f) {
+        Msg result = msg_failed("help: %s", strerror(errno));
+        rmdir(tmp_dir);
+        return result;
+    }
+    fputs(HELP_CONTENT, f);
+    fclose(f);
+
+    Msg result = execute_preview(tmp_path);
+    remove(tmp_path);
+    rmdir(tmp_dir);
+    return result;
+}
+
 static void walk_glob_matches(const char *abs_dir, const char *rel_prefix,
                                FilterType filter_type, const char *pattern,
                                Entry *out_entries, int *out_count, int *out_truncated)
@@ -755,6 +817,7 @@ static Msg execute_cmd(const Cmd *cmd)
     case CMD_TRASH:         return execute_cmd_trash(cmd);
     case CMD_LAUNCH_EDITOR: return execute_launch_editor(cmd->path);
     case CMD_PREVIEW:       return execute_preview(cmd->path);
+    case CMD_HELP:          return execute_help();
     case CMD_LIST_ARCHIVE:  return execute_list_archive(cmd->path, cmd->archive_format, cmd->path2, cmd->is_dir);
     case CMD_EXTRACT_MEMBER: return execute_extract_member(cmd->path, cmd->archive_format, cmd->path2);
     case CMD_EXTRACT_MEMBER_TO: return execute_extract_member_to(cmd->path, cmd->archive_format, cmd->path2, cmd->path3);
@@ -959,6 +1022,8 @@ static Msg translate_event(struct tb_event ev, AppMode mode)
         msg.type = MSG_DELETE_PERMANENT;
     else if (ev.ch == 'q')
         msg.type = MSG_QUIT;
+    else if (ev.ch == 'h')
+        msg.type = MSG_HELP;
     else if (ev.ch != 0) {
         msg.type = MSG_TEXT_INPUT;
         msg.ch = (char)ev.ch;
@@ -986,34 +1051,7 @@ static int detect_window_size(int *cols, int *rows)
 
 static void print_help(void)
 {
-    printf("dired - terminal file explorer\n\n");
-    printf("Usage: dired [-help]\n\n");
-    printf("Controls:\n");
-    printf("  up/down       Navigate\n");
-    printf("  left          Go to parent directory\n");
-    printf("  right/Enter   Open file or enter directory\n");
-    printf("  r             Rename selected file/directory; in selection mode, range-select from an anchor entry to the cursor (press again to stop)\n");
-    printf("  n             Create a new file or directory (trailing / for a directory)\n");
-    printf("  :             Run a shell command (prefix with !, e.g. !unzip $FILE); $FILE is the selected entry\n");
-    printf("                Up/Down while composing recall this folder's command history\n");
-    printf("  f             Filter listing by filename (plain substring)\n");
-    printf("  F             Filter listing by filename (extended regex)\n");
-    printf("  g             Recursively glob the current directory tree by filename (plain substring)\n");
-    printf("  G             Recursively glob the current directory tree by filename (extended regex)\n");
-    printf("  v             Enter/leave selection mode to mark multiple entries for a batch action (Esc also leaves; marks are discarded on leave)\n");
-    printf("  t             Select all / select none in the current directory (selection mode only)\n");
-    printf("  Esc           Cancel a pending yank (nav); cancel composing (Rename/Create/Filter/Run command)\n");
-    printf("  space         Preview selected file (text pages, binary is hex-dumped); in selection mode, toggle a mark on the cursor's entry\n");
-    printf("  c             Yank copy\n");
-    printf("  m             Yank move\n");
-    printf("  p             Paste\n");
-    printf("  s             Cycle sort key/direction (name, date, size, extension)\n");
-    printf("  d             Cycle directory grouping (first, last, mixed)\n");
-    printf("  o             Jump to the next page (wraps to the first page)\n");
-    printf("  a             Toggle hidden files\n");
-    printf("  Backspace     Move selected file/directory to trash (~/.trash)\n");
-    printf("  x             Permanently delete selected file/directory (bypasses trash)\n");
-    printf("  q             Quit\n\n");
+    printf("%s\n", HELP_CONTENT);
     printf("Build time: %s\n", BUILD_TIMESTAMP);
 
     int cols, rows;
