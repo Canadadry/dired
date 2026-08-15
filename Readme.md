@@ -42,31 +42,34 @@ ssh user@remotehost 'cd /path/to/dired && ./builder debug clean dired'
 
 4. Controls:
 
+Press `h` inside dired at any time to see this same reference without leaving the app.
+
 ```
-↑↓: Navigate
-←: Go to parent directory
-→ / Enter: Open file or enter directory
-r: Rename selected file/directory
-   In selection mode, range-selects from an anchor entry to the cursor, marking or unmarking based on the anchor's state (press r again to stop)
-n: Create a new file or directory (trailing / for a directory)
-v: Enter/leave selection mode to mark multiple entries for a batch action (marks are discarded on leave; Esc also leaves)
-   While marks exist, Backspace/x/c/m/p (trash/delete/yank copy/yank move/paste) act on every marked entry instead of just the cursor's
-t: Select all / select none in the current directory (selection mode only)
-Space: Preview selected file (text pages, binary is hex-dumped — both paged via less)
-   In selection mode, toggles a mark on the entry under the cursor instead of previewing
-:: Run a shell command (prefix with !, e.g. !unzip $FILE), output paged. $FILE is the selected entry's path
-   Up/Down while composing recall this folder's previously run commands
-f: Filter listing by filename (plain substring)
-F: Filter listing by filename (extended regex)
-g: Recursively glob the current directory tree by filename (plain substring), Enter to search
-G: Recursively glob the current directory tree by filename (extended regex), Enter to search
-Esc: Cancel a pending yank (nav); cancel composing (Rename/Create/Filter/Run command)
-s: Cycle sort key/direction (name, date, size, extension — asc/desc)
-d: Cycle directory grouping (first, last, mixed)
-a: Toggle hidden files (dotfiles hidden by default)
-Backspace: Move selected file/directory to trash (~/.trash)
-x: Permanently delete selected file/directory (bypasses trash)
-q: Quit
+Two modes: Navigation (default) and Selection (v). Selection mode marks
+multiple entries for one batch action.
+
+Navigation mode
+  up/down      Navigate          f            Filter (plain)
+  left         Parent dir        F            Filter (regex)
+  right/Enter  Open/enter        g            Glob (plain)
+  r            Rename            G            Glob (regex)
+  n            New file/dir      v            Selection mode
+  :!           Run command       space        Preview
+  c            Yank copy         s            Cycle sort
+  m            Yank move         d            Cycle group
+  p            Paste             o            Next page
+  Backspace    Trash             a            Toggle hidden
+  x            Delete            h            Help
+  Esc          Cancel yank       q            Quit
+
+Selection mode (v)
+  v            Exit select       t            Select all/none
+  r            Range-select      space        Toggle mark
+  Esc          Cancel select     up/down      Extend range
+  c/m/p        Batch yank/paste  Backspace/x  Batch delete
+
+Command prompt (:!)
+  up/down      Recall history
 ```
 
 ## Per-Extension Preview Commands
