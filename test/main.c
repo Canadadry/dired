@@ -13,6 +13,7 @@ int main(void) {
     TEST_GROUP(test_gitstatus);
     TEST_GROUP(test_hashmap);
     TEST_GROUP(test_history);
+    TEST_GROUP(test_launch_group);
 
     test_done();
     return 0;

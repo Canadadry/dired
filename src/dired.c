@@ -905,7 +905,8 @@ static void style_colors(StyleTag style, uintattr_t *fg, uintattr_t *bg)
 
 static void render(const Model *model)
 {
-    View v = view(model);
+    static View v;
+    v = view(model);
 
     tb_clear();
     for (int i = 0; i < v.line_count; i++) {
@@ -1149,7 +1150,7 @@ int main(int argc, char **argv)
 
     tb_init();
 
-    Model model;
+    static Model model;
     memset(&model, 0, sizeof(model));
     model.mode = MODE_NAV;
     model.history = &g_history;
@@ -1163,7 +1164,7 @@ int main(int argc, char **argv)
     while (!model.should_quit) {
         if (cmd.type != CMD_NONE) {
             Msg outcome = execute_cmd(&cmd);
-            Model next_model;
+            static Model next_model;
             Cmd next_cmd;
             update(&outcome, &model, &next_model, &next_cmd);
             model = next_model;
@@ -1177,7 +1178,7 @@ int main(int argc, char **argv)
         tb_poll_event(&ev);
         Msg msg = translate_event(ev, model.mode);
 
-        Model next_model;
+        static Model next_model;
         Cmd next_cmd;
         update(&msg, &model, &next_model, &next_cmd);
         model = next_model;

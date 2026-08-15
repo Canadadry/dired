@@ -11,5 +11,6 @@ void test_pager(void);
 void test_gitstatus(void);
 void test_hashmap(void);
 void test_history(void);
+void test_launch_group(void);
 
 #endif // DIRED_TESTS_H

@@ -125,7 +125,7 @@ static void add_virtual_line(View *v, const Model *m)
 
 View view(const Model *model)
 {
-    View v;
+    static View v;
     v.line_count = 0;
 
     if (model->mode == MODE_SELECT) {
