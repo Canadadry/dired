@@ -20,8 +20,10 @@ Never relay a `QUESTION:` to the user; resolve it via a fresh `guideline`-skill 
 ### 1. Pick the next PRD
 Take the lowest-numbered file in `docs/prd/triage/*.md`; if none remain, report the PRDs completed this run and stop.
 
+If the PRD has an `## Implementation Chunks` section, treat each listed chunk as its own unit of work: run steps 2-4 once per chunk, in dependency order, each getting its own implementer agent, verifier agent, and commit (step 5). Only graduate the PRD out of triage after the final chunk is verified and committed. Otherwise treat the whole PRD as a single unit of work.
+
 ### 2. Spawn a fresh implementer agent
-Spawn a new, memoryless agent (no isolation) to implement the PRD via the `tdd` skill, update README, and never touch git.
+Spawn a new, memoryless agent (no isolation) to implement the PRD — or, if chunked, only the current chunk — via the `tdd` skill, update README, and never touch git.
 
 Reporting contract: end with `QUESTION:` + question if unsure, or `DONE:` + summary when finished — `DONE:` means implemented, not verified.
 
@@ -35,8 +37,10 @@ Spawn a second fresh, memoryless agent to rerun `make test` and confirm the diff
 
 It reports `VERIFIED:` to proceed to step 5, or `FAILED:` plus detail to stop the loop and report to the user without committing.
 
-### 5. Graduate, commit, push
-On `VERIFIED:`, mark the PRD done and `git mv` it out of triage yourself, then spawn a subagent to run the `git-commit` skill.
+### 5. Commit, and graduate if done
+On `VERIFIED:`, spawn a subagent to run the `git-commit` skill for this chunk (or the whole PRD, if unchunked).
+
+If more chunks remain, return to step 2 for the next chunk — the PRD stays in triage until its final chunk lands. Once the final (or only) chunk is committed, mark the PRD done and `git mv` it out of triage yourself.
 
 ### 6. Loop
 Return to step 1 for the next PRD; keep going until the triage queue is empty.

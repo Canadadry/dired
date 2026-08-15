@@ -15,6 +15,8 @@ A deep module (as opposed to a shallow module) is one which encapsulates a lot o
 
 Check with the user that these modules match their expectations. Check with the user which modules they want tests written for.
 
+For big features, actively search these modules for a natural build order; if one exists, add an Implementation Chunks section (after Implementation Decisions) listing each chunk in dependency order. If unsure whether the PRD needs cutting, ask the user.
+
 3. Write the PRD to `docs/prd/triage/<slug>.md` using the frontmatter and template below.
 
 <prd-template>
@@ -63,6 +65,10 @@ A list of implementation decisions that were made. This can include:
 Do NOT include specific file paths or code snippets. They may end up being outdated very quickly.
 
 Exception: if a prototype produced a snippet that encodes a decision more precisely than prose can (state machine, reducer, schema, type shape), inline it within the relevant decision and note briefly that it came from a prototype. Trim to the decision-rich parts — not a working demo, just the important bits.
+
+## Implementation Chunks
+
+For big features only, when a natural build order exists among the modules: each chunk listed in dependency order, so the feature can be built incrementally.
 
 ## Testing Decisions
 
