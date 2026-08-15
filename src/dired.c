@@ -1132,6 +1132,19 @@ static void load_history(void)
     sweep_deleted_history_folders();
 }
 
+#ifdef BUILD_DEBUG
+static void dired_test_sync_signal(void)
+{
+    const char *fd_str = getenv("DIRED_TEST_SYNC_FD");
+    if (!fd_str)
+        return;
+
+    int fd = atoi(fd_str);
+    char byte = 1;
+    write(fd, &byte, 1);
+}
+#endif
+
 int main(int argc, char **argv)
 {
     for (int i = 1; i < argc; i++) {
@@ -1169,6 +1182,9 @@ int main(int argc, char **argv)
         }
 
         render(&model);
+#ifdef BUILD_DEBUG
+        dired_test_sync_signal();
+#endif
 
         struct tb_event ev;
         tb_poll_event(&ev);
