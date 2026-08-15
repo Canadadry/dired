@@ -1,7 +1,7 @@
 ---
 title: "TTY integration test harness"
 description: "There is no way to drive dired as a real TUI process and assert on what it renders, so regressions like the git-status coloring bugs (PRDs 021, 024) can only be caught by hand-testing or by unit-testing internals in isolation."
-status: needs-triage
+status: done
 ---
 
 ## Problem Statement

@@ -1,0 +1,54 @@
+{
+  "fixture": {
+    "tree": {
+      "sub/file.txt": "hello\n"
+    },
+    "setup": [
+      [
+        "add",
+        "sub/file.txt"
+      ],
+      [
+        "commit",
+        "-m",
+        "init"
+      ]
+    ],
+    "mutate": {
+      "sub/file.txt": "hello world\n"
+    }
+  },
+  "steps": [
+    {
+      "keys": [
+        "<Right>"
+      ],
+      "expect": [
+        "Path: {fixture_root}/sub                                          ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "<bg-yellow><black>-rw-rw-r--       12 file.txt</black></bg-yellow>                                                    "
+      ]
+    }
+  ]
+}

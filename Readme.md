@@ -72,6 +72,26 @@ Command prompt (:!)
   up/down      Recall history
 ```
 
+## Testing
+
+Run the C unit test suite:
+
+```
+./builder debug test
+```
+
+Run the integration test suite (drives the real `diredd` binary under a
+pseudo-terminal and asserts on rendered screen output, including
+git-status colors, via JSON test files in `test/integration/`):
+
+```
+cd test/integration && make test
+```
+
+Requires `python3` and `make`; `make test` installs its own virtualenv
+and pinned dependencies automatically (or run `make install` first to
+do just that step).
+
 ## Per-Extension Preview Commands
 
 By default, previewing a file (Space) pages its text through `less -R`, or hex-dumps it through `hexdump -C` piped into `less -R` if it looks binary. You can override this per file extension by editing `~/.config/dired` — the file (and `~/.config` itself, if missing) is created automatically the first time you run dired, pre-filled with a commented-out example config to get you started (every line commented out, so it has no effect until you uncomment something).
