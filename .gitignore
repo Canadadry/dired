@@ -1,3 +1,4 @@
 build
 builder
 __pycache__
+test/integration/.venv
