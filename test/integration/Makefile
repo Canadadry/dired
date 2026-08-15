@@ -2,10 +2,12 @@ PYTHON := python3
 VENV := .venv
 VENV_PYTHON := $(VENV)/bin/python
 
-.PHONY: test venv clean
+.PHONY: test install venv clean
 
 test: venv
 	$(VENV_PYTHON) -m unittest discover -s . -p '*_test.py'
+
+install: venv
 
 venv: $(VENV)/.deps-installed
 
