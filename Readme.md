@@ -77,15 +77,18 @@ Command prompt (:!)
 Run the C unit test suite:
 
 ```
-./builder debug test
+make unit
 ```
 
-Run the integration test suite (drives the real `diredd` binary under a
-pseudo-terminal and asserts on rendered screen output, including
-git-status colors, via JSON test files in `test/integration/`):
+(equivalent to `./builder clean debug test`)
+
+Run the full test suite — unit tests, then the integration suite (drives
+the real `diredd` binary under a pseudo-terminal and asserts on rendered
+screen output, including git-status colors, via JSON test files in
+`test/integration/`):
 
 ```
-cd test/integration && make test
+make test
 ```
 
 Requires `python3` and `make`; `make test` installs its own virtualenv
