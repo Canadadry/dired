@@ -238,6 +238,48 @@ static void populate_entries_from_level(Model *out_model, const ArchiveLevel *le
                  out_model->entries, MAX_ENTRIES, &out_model->entry_count, &truncated);
 }
 
+static void refresh_current_listing(Model *out_model, Cmd *out_cmd)
+{
+    if (out_model->archive_depth > 0) {
+        ArchiveLevel *level = &out_model->archive_stack[out_model->archive_depth - 1];
+
+        if (out_model->glob_type != GLOB_NONE) {
+            FilterType filter_type = (out_model->glob_type == GLOB_REGEX) ? FILTER_REGEX : FILTER_PLAIN;
+
+            static ArchiveMember matches[MAX_ENTRIES];
+            int truncated = 0;
+            int count = archive_glob_matches(level->members, level->member_count,
+                                              level->subfolder, filter_type, out_model->glob_pattern,
+                                              matches, MAX_ENTRIES, &truncated);
+
+            out_model->entry_count = count;
+            for (int i = 0; i < count; i++)
+                member_to_entry(&matches[i], &out_model->entries[i]);
+            sort_entries(out_model->entries, out_model->entry_count, out_model->sort_mode, out_model->group_mode);
+            out_model->glob_capped = truncated;
+            return;
+        }
+
+        populate_entries_from_level(out_model, level);
+        return;
+    }
+
+    if (out_model->glob_type != GLOB_NONE) {
+        out_cmd->type = CMD_BUILD_GLOB;
+        out_cmd->glob_type = out_model->glob_type;
+        strncpy(out_cmd->cmd_text, out_model->glob_pattern, sizeof(out_cmd->cmd_text) - 1);
+        out_cmd->cmd_text[sizeof(out_cmd->cmd_text) - 1] = '\0';
+        strncpy(out_cmd->path, out_model->current_path, sizeof(out_cmd->path) - 1);
+        out_cmd->path[sizeof(out_cmd->path) - 1] = '\0';
+        return;
+    }
+
+    out_cmd->type = CMD_LOAD_DIR;
+    out_cmd->show_hidden = out_model->show_hidden;
+    strncpy(out_cmd->path, out_model->current_path, sizeof(out_cmd->path) - 1);
+    out_cmd->path[sizeof(out_cmd->path) - 1] = '\0';
+}
+
 static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
 {
     switch (msg->type) {
@@ -447,17 +489,7 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
 
     case MSG_TOGGLE_HIDDEN:
         out_model->show_hidden = !out_model->show_hidden;
-
-        if (out_model->archive_depth > 0) {
-            ArchiveLevel *level = &out_model->archive_stack[out_model->archive_depth - 1];
-            populate_entries_from_level(out_model, level);
-            break;
-        }
-
-        out_cmd->type = CMD_LOAD_DIR;
-        out_cmd->show_hidden = out_model->show_hidden;
-        strncpy(out_cmd->path, out_model->current_path, sizeof(out_cmd->path) - 1);
-        out_cmd->path[sizeof(out_cmd->path) - 1] = '\0';
+        refresh_current_listing(out_model, out_cmd);
         break;
 
     case MSG_QUIT:
@@ -963,44 +995,7 @@ static void handle_member_extracted(const Msg *msg, Model *out_model, Cmd *out_c
 
 static void handle_op_succeeded(Model *out_model, Cmd *out_cmd)
 {
-    if (out_model->archive_depth > 0) {
-        ArchiveLevel *level = &out_model->archive_stack[out_model->archive_depth - 1];
-
-        if (out_model->glob_type != GLOB_NONE) {
-            FilterType filter_type = (out_model->glob_type == GLOB_REGEX) ? FILTER_REGEX : FILTER_PLAIN;
-
-            static ArchiveMember matches[MAX_ENTRIES];
-            int truncated = 0;
-            int count = archive_glob_matches(level->members, level->member_count,
-                                              level->subfolder, filter_type, out_model->glob_pattern,
-                                              matches, MAX_ENTRIES, &truncated);
-
-            out_model->entry_count = count;
-            for (int i = 0; i < count; i++)
-                member_to_entry(&matches[i], &out_model->entries[i]);
-            sort_entries(out_model->entries, out_model->entry_count, out_model->sort_mode, out_model->group_mode);
-            out_model->glob_capped = truncated;
-            return;
-        }
-
-        populate_entries_from_level(out_model, level);
-        return;
-    }
-
-    if (out_model->glob_type != GLOB_NONE) {
-        out_cmd->type = CMD_BUILD_GLOB;
-        out_cmd->glob_type = out_model->glob_type;
-        strncpy(out_cmd->cmd_text, out_model->glob_pattern, sizeof(out_cmd->cmd_text) - 1);
-        out_cmd->cmd_text[sizeof(out_cmd->cmd_text) - 1] = '\0';
-        strncpy(out_cmd->path, out_model->current_path, sizeof(out_cmd->path) - 1);
-        out_cmd->path[sizeof(out_cmd->path) - 1] = '\0';
-        return;
-    }
-
-    out_cmd->type = CMD_LOAD_DIR;
-    out_cmd->show_hidden = out_model->show_hidden;
-    strncpy(out_cmd->path, out_model->current_path, sizeof(out_cmd->path) - 1);
-    out_cmd->path[sizeof(out_cmd->path) - 1] = '\0';
+    refresh_current_listing(out_model, out_cmd);
 }
 
 static void handle_dir_loaded(const Msg *msg, Model *out_model)

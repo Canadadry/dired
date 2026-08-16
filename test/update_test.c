@@ -4793,6 +4793,75 @@ static void test_toggle_hidden(void)
     }
 }
 
+static void test_toggle_hidden_preserves_glob_issues_build_glob_cmd(void)
+{
+    Model in = make_nav_model(3, 1);
+    strcpy(in.current_path, "/home/user");
+    in.show_hidden = 0;
+    in.glob_type = GLOB_PLAIN;
+    strcpy(in.glob_pattern, "report");
+    Msg msg = { .type = MSG_TOGGLE_HIDDEN };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (!out.show_hidden) {
+        TEST_ERRORF("toggle hidden preserves glob", "show_hidden = %d, want 1", out.show_hidden);
+    }
+    if (cmd.type != CMD_BUILD_GLOB) {
+        TEST_ERRORF("toggle hidden preserves glob", "cmd.type = %d, want CMD_BUILD_GLOB", cmd.type);
+    }
+    if (strcmp(cmd.path, "/home/user") != 0) {
+        TEST_ERRORF("toggle hidden preserves glob", "cmd.path = %s, want /home/user", cmd.path);
+    }
+    if (cmd.glob_type != GLOB_PLAIN || strcmp(cmd.cmd_text, "report") != 0) {
+        TEST_ERRORF("toggle hidden preserves glob", "cmd = {%d, '%s'}, want {GLOB_PLAIN, 'report'}",
+                    cmd.glob_type, cmd.cmd_text);
+    }
+}
+
+static void test_toggle_hidden_inside_archive_with_glob_active_rebuilds_glob_matches(void)
+{
+    ArchiveMember members[] = {
+        make_archive_member("readme.txt", 0, 6),
+        make_archive_member("src", 1, 0),
+        make_archive_member("src/main.c", 0, 42),
+    };
+    int member_count = sizeof(members) / sizeof(members[0]);
+
+    Model in = make_archive_level_model(members, member_count, "", "project.zip",
+                                         "/home/user/project.zip");
+    in.show_hidden = 0;
+    in.glob_type = GLOB_PLAIN;
+    strcpy(in.glob_pattern, ".c");
+    in.entry_count = 1;
+    strcpy(in.entries[0].name, "readme.txt");
+    in.entries[0].st.st_mode = S_IFREG | 0644;
+    in.selected = 0;
+
+    Msg msg = { .type = MSG_TOGGLE_HIDDEN };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("toggle hidden inside archive preserves glob",
+                    "cmd.type = %d, want CMD_NONE (no real-filesystem walk)", cmd.type);
+    }
+    if (!out.show_hidden) {
+        TEST_ERRORF("toggle hidden inside archive preserves glob", "show_hidden = %d, want 1", out.show_hidden);
+    }
+    if (out.entry_count != 1 || strcmp(out.entries[0].name, "src/main.c") != 0) {
+        TEST_ERRORF("toggle hidden inside archive preserves glob",
+                    "entries = [%s] (%d), want [src/main.c] (1)",
+                    out.entries[0].name, out.entry_count);
+    }
+
+    free(out.archive_stack[0].members);
+}
+
 static void test_toggle_hidden_inside_archive_repopulates_entries_without_cmd(void)
 {
     ArchiveMember members[] = {
@@ -5201,6 +5270,8 @@ void test_update(void)
     test_cycle_sort_on_archive_sourced_entries_reorders_in_place();
     test_cycle_group_on_archive_sourced_entries_regroups_in_place();
     test_toggle_hidden();
+    test_toggle_hidden_preserves_glob_issues_build_glob_cmd();
+    test_toggle_hidden_inside_archive_with_glob_active_rebuilds_glob_matches();
     test_toggle_hidden_inside_archive_repopulates_entries_without_cmd();
     test_resort_keeps_selection_on_same_file();
     test_dir_loaded_sorts_entries();
