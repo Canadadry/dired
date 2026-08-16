@@ -1,0 +1,126 @@
+{
+  "fixture": {
+    "tree": {
+      "sub/deep.txt": "hello",
+      "top.txt": "hi"
+    }
+  },
+  "steps": [
+    {
+      "keys": ["g"],
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "<green>g:</green>                                                                              "
+      ]
+    },
+    {
+      "keys": ["t", "x", "t"],
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "<green>g:txt</green>                                                                           "
+      ]
+    },
+    {
+      "keys": ["<Enter>"],
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "Glob: txt                                                                       ",
+        "<bg-white><black>-rw-rw-r--        5 sub/deep.txt</black></bg-white>                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "-rw-rw-r--        2 top.txt                                                     "
+      ]
+    },
+    {
+      "keys": ["v"],
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "<red>selection mode not available on glob results (spans multiple directories)</red>       ",
+        "<bg-white><black>-rw-rw-r--        5 sub/deep.txt</black></bg-white>                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "-rw-rw-r--        2 top.txt                                                     "
+      ]
+    }
+  ]
+}
