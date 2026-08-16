@@ -153,3 +153,17 @@ either feature's behavior alone.
   glob+hidden-toggle bug and adding its regression test is deferred to a
   follow-up, per this PRD's Out of Scope boundary on not bundling bug
   fixes into test-writing.
+- Investigation for User Story 7 additionally found that glob-mode entries
+  never receive git-status classification at all: `execute_build_glob`/
+  `walk_glob_matches` (`src/dired.c`) never call `classify_git_status`, and
+  only ever write `name`/`st` into the `static Entry scratch[MAX_ENTRIES]`
+  buffer — `git_status` is left at its zero-initialized `GIT_STATUS_NONE`
+  permanently, so a git-modified/untracked file matching an active glob
+  pattern renders with no git-status color regardless of its real state.
+  This is a distinct bug from Story 4's (narrowing dropped entirely); here
+  the narrowing is correct but coloring is silently absent.
+  `cross_gitstatus_refresh_after_delete.json` therefore covers only the
+  plain-listing (non-glob) case, confirmed correct above. Fixing the
+  glob-mode git-status gap and adding its regression test is deferred to a
+  follow-up, per this PRD's Out of Scope boundary on not bundling bug
+  fixes into test-writing.
