@@ -137,3 +137,19 @@ either feature's behavior alone.
 - A fourth, deferred PRD (dired gaining `:zip`/`:tar.gz` archive-creation
   and extraction commands, to be grilled in its own dedicated session) may
   eventually unblock archive-related cross-feature scenarios too.
+- Investigation for User Story 4 found that the glob half of this scenario
+  doesn't reproduce the filter half's correct behavior: `MSG_TOGGLE_HIDDEN`
+  (`src/update.c`) never inspects `glob_type` and unconditionally reloads
+  via `CMD_LOAD_DIR`, so `handle_dir_loaded` reapplies `filter_type` —
+  which entering glob mode has already forced to `FILTER_NONE` — silently
+  dropping the glob's narrowing and reverting to the plain directory
+  listing, even though `model->glob_type`/`glob_pattern` remain set
+  internally. This is a real bug, not a design gap: `handle_op_succeeded`
+  already contains the correct pattern (checking `glob_type` and reissuing
+  `CMD_BUILD_GLOB` after rename/delete/paste refreshes) that
+  `MSG_TOGGLE_HIDDEN` simply doesn't follow.
+  `cross_hidden_toggle_with_filter.json` therefore covers only the
+  filter+hidden-toggle combination (confirmed correct); fixing the
+  glob+hidden-toggle bug and adding its regression test is deferred to a
+  follow-up, per this PRD's Out of Scope boundary on not bundling bug
+  fixes into test-writing.
