@@ -1,0 +1,99 @@
+{
+  "fixture": {
+    "tree": {
+      "f01": "x", "f02": "x", "f03": "x", "f04": "x", "f05": "x",
+      "f06": "x", "f07": "x", "f08": "x", "f09": "x", "f10": "x",
+      "f11": "x", "f12": "x", "f13": "x", "f14": "x", "f15": "x",
+      "f16": "x", "f17": "x", "f18": "x", "f19": "x", "f20": "x",
+      "f21": "x", "f22": "x", "f23": "x", "f24": "x"
+    }
+  },
+  "steps": [
+    {
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "                                                                              ->",
+        "<bg-white><black>-rw-rw-r--        1 f01</black></bg-white>                                                         ",
+        "-rw-rw-r--        1 f02                                                         ",
+        "-rw-rw-r--        1 f03                                                         ",
+        "-rw-rw-r--        1 f04                                                         ",
+        "-rw-rw-r--        1 f05                                                         ",
+        "-rw-rw-r--        1 f06                                                         ",
+        "-rw-rw-r--        1 f07                                                         ",
+        "-rw-rw-r--        1 f08                                                         ",
+        "-rw-rw-r--        1 f09                                                         ",
+        "-rw-rw-r--        1 f10                                                         ",
+        "-rw-rw-r--        1 f11                                                         ",
+        "-rw-rw-r--        1 f12                                                         ",
+        "-rw-rw-r--        1 f13                                                         ",
+        "-rw-rw-r--        1 f14                                                         ",
+        "-rw-rw-r--        1 f15                                                         ",
+        "-rw-rw-r--        1 f16                                                         ",
+        "-rw-rw-r--        1 f17                                                         ",
+        "-rw-rw-r--        1 f18                                                         ",
+        "-rw-rw-r--        1 f19                                                         ",
+        "-rw-rw-r--        1 f20                                                         ",
+        "-rw-rw-r--        1 f21                                                         ",
+        "-rw-rw-r--        1 f22                                                         "
+      ]
+    },
+    {
+      "keys": ["o"],
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "                                                                              <-",
+        "<bg-white><black>-rw-rw-r--        1 f23</black></bg-white>                                                         ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "-rw-rw-r--        1 f24                                                         "
+      ]
+    },
+    {
+      "keys": ["o"],
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "                                                                              ->",
+        "<bg-white><black>-rw-rw-r--        1 f01</black></bg-white>                                                         ",
+        "-rw-rw-r--        1 f02                                                         ",
+        "-rw-rw-r--        1 f03                                                         ",
+        "-rw-rw-r--        1 f04                                                         ",
+        "-rw-rw-r--        1 f05                                                         ",
+        "-rw-rw-r--        1 f06                                                         ",
+        "-rw-rw-r--        1 f07                                                         ",
+        "-rw-rw-r--        1 f08                                                         ",
+        "-rw-rw-r--        1 f09                                                         ",
+        "-rw-rw-r--        1 f10                                                         ",
+        "-rw-rw-r--        1 f11                                                         ",
+        "-rw-rw-r--        1 f12                                                         ",
+        "-rw-rw-r--        1 f13                                                         ",
+        "-rw-rw-r--        1 f14                                                         ",
+        "-rw-rw-r--        1 f15                                                         ",
+        "-rw-rw-r--        1 f16                                                         ",
+        "-rw-rw-r--        1 f17                                                         ",
+        "-rw-rw-r--        1 f18                                                         ",
+        "-rw-rw-r--        1 f19                                                         ",
+        "-rw-rw-r--        1 f20                                                         ",
+        "-rw-rw-r--        1 f21                                                         ",
+        "-rw-rw-r--        1 f22                                                         "
+      ]
+    }
+  ]
+}
