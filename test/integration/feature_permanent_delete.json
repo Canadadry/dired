@@ -1,0 +1,96 @@
+{
+  "fixture": {
+    "tree": {
+      "a.txt": "1",
+      "b.txt": "22"
+    }
+  },
+  "steps": [
+    {
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "                                                                                ",
+        "<bg-white><black>-rw-rw-r--        1 a.txt</black></bg-white>                                                       ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "-rw-rw-r--        2 b.txt                                                       "
+      ]
+    },
+    {
+      "keys": ["x"],
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "Delete 'a.txt' ? [y/N]                                                          ",
+        "<bg-white><black>-rw-rw-r--        1 a.txt</black></bg-white>                                                       ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "-rw-rw-r--        2 b.txt                                                       "
+      ]
+    },
+    {
+      "keys": ["y"],
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "<bg-white><black>-rw-rw-r--        2 b.txt</black></bg-white>                                                       "
+      ]
+    }
+  ]
+}
