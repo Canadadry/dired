@@ -43,7 +43,7 @@ On `VERIFIED:`, spawn a subagent to run the `git-commit` skill for this chunk (o
 If more chunks remain, return to step 2 for the next chunk — the PRD stays in triage until its final chunk lands. Once the final (or only) chunk is committed, mark the PRD done and `git mv` it out of triage yourself.
 
 ### 6. Loop
-Return to step 1 for the next PRD; keep going until the triage queue is empty.
+Return to step 1 for the next PRD; keep going until the triage queue is empty. Continue in place — do not call the `Skill` tool to re-invoke `prd-autopilot`, since that restarts the loop from scratch and drops this run's progress. If you're picking this back up after a break (e.g. a scheduled wakeup), say you're resuming the autopilot run, not that you're starting it.
 
 ## Stopping conditions
 Stop when the triage queue empties, the user interrupts, or a verifier reports `FAILED:` — never pause mid-loop to wait on a human otherwise.
