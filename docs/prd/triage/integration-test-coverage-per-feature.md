@@ -159,3 +159,9 @@ future PRD about dired gaining its own archive-creation commands.
   fixture-harness capability (`git rm` / file-removal mutation) that this
   PRD's fixture whitelist and `mutate` mechanism don't support, and is
   deferred to a future PRD that extends the harness and this test.
+- `feature_history_recall.json` covers only the no-history-yet Up/Down
+  no-op case; recall-of-a-real-entry is blocked because `tree`/`mutate`
+  fixture content is written literally with no runtime-path templating,
+  while the history file's on-disk key must equal the fixture root's exact
+  `getcwd()` value at test time — deferred to a future harness PRD that
+  adds `{fixture_root}` substitution to `fixture.py`'s tree/mutate writers.
