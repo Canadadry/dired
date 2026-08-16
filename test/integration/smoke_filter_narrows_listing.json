@@ -1,0 +1,126 @@
+{
+  "fixture": {
+    "tree": {
+      "apple.txt": "1",
+      "avocado.txt": "22",
+      "banana.txt": "333"
+    }
+  },
+  "steps": [
+    {
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "                                                                                ",
+        "<bg-white><black>-rw-rw-r--        1 apple.txt</black></bg-white>                                                   ",
+        "-rw-rw-r--        2 avocado.txt                                                 ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "-rw-rw-r--        3 banana.txt                                                  "
+      ]
+    },
+    {
+      "keys": ["f"],
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "<green>f:</green>                                                                              ",
+        "<bg-white><black>-rw-rw-r--        1 apple.txt</black></bg-white>                                                   ",
+        "-rw-rw-r--        2 avocado.txt                                                 ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "-rw-rw-r--        3 banana.txt                                                  "
+      ]
+    },
+    {
+      "keys": ["a", "v", "o"],
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "<green>f:avo</green>                                                                           ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "<bg-white><black>-rw-rw-r--        2 avocado.txt</black></bg-white>                                                 "
+      ]
+    },
+    {
+      "keys": ["<Enter>"],
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "Filter: avo                                                                     ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "<bg-white><black>-rw-rw-r--        2 avocado.txt</black></bg-white>                                                 "
+      ]
+    }
+  ]
+}
