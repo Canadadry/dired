@@ -1,7 +1,7 @@
 ---
 title: "Integration test coverage: one test per remaining feature"
 description: "The tty integration harness (PRD 030) covers only a handful of scenarios so far; most of dired's internal-behavior feature surface has no end-to-end screen-output coverage yet."
-status: needs-triage
+status: done
 ---
 
 ## Problem Statement
