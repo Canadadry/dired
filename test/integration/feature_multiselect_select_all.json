@@ -1,0 +1,126 @@
+{
+  "fixture": {
+    "tree": {
+      "a.txt": "a",
+      "b.txt": "bb",
+      "c.txt": "ccc"
+    }
+  },
+  "steps": [
+    {
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "                                                                                ",
+        "<bg-white><black>-rw-rw-r--        1 a.txt</black></bg-white>                                                       ",
+        "-rw-rw-r--        2 b.txt                                                       ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "-rw-rw-r--        3 c.txt                                                       "
+      ]
+    },
+    {
+      "keys": ["v"],
+      "expect": [
+        "VISUAL : {fixture_root}                                           ",
+        "                                                                                ",
+        "<bg-white><black>-rw-rw-r--        1 a.txt</black></bg-white>                                                       ",
+        "-rw-rw-r--        2 b.txt                                                       ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "-rw-rw-r--        3 c.txt                                                       "
+      ]
+    },
+    {
+      "keys": ["t"],
+      "expect": [
+        "VISUAL(3) : {fixture_root}                                        ",
+        "                                                                                ",
+        "<bg-blue><white>-rw-rw-r--        1 a.txt</white></bg-blue>                                                       ",
+        "<blue>-rw-rw-r--        2 b.txt</blue>                                                       ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "<blue>-rw-rw-r--        3 c.txt</blue>                                                       "
+      ]
+    },
+    {
+      "keys": ["t"],
+      "expect": [
+        "VISUAL : {fixture_root}                                           ",
+        "                                                                                ",
+        "<bg-white><black>-rw-rw-r--        1 a.txt</black></bg-white>                                                       ",
+        "-rw-rw-r--        2 b.txt                                                       ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "-rw-rw-r--        3 c.txt                                                       "
+      ]
+    }
+  ]
+}
