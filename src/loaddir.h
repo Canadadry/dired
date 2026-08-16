@@ -10,4 +10,7 @@
  * on success or MSG_OP_FAILED on an opendir() error. */
 Msg load_directory(const char *path, int show_hidden);
 
+char *read_git_status(const char *path);
+char *read_git_prefix(const char *path);
+
 #endif // DIRED_LOADDIR_H

@@ -1,0 +1,105 @@
+{
+  "fixture": {
+    "tree": {
+      "clean.txt": "static\n",
+      "tracked.txt": "hello\n"
+    },
+    "setup": [
+      ["add", "clean.txt"],
+      ["add", "tracked.txt"],
+      ["commit", "-m", "init"]
+    ],
+    "mutate": {
+      "tracked.txt": "hello world\n"
+    }
+  },
+  "steps": [
+    {
+      "keys": ["g"],
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "<green>g:</green>                                                                              "
+      ]
+    },
+    {
+      "keys": ["t", "x", "t"],
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "<green>g:txt</green>                                                                           "
+      ]
+    },
+    {
+      "keys": ["<Enter>"],
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "Glob: txt                                                                       ",
+        "<bg-white><black>-rw-rw-r--        7 clean.txt</black></bg-white>                                                   ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "<yellow>-rw-rw-r--       12 tracked.txt</yellow>                                                 "
+      ]
+    }
+  ]
+}

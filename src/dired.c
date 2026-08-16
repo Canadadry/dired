@@ -5,6 +5,7 @@
 #include "view.h"
 #include "helpers.h"
 #include "loaddir.h"
+#include "gitstatus.h"
 #include "trash.h"
 #include "archive.h"
 #include "pager.h"
@@ -688,6 +689,8 @@ static Msg execute_build_glob(const char *cwd, GlobType glob_type, const char *p
     FilterType filter_type = (glob_type == GLOB_REGEX) ? FILTER_REGEX : FILTER_PLAIN;
 
     walk_glob_matches(cwd, "", filter_type, pattern, scratch, &count, &truncated);
+
+    classify_git_status(read_git_status(cwd), read_git_prefix(cwd), scratch, count);
 
     Msg msg = { .type = MSG_GLOB_BUILT };
     msg.glob_built.entries = scratch;

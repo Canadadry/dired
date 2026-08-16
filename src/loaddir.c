@@ -30,7 +30,7 @@ static void quote_shell_arg(const char *arg, char *out, size_t out_size)
     out[i] = '\0';
 }
 
-static char *read_git_status(const char *path)
+char *read_git_status(const char *path)
 {
     static char buf[GIT_STATUS_BUF_LEN];
 
@@ -60,7 +60,7 @@ static char *read_git_status(const char *path)
     return buf;
 }
 
-static char *read_git_prefix(const char *path)
+char *read_git_prefix(const char *path)
 {
     static char buf[PATH_MAX_LEN];
 
