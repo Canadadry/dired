@@ -1,0 +1,126 @@
+{
+  "fixture": {
+    "tree": {
+      "a.txt": "1",
+      "m.txt": "22",
+      "k_dir/.keep": ""
+    }
+  },
+  "steps": [
+    {
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "                                                                                ",
+        "<bg-white><black>drwxrwxr-x       60 k_dir</black></bg-white>                                                       ",
+        "-rw-rw-r--        1 a.txt                                                       ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "-rw-rw-r--        2 m.txt                                                       "
+      ]
+    },
+    {
+      "keys": ["d"],
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "                                                                                ",
+        "-rw-rw-r--        1 a.txt                                                       ",
+        "-rw-rw-r--        2 m.txt                                                       ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "<bg-white><black>drwxrwxr-x       60 k_dir</black></bg-white>                                                       "
+      ]
+    },
+    {
+      "keys": ["d"],
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "                                                                                ",
+        "-rw-rw-r--        1 a.txt                                                       ",
+        "<bg-white><black>drwxrwxr-x       60 k_dir</black></bg-white>                                                       ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "-rw-rw-r--        2 m.txt                                                       "
+      ]
+    },
+    {
+      "keys": ["d"],
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "                                                                                ",
+        "<bg-white><black>drwxrwxr-x       60 k_dir</black></bg-white>                                                       ",
+        "-rw-rw-r--        1 a.txt                                                       ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "-rw-rw-r--        2 m.txt                                                       "
+      ]
+    }
+  ]
+}
