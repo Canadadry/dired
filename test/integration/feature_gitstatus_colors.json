@@ -1,0 +1,50 @@
+{
+  "fixture": {
+    "tree": {
+      "tracked.txt": "hello\n",
+      ".gitignore": "ignored.txt\n",
+      "staged.txt": "staged",
+      "untracked.txt": "new",
+      "ignored.txt": "secret"
+    },
+    "setup": [
+      ["add", "tracked.txt"],
+      ["add", ".gitignore"],
+      ["commit", "-m", "init"],
+      ["add", "staged.txt"]
+    ],
+    "mutate": {
+      "tracked.txt": "hello world\n"
+    }
+  },
+  "steps": [
+    {
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "                                                                                ",
+        "<bg-black><white>-rw-rw-r--        6 ignored.txt</white></bg-black>                                                 ",
+        "<green>-rw-rw-r--        6 staged.txt</green>                                                  ",
+        "<yellow>-rw-rw-r--       12 tracked.txt</yellow>                                                 ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "<green>-rw-rw-r--        3 untracked.txt</green>                                               "
+      ]
+    }
+  ]
+}

@@ -154,3 +154,8 @@ future PRD about dired gaining its own archive-creation commands.
   stories are the concrete motivation for the debug-build `HOME`-resolves-
   to-cwd PRD; if that PRD is deprioritized, every other feature file here
   can still land independently.
+- `feature_gitstatus_colors.json` covers 4 of the 5 states from User Story
+  11 (modified, untracked, staged, ignored); "deleted" is blocked on a
+  fixture-harness capability (`git rm` / file-removal mutation) that this
+  PRD's fixture whitelist and `mutate` mechanism don't support, and is
+  deferred to a future PRD that extends the harness and this test.
