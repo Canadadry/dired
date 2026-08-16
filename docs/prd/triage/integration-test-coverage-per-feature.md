@@ -165,3 +165,10 @@ future PRD about dired gaining its own archive-creation commands.
   while the history file's on-disk key must equal the fixture root's exact
   `getcwd()` value at test time — deferred to a future harness PRD that
   adds `{fixture_root}` substitution to `fixture.py`'s tree/mutate writers.
+- User Story 10 (`feature_help_page.json`) is not implemented because
+  `execute_help()` is structurally identical to the already-excluded
+  `space`-preview path (same `execute_preview()` call, `less -R` forked
+  directly onto the pty, dired's own renderer offline for the duration) —
+  it falls under the PRD's existing Out of Scope exclusion for
+  interactive-external-process features, even though `h` isn't named
+  explicitly there.
