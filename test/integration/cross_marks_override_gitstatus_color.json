@@ -1,0 +1,162 @@
+{
+  "fixture": {
+    "tree": {
+      "clean.txt": "static\n",
+      "tracked.txt": "hello\n"
+    },
+    "setup": [
+      ["add", "clean.txt"],
+      ["add", "tracked.txt"],
+      ["commit", "-m", "init"]
+    ],
+    "mutate": {
+      "tracked.txt": "hello world\n"
+    }
+  },
+  "steps": [
+    {
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "                                                                                ",
+        "<bg-white><black>-rw-rw-r--        7 clean.txt</black></bg-white>                                                   ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "<yellow>-rw-rw-r--       12 tracked.txt</yellow>                                                 "
+      ]
+    },
+    {
+      "keys": ["<Down>"],
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "                                                                                ",
+        "-rw-rw-r--        7 clean.txt                                                   ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "<bg-yellow><black>-rw-rw-r--       12 tracked.txt</black></bg-yellow>                                                 "
+      ]
+    },
+    {
+      "keys": ["v"],
+      "expect": [
+        "VISUAL : {fixture_root}                                           ",
+        "                                                                                ",
+        "-rw-rw-r--        7 clean.txt                                                   ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "<bg-yellow><black>-rw-rw-r--       12 tracked.txt</black></bg-yellow>                                                 "
+      ]
+    },
+    {
+      "keys": [" "],
+      "expect": [
+        "VISUAL(1) : {fixture_root}                                        ",
+        "                                                                                ",
+        "-rw-rw-r--        7 clean.txt                                                   ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "<bg-blue><white>-rw-rw-r--       12 tracked.txt</white></bg-blue>                                                 "
+      ]
+    },
+    {
+      "keys": ["<Up>"],
+      "expect": [
+        "VISUAL(1) : {fixture_root}                                        ",
+        "                                                                                ",
+        "<bg-white><black>-rw-rw-r--        7 clean.txt</black></bg-white>                                                   ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "<blue>-rw-rw-r--       12 tracked.txt</blue>                                                 "
+      ]
+    }
+  ]
+}
