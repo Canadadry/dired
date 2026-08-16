@@ -1,7 +1,7 @@
 ---
 title: "Integration test coverage: cross-feature interaction bugs"
 description: "Individual features each have their own tests, but nothing exercises the undocumented behavior where two independently-specified features are both active at once."
-status: needs-triage
+status: done
 ---
 
 ## Problem Statement
