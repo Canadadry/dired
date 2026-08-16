@@ -1,6 +1,27 @@
 #include "minitest.h"
 #include "../src/helpers.h"
 #include <string.h>
+#include <unistd.h>
+
+static void test_dired_effective_home_returns_cwd_in_debug_builds(void)
+{
+    char cwd[PATH_MAX_LEN];
+    if (!getcwd(cwd, sizeof(cwd))) {
+        TEST_ERRORF("setup", "getcwd failed");
+        return;
+    }
+
+    char got[PATH_MAX_LEN];
+    int rc = dired_effective_home(got, sizeof(got));
+
+    if (rc != 0) {
+        TEST_ERRORF("dired_effective_home", "rc = %d, want 0", rc);
+        return;
+    }
+    if (strcmp(got, cwd) != 0) {
+        TEST_ERRORF("dired_effective_home", "= %s, want %s (cwd)", got, cwd);
+    }
+}
 
 static void test_is_protected_name(void)
 {
@@ -769,6 +790,7 @@ static void test_build_preview_argv(void)
 
 void test_helpers(void)
 {
+    test_dired_effective_home_returns_cwd_in_debug_builds();
     test_is_protected_name();
     test_is_hidden_name();
     test_mode_to_str();

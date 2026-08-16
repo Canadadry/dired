@@ -31,6 +31,8 @@ int build_preview_argv(const PreviewRule *rule, const char *file_path, int col_w
                         char argv_buf[PREVIEW_ARGV_MAX][PREVIEW_EXEC_TOKEN_MAX],
                         char *out_argv[PREVIEW_ARGV_MAX + 1]);
 
+int dired_effective_home(char *out, size_t out_size);
+
 int is_protected_name(const char *name);
 int is_hidden_name(const char *name);
 ArchiveFormat archive_format_for_name(const char *name);

@@ -1060,12 +1060,15 @@ static void print_help(void)
 
 static void load_preview_config(void)
 {
-    const char *home = getenv("HOME");
-    if (!home || home[0] == '\0')
+    char home[PATH_MAX_LEN];
+    if (dired_effective_home(home, sizeof(home)) != 0)
         return;
 
     char config_dir[PATH_MAX_LEN];
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
     snprintf(config_dir, sizeof(config_dir), "%s/.config", home);
+#pragma GCC diagnostic pop
     if (mkdir(config_dir, 0755) != 0 && errno != EEXIST)
         return;
 

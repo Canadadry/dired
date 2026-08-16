@@ -1,4 +1,5 @@
 #include "history.h"
+#include "helpers.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -262,8 +263,8 @@ const char *history_folder_path_at(const History *h, int index)
 
 int history_default_path(char *out, size_t out_size)
 {
-    const char *home = getenv("HOME");
-    if (!home || home[0] == '\0')
+    char home[PATH_MAX_LEN];
+    if (dired_effective_home(home, sizeof(home)) != 0)
         return -1;
     snprintf(out, out_size, "%s/.config/dired_history", home);
     return 0;

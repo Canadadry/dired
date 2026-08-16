@@ -53,14 +53,23 @@ static void find_trashed_entry(const char *dir, const char *prefix, char *out, s
 
 static void test_trash_moves_file_and_writes_metadata(void)
 {
-    char home_buf[PATH_MAX_LEN], src_dir_buf[PATH_MAX_LEN];
-    char *home = make_tmpdir(home_buf, "home");
+    char orig_cwd[PATH_MAX_LEN];
+    if (!getcwd(orig_cwd, sizeof(orig_cwd))) {
+        TEST_ERRORF("setup", "getcwd failed");
+        return;
+    }
+
+    char cwd_buf[PATH_MAX_LEN], src_dir_buf[PATH_MAX_LEN];
+    char *cwd_home = make_tmpdir(cwd_buf, "home");
     char *src_dir = make_tmpdir(src_dir_buf, "src");
-    if (!home || !src_dir) {
+    if (!cwd_home || !src_dir) {
         TEST_ERRORF("setup", "mkdtemp failed");
         return;
     }
-    setenv("HOME", home, 1);
+    if (chdir(cwd_home) != 0) {
+        TEST_ERRORF("setup", "chdir failed");
+        return;
+    }
 
     char src_path[PATH_MAX_LEN];
     snprintf(src_path, sizeof(src_path), "%s/note.txt", src_dir);
@@ -70,6 +79,7 @@ static void test_trash_moves_file_and_writes_metadata(void)
 
     if (msg.type != MSG_OP_SUCCEEDED) {
         TEST_ERRORF("trash file", "msg.type = %d, want MSG_OP_SUCCEEDED (error=%s)", msg.type, msg.error);
+        chdir(orig_cwd);
         return;
     }
 
@@ -79,12 +89,13 @@ static void test_trash_moves_file_and_writes_metadata(void)
     }
 
     char trash_dir[PATH_MAX_LEN];
-    snprintf(trash_dir, sizeof(trash_dir), "%s/.trash", home);
+    snprintf(trash_dir, sizeof(trash_dir), "%s/.trash", cwd_home);
 
     char trashed_name[NAME_MAX_LEN + 1];
     find_trashed_entry(trash_dir, "note.txt", trashed_name, sizeof(trashed_name));
     if (trashed_name[0] == '\0') {
         TEST_ERRORF("trash file", "no single note.txt* entry found in %s", trash_dir);
+        chdir(orig_cwd);
         return;
     }
 
@@ -96,6 +107,7 @@ static void test_trash_moves_file_and_writes_metadata(void)
     FILE *f = fopen(sidecar_path, "r");
     if (!f) {
         TEST_ERRORF("trash file", "sidecar %s missing", sidecar_path);
+        chdir(orig_cwd);
         return;
     }
     char recorded[PATH_MAX_LEN];
@@ -106,18 +118,29 @@ static void test_trash_moves_file_and_writes_metadata(void)
     if (strcmp(recorded, src_path) != 0) {
         TEST_ERRORF("trash file", "sidecar records '%s', want '%s'", recorded, src_path);
     }
+
+    chdir(orig_cwd);
 }
 
 static void test_trash_moves_nonempty_directory(void)
 {
-    char home_buf[PATH_MAX_LEN], src_dir_buf[PATH_MAX_LEN];
-    char *home = make_tmpdir(home_buf, "home2");
+    char orig_cwd[PATH_MAX_LEN];
+    if (!getcwd(orig_cwd, sizeof(orig_cwd))) {
+        TEST_ERRORF("setup", "getcwd failed");
+        return;
+    }
+
+    char cwd_buf[PATH_MAX_LEN], src_dir_buf[PATH_MAX_LEN];
+    char *cwd_home = make_tmpdir(cwd_buf, "home2");
     char *src_dir = make_tmpdir(src_dir_buf, "src2");
-    if (!home || !src_dir) {
+    if (!cwd_home || !src_dir) {
         TEST_ERRORF("setup", "mkdtemp failed");
         return;
     }
-    setenv("HOME", home, 1);
+    if (chdir(cwd_home) != 0) {
+        TEST_ERRORF("setup", "chdir failed");
+        return;
+    }
 
     char victim_dir[PATH_MAX_LEN];
     snprintf(victim_dir, sizeof(victim_dir), "%s/project", src_dir);
@@ -133,6 +156,7 @@ static void test_trash_moves_nonempty_directory(void)
 
     if (msg.type != MSG_OP_SUCCEEDED) {
         TEST_ERRORF("trash nonempty dir", "msg.type = %d, want MSG_OP_SUCCEEDED (error=%s)", msg.type, msg.error);
+        chdir(orig_cwd);
         return;
     }
 
@@ -142,11 +166,12 @@ static void test_trash_moves_nonempty_directory(void)
     }
 
     char trash_dir[PATH_MAX_LEN];
-    snprintf(trash_dir, sizeof(trash_dir), "%s/.trash", home);
+    snprintf(trash_dir, sizeof(trash_dir), "%s/.trash", cwd_home);
     char trashed_name[NAME_MAX_LEN + 1];
     find_trashed_entry(trash_dir, "project", trashed_name, sizeof(trashed_name));
     if (trashed_name[0] == '\0') {
         TEST_ERRORF("trash nonempty dir", "no single project* entry found in %s", trash_dir);
+        chdir(orig_cwd);
         return;
     }
 
@@ -158,19 +183,30 @@ static void test_trash_moves_nonempty_directory(void)
     if (stat(trashed_nested, &st) != 0) {
         TEST_ERRORF("trash nonempty dir", "nested file %s missing after trash", trashed_nested);
     }
+
+    chdir(orig_cwd);
 }
 
 static void test_trash_same_name_does_not_collide(void)
 {
-    char home_buf[PATH_MAX_LEN], src_dir_a_buf[PATH_MAX_LEN], src_dir_b_buf[PATH_MAX_LEN];
-    char *home = make_tmpdir(home_buf, "home3");
+    char orig_cwd[PATH_MAX_LEN];
+    if (!getcwd(orig_cwd, sizeof(orig_cwd))) {
+        TEST_ERRORF("setup", "getcwd failed");
+        return;
+    }
+
+    char cwd_buf[PATH_MAX_LEN], src_dir_a_buf[PATH_MAX_LEN], src_dir_b_buf[PATH_MAX_LEN];
+    char *cwd_home = make_tmpdir(cwd_buf, "home3");
     char *src_dir_a = make_tmpdir(src_dir_a_buf, "srcA");
     char *src_dir_b = make_tmpdir(src_dir_b_buf, "srcB");
-    if (!home || !src_dir_a || !src_dir_b) {
+    if (!cwd_home || !src_dir_a || !src_dir_b) {
         TEST_ERRORF("setup", "mkdtemp failed");
         return;
     }
-    setenv("HOME", home, 1);
+    if (chdir(cwd_home) != 0) {
+        TEST_ERRORF("setup", "chdir failed");
+        return;
+    }
 
     char path_a[PATH_MAX_LEN], path_b[PATH_MAX_LEN];
     snprintf(path_a, sizeof(path_a), "%s/dup.txt", src_dir_a);
@@ -184,11 +220,12 @@ static void test_trash_same_name_does_not_collide(void)
     if (msg_a.type != MSG_OP_SUCCEEDED || msg_b.type != MSG_OP_SUCCEEDED) {
         TEST_ERRORF("no collision", "trashing failed: a=%d(%s) b=%d(%s)",
                     msg_a.type, msg_a.error, msg_b.type, msg_b.error);
+        chdir(orig_cwd);
         return;
     }
 
     char trash_dir[PATH_MAX_LEN];
-    snprintf(trash_dir, sizeof(trash_dir), "%s/.trash", home);
+    snprintf(trash_dir, sizeof(trash_dir), "%s/.trash", cwd_home);
 
     DIR *d = opendir(trash_dir);
     int dup_entries = 0;
@@ -203,6 +240,8 @@ static void test_trash_same_name_does_not_collide(void)
     if (dup_entries != 2) {
         TEST_ERRORF("no collision", "found %d dup.txt* entries in trash, want 2", dup_entries);
     }
+
+    chdir(orig_cwd);
 }
 
 void test_trash(void)

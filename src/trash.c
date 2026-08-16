@@ -1,4 +1,5 @@
 #include "trash.h"
+#include "helpers.h"
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,11 +16,9 @@ static Msg msg_failed(const char *fmt, const char *detail)
 
 static int ensure_trash_dir(char *out, size_t out_size)
 {
-    const char *home = getenv("HOME");
-    if (!home || home[0] == '\0') {
-        errno = ENOENT;
+    char home[PATH_MAX_LEN];
+    if (dired_effective_home(home, sizeof(home)) != 0)
         return -1;
-    }
 
     snprintf(out, out_size, "%s/.trash", home);
     if (mkdir(out, 0755) != 0 && errno != EEXIST)

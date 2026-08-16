@@ -1,8 +1,28 @@
 #include "helpers.h"
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <ctype.h>
+#include <errno.h>
 #include <regex.h>
+#include <unistd.h>
+
+int dired_effective_home(char *out, size_t out_size)
+{
+#ifdef BUILD_DEBUG
+    if (!getcwd(out, out_size))
+        return -1;
+    return 0;
+#else
+    const char *home = getenv("HOME");
+    if (!home || home[0] == '\0') {
+        errno = ENOENT;
+        return -1;
+    }
+    snprintf(out, out_size, "%s", home);
+    return 0;
+#endif
+}
 
 int is_protected_name(const char *name)
 {

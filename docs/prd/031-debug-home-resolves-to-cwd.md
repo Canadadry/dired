@@ -1,7 +1,7 @@
 ---
 title: "Debug builds resolve HOME to cwd for trash/history/config"
 description: "Trash, command history, and preview config all hardcode $HOME in debug builds too, so integration/manual debug runs read and write the real developer's home directory instead of an isolated location."
-status: needs-triage
+status: done
 ---
 
 ## Problem Statement
