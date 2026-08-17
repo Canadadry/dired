@@ -7,9 +7,12 @@
   },
   "steps": [
     {
-      "keys": ["G"],
+      "keys": [
+        "G"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
+        "<green>G:</green>                                                                              ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -31,14 +34,20 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<green>G:</green>                                                                              "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["^", "s", "u", "b", "/"],
+      "keys": [
+        "^",
+        "s",
+        "u",
+        "b",
+        "/"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
+        "<green>G:^sub/</green>                                                                         ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -60,15 +69,17 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<green>G:^sub/</green>                                                                         "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["<Enter>"],
+      "keys": [
+        "<Enter>"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
         "Glob: ^sub/                                                                     ",
+        "<bg-white><black>-rw-rw-r--        5 sub/deep.txt</black></bg-white>                                                ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -89,8 +100,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<bg-white><black>-rw-rw-r--        5 sub/deep.txt</black></bg-white>                                                "
+        "                                                                                "
       ]
     }
   ]

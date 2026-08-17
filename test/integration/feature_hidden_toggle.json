@@ -10,6 +10,7 @@
       "expect": [
         "Path: {fixture_root}                                              ",
         "                                                                                ",
+        "<bg-white><black>-rw-rw-r--        2 visible.txt</black></bg-white>                                                 ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -30,17 +31,19 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<bg-white><black>-rw-rw-r--        2 visible.txt</black></bg-white>                                                 "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["a"],
+      "keys": [
+        "a"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
         "                                                                                ",
         "drwxr-xr-x       60 .config                                                     ",
         "-rw-rw-r--        1 .hidden                                                     ",
+        "<bg-white><black>-rw-rw-r--        2 visible.txt</black></bg-white>                                                 ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -59,15 +62,17 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<bg-white><black>-rw-rw-r--        2 visible.txt</black></bg-white>                                                 "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["a"],
+      "keys": [
+        "a"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
         "                                                                                ",
+        "<bg-white><black>-rw-rw-r--        2 visible.txt</black></bg-white>                                                 ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -88,8 +93,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<bg-white><black>-rw-rw-r--        2 visible.txt</black></bg-white>                                                 "
+        "                                                                                "
       ]
     }
   ]

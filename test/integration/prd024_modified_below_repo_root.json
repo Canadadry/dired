@@ -26,6 +26,7 @@
       "expect": [
         "Path: {fixture_root}/sub                                          ",
         "                                                                                ",
+        "<bg-yellow><black>-rw-rw-r--       12 file.txt</black></bg-yellow>                                                    ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -46,8 +47,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<bg-yellow><black>-rw-rw-r--       12 file.txt</black></bg-yellow>                                                    "
+        "                                                                                "
       ]
     }
   ]

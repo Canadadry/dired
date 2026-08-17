@@ -13,121 +13,6 @@
         "                                                                                ",
         "<bg-white><black>-rw-rw-r--        1 a.zzz</black></bg-white>                                                       ",
         "-rw-rw-r--        3 b.aaa                                                       ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        2 c.mmm                                                       "
-      ]
-    },
-    {
-      "keys": ["s"],
-      "expect": [
-        "Path: {fixture_root}                                              ",
-        "                                                                                ",
-        "-rw-rw-r--        2 c.mmm                                                       ",
-        "-rw-rw-r--        3 b.aaa                                                       ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "<bg-white><black>-rw-rw-r--        1 a.zzz</black></bg-white>                                                       "
-      ]
-    },
-    {
-      "keys": ["s"],
-      "expect": [
-        "Path: {fixture_root}                                              ",
-        "                                                                                ",
-        "<bg-white><black>-rw-rw-r--        1 a.zzz</black></bg-white>                                                       ",
-        "-rw-rw-r--        3 b.aaa                                                       ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        2 c.mmm                                                       "
-      ]
-    },
-    {
-      "keys": ["s"],
-      "expect": [
-        "Path: {fixture_root}                                              ",
-        "                                                                                ",
-        "<bg-white><black>-rw-rw-r--        1 a.zzz</black></bg-white>                                                       ",
-        "-rw-rw-r--        3 b.aaa                                                       ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        2 c.mmm                                                       "
-      ]
-    },
-    {
-      "keys": ["s"],
-      "expect": [
-        "Path: {fixture_root}                                              ",
-        "                                                                                ",
-        "<bg-white><black>-rw-rw-r--        1 a.zzz</black></bg-white>                                                       ",
         "-rw-rw-r--        2 c.mmm                                                       ",
         "                                                                                ",
         "                                                                                ",
@@ -147,15 +32,48 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        3 b.aaa                                                       "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["s"],
+      "keys": [
+        "s"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
         "                                                                                ",
+        "-rw-rw-r--        2 c.mmm                                                       ",
+        "-rw-rw-r--        3 b.aaa                                                       ",
+        "<bg-white><black>-rw-rw-r--        1 a.zzz</black></bg-white>                                                       ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                "
+      ]
+    },
+    {
+      "keys": [
+        "s"
+      ],
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "                                                                                ",
+        "<bg-white><black>-rw-rw-r--        1 a.zzz</black></bg-white>                                                       ",
         "-rw-rw-r--        3 b.aaa                                                       ",
         "-rw-rw-r--        2 c.mmm                                                       ",
         "                                                                                ",
@@ -176,15 +94,17 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<bg-white><black>-rw-rw-r--        1 a.zzz</black></bg-white>                                                       "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["s"],
+      "keys": [
+        "s"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
         "                                                                                ",
+        "<bg-white><black>-rw-rw-r--        1 a.zzz</black></bg-white>                                                       ",
         "-rw-rw-r--        3 b.aaa                                                       ",
         "-rw-rw-r--        2 c.mmm                                                       ",
         "                                                                                ",
@@ -205,45 +125,18 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<bg-white><black>-rw-rw-r--        1 a.zzz</black></bg-white>                                                       "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["s"],
+      "keys": [
+        "s"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
         "                                                                                ",
         "<bg-white><black>-rw-rw-r--        1 a.zzz</black></bg-white>                                                       ",
         "-rw-rw-r--        2 c.mmm                                                       ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        3 b.aaa                                                       "
-      ]
-    },
-    {
-      "keys": ["s"],
-      "expect": [
-        "Path: {fixture_root}                                              ",
-        "                                                                                ",
-        "<bg-white><black>-rw-rw-r--        1 a.zzz</black></bg-white>                                                       ",
         "-rw-rw-r--        3 b.aaa                                                       ",
         "                                                                                ",
         "                                                                                ",
@@ -263,8 +156,131 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
+        "                                                                                "
+      ]
+    },
+    {
+      "keys": [
+        "s"
+      ],
+      "expect": [
+        "Path: {fixture_root}                                              ",
         "                                                                                ",
-        "-rw-rw-r--        2 c.mmm                                                       "
+        "-rw-rw-r--        3 b.aaa                                                       ",
+        "-rw-rw-r--        2 c.mmm                                                       ",
+        "<bg-white><black>-rw-rw-r--        1 a.zzz</black></bg-white>                                                       ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                "
+      ]
+    },
+    {
+      "keys": [
+        "s"
+      ],
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "                                                                                ",
+        "-rw-rw-r--        3 b.aaa                                                       ",
+        "-rw-rw-r--        2 c.mmm                                                       ",
+        "<bg-white><black>-rw-rw-r--        1 a.zzz</black></bg-white>                                                       ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                "
+      ]
+    },
+    {
+      "keys": [
+        "s"
+      ],
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "                                                                                ",
+        "<bg-white><black>-rw-rw-r--        1 a.zzz</black></bg-white>                                                       ",
+        "-rw-rw-r--        2 c.mmm                                                       ",
+        "-rw-rw-r--        3 b.aaa                                                       ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                "
+      ]
+    },
+    {
+      "keys": [
+        "s"
+      ],
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "                                                                                ",
+        "<bg-white><black>-rw-rw-r--        1 a.zzz</black></bg-white>                                                       ",
+        "-rw-rw-r--        3 b.aaa                                                       ",
+        "-rw-rw-r--        2 c.mmm                                                       ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                "
       ]
     }
   ]

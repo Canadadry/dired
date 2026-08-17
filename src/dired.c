@@ -977,7 +977,7 @@ static void render(const Model *model)
         uintattr_t fg, bg;
         style_colors(v.lines[i].style, &fg, &bg);
 
-        int row = (i == v.line_count - 1) ? tb_height() - 1 : i;
+        int row = i;
         tb_print(0, row, fg, bg, v.lines[i].text);
     }
     tb_present();

@@ -19,6 +19,7 @@
         "                                                                                ",
         "<bg-white><black>drwxrwxr-x       60 alpha</black></bg-white>                                                       ",
         "drwxrwxr-x       60 beta                                                        ",
+        "-rw-rw-r--        2 gamma.txt                                                   ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -37,8 +38,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        2 gamma.txt                                                   "
+        "                                                                                "
       ]
     },
     {
@@ -49,6 +49,7 @@
         "Folder History                                                                  ",
         "                                                                                ",
         "<bg-white><black>{fixture_root}/beta</black></bg-white>                                               ",
+        "{fixture_root}/alpha                                              ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -68,8 +69,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "{fixture_root}/alpha                                              "
+        "                                                                                "
       ]
     },
     {
@@ -112,6 +112,7 @@
         "                                                                                ",
         "<bg-white><black>drwxrwxr-x       60 alpha</black></bg-white>                                                       ",
         "drwxrwxr-x       60 beta                                                        ",
+        "-rw-rw-r--        2 gamma.txt                                                   ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -130,8 +131,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        2 gamma.txt                                                   "
+        "                                                                                "
       ]
     },
     {

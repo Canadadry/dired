@@ -15,6 +15,7 @@
         "<bg-white><black>-rw-rw-r--        1 apple.txt</black></bg-white>                                                   ",
         "-rw-rw-r--        2 avocado.txt                                                 ",
         "-rw-rw-r--        3 avocado2.txt                                                ",
+        "-rw-rw-r--        4 banana.txt                                                  ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -32,17 +33,50 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        4 banana.txt                                                  "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["f"],
+      "keys": [
+        "f"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
         "<green>f:</green>                                                                              ",
         "<bg-white><black>-rw-rw-r--        1 apple.txt</black></bg-white>                                                   ",
         "-rw-rw-r--        2 avocado.txt                                                 ",
+        "-rw-rw-r--        3 avocado2.txt                                                ",
+        "-rw-rw-r--        4 banana.txt                                                  ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                "
+      ]
+    },
+    {
+      "keys": [
+        "a",
+        "v",
+        "o"
+      ],
+      "expect": [
+        "Path: {fixture_root}                                              ",
+        "<green>f:avo</green>                                                                           ",
+        "<bg-white><black>-rw-rw-r--        2 avocado.txt</black></bg-white>                                                 ",
         "-rw-rw-r--        3 avocado2.txt                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -62,44 +96,19 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "-rw-rw-r--        4 banana.txt                                                  "
+        "                                                                                ",
+        "                                                                                "
       ]
     },
     {
-      "keys": ["a", "v", "o"],
-      "expect": [
-        "Path: {fixture_root}                                              ",
-        "<green>f:avo</green>                                                                           ",
-        "<bg-white><black>-rw-rw-r--        2 avocado.txt</black></bg-white>                                                 ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        3 avocado2.txt                                                "
-      ]
-    },
-    {
-      "keys": ["<Enter>"],
+      "keys": [
+        "<Enter>"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
         "Filter: avo                                                                     ",
         "<bg-white><black>-rw-rw-r--        2 avocado.txt</black></bg-white>                                                 ",
+        "-rw-rw-r--        3 avocado2.txt                                                ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -119,15 +128,26 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        3 avocado2.txt                                                "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["r", "k", "i", "w", "i", ".", "t", "x", "t", "<Enter>"],
+      "keys": [
+        "r",
+        "k",
+        "i",
+        "w",
+        "i",
+        ".",
+        "t",
+        "x",
+        "t",
+        "<Enter>"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
         "Filter: avo                                                                     ",
+        "<bg-white><black>-rw-rw-r--        3 avocado2.txt</black></bg-white>                                                ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -148,8 +168,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<bg-white><black>-rw-rw-r--        3 avocado2.txt</black></bg-white>                                                "
+        "                                                                                "
       ]
     }
   ]

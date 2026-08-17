@@ -11,6 +11,7 @@
         "Path: {fixture_root}                                              ",
         "                                                                                ",
         "<bg-white><black>drwxrwxr-x       60 dest</black></bg-white>                                                        ",
+        "-rw-rw-r--        2 file.txt                                                    ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -30,16 +31,18 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        2 file.txt                                                    "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["<Down>"],
+      "keys": [
+        "<Down>"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
         "                                                                                ",
         "drwxrwxr-x       60 dest                                                        ",
+        "<bg-white><black>-rw-rw-r--        2 file.txt</black></bg-white>                                                    ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -59,16 +62,18 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<bg-white><black>-rw-rw-r--        2 file.txt</black></bg-white>                                                    "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["m"],
+      "keys": [
+        "m"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
         "Yanked: file.txt (move)                                                         ",
         "drwxrwxr-x       60 dest                                                        ",
+        "<bg-white><black>-rw-rw-r--        2 file.txt</black></bg-white>                                                    ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -88,16 +93,18 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<bg-white><black>-rw-rw-r--        2 file.txt</black></bg-white>                                                    "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["<Up>"],
+      "keys": [
+        "<Up>"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
         "Yanked: file.txt (move)                                                         ",
         "<bg-white><black>drwxrwxr-x       60 dest</black></bg-white>                                                        ",
+        "-rw-rw-r--        2 file.txt                                                    ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -117,15 +124,48 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        2 file.txt                                                    "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["<Right>"],
+      "keys": [
+        "<Right>"
+      ],
+      "expect": [
+        "Path: {fixture_root}/dest                                         ",
+        "Yanked: file.txt (move)                                                         ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                "
+      ]
+    },
+    {
+      "keys": [
+        "p"
+      ],
       "expect": [
         "Path: {fixture_root}/dest                                         ",
         "                                                                                ",
+        "<bg-white><black>-rw-rw-r--        2 file.txt</black></bg-white>                                                    ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -146,44 +186,17 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "Yanked: file.txt (move)                                                         "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["p"],
-      "expect": [
-        "Path: {fixture_root}/dest                                         ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "<bg-white><black>-rw-rw-r--        2 file.txt</black></bg-white>                                                    "
-      ]
-    },
-    {
-      "keys": ["<Left>"],
+      "keys": [
+        "<Left>"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
         "                                                                                ",
+        "<bg-white><black>drwxrwxr-x       80 dest</black></bg-white>                                                        ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -204,8 +217,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<bg-white><black>drwxrwxr-x       80 dest</black></bg-white>                                                        "
+        "                                                                                "
       ]
     }
   ]

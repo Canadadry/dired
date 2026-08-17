@@ -11,6 +11,7 @@
         "Path: {fixture_root}                                              ",
         "                                                                                ",
         "<bg-white><black>-rw-rw-r--        1 a.txt</black></bg-white>                                                       ",
+        "-rw-rw-r--        2 b.txt                                                       ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -30,16 +31,19 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        2 b.txt                                                       "
+        "                                                                                "
       ]
     },
     {
-      "keys": [":", "!"],
+      "keys": [
+        ":",
+        "!"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
         ":!                                                                              ",
         "<bg-white><black>-rw-rw-r--        1 a.txt</black></bg-white>                                                       ",
+        "-rw-rw-r--        2 b.txt                                                       ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -59,16 +63,18 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        2 b.txt                                                       "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["<Up>"],
+      "keys": [
+        "<Up>"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
         ":!                                                                              ",
         "<bg-white><black>-rw-rw-r--        1 a.txt</black></bg-white>                                                       ",
+        "-rw-rw-r--        2 b.txt                                                       ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -88,16 +94,18 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        2 b.txt                                                       "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["<Down>"],
+      "keys": [
+        "<Down>"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
         ":!                                                                              ",
         "<bg-white><black>-rw-rw-r--        1 a.txt</black></bg-white>                                                       ",
+        "-rw-rw-r--        2 b.txt                                                       ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -117,16 +125,18 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        2 b.txt                                                       "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["<Esc>"],
+      "keys": [
+        "<Esc>"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
         "                                                                                ",
         "<bg-white><black>-rw-rw-r--        1 a.txt</black></bg-white>                                                       ",
+        "-rw-rw-r--        2 b.txt                                                       ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -146,8 +156,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        2 b.txt                                                       "
+        "                                                                                "
       ]
     }
   ]

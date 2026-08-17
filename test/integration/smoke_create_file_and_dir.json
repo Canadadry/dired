@@ -32,10 +32,13 @@
       ]
     },
     {
-      "keys": ["n"],
+      "keys": [
+        "n"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
         "Create:                                                                         ",
+        "<bg-white><black>          </black></bg-white>                                                                      ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -56,15 +59,28 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<bg-white><black>          </black></bg-white>                                                                      "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["n", "e", "w", "f", "i", "l", "e", ".", "t", "x", "t", "<Enter>"],
+      "keys": [
+        "n",
+        "e",
+        "w",
+        "f",
+        "i",
+        "l",
+        "e",
+        ".",
+        "t",
+        "x",
+        "t",
+        "<Enter>"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
         "                                                                                ",
+        "<bg-white><black>-rw-rw-r--        0 newfile.txt</black></bg-white>                                                 ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -85,16 +101,18 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<bg-white><black>-rw-rw-r--        0 newfile.txt</black></bg-white>                                                 "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["n"],
+      "keys": [
+        "n"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
         "Create:                                                                         ",
         "-rw-rw-r--        0 newfile.txt                                                 ",
+        "<bg-white><black>          </black></bg-white>                                                                      ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -114,16 +132,25 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<bg-white><black>          </black></bg-white>                                                                      "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["n", "e", "w", "d", "i", "r", "/", "<Enter>"],
+      "keys": [
+        "n",
+        "e",
+        "w",
+        "d",
+        "i",
+        "r",
+        "/",
+        "<Enter>"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
         "                                                                                ",
         "drwxr-xr-x       40 newdir                                                      ",
+        "<bg-white><black>-rw-rw-r--        0 newfile.txt</black></bg-white>                                                 ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -143,8 +170,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<bg-white><black>-rw-rw-r--        0 newfile.txt</black></bg-white>                                                 "
+        "                                                                                "
       ]
     }
   ]

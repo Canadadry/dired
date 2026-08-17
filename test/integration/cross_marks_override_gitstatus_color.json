@@ -5,9 +5,19 @@
       "tracked.txt": "hello\n"
     },
     "setup": [
-      ["add", "clean.txt"],
-      ["add", "tracked.txt"],
-      ["commit", "-m", "init"]
+      [
+        "add",
+        "clean.txt"
+      ],
+      [
+        "add",
+        "tracked.txt"
+      ],
+      [
+        "commit",
+        "-m",
+        "init"
+      ]
     ],
     "mutate": {
       "tracked.txt": "hello world\n"
@@ -19,6 +29,7 @@
         "Path: {fixture_root}                                              ",
         "                                                                                ",
         "<bg-white><black>-rw-rw-r--        7 clean.txt</black></bg-white>                                                   ",
+        "<yellow>-rw-rw-r--       12 tracked.txt</yellow>                                                 ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -38,16 +49,18 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<yellow>-rw-rw-r--       12 tracked.txt</yellow>                                                 "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["<Down>"],
+      "keys": [
+        "<Down>"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
         "                                                                                ",
         "-rw-rw-r--        7 clean.txt                                                   ",
+        "<bg-yellow><black>-rw-rw-r--       12 tracked.txt</black></bg-yellow>                                                 ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -67,16 +80,18 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<bg-yellow><black>-rw-rw-r--       12 tracked.txt</black></bg-yellow>                                                 "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["v"],
+      "keys": [
+        "v"
+      ],
       "expect": [
         "VISUAL : {fixture_root}                                           ",
         "                                                                                ",
         "-rw-rw-r--        7 clean.txt                                                   ",
+        "<bg-yellow><black>-rw-rw-r--       12 tracked.txt</black></bg-yellow>                                                 ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -96,16 +111,18 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<bg-yellow><black>-rw-rw-r--       12 tracked.txt</black></bg-yellow>                                                 "
+        "                                                                                "
       ]
     },
     {
-      "keys": [" "],
+      "keys": [
+        " "
+      ],
       "expect": [
         "VISUAL(1) : {fixture_root}                                        ",
         "                                                                                ",
         "-rw-rw-r--        7 clean.txt                                                   ",
+        "<bg-blue><white>-rw-rw-r--       12 tracked.txt</white></bg-blue>                                                 ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -125,16 +142,18 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<bg-blue><white>-rw-rw-r--       12 tracked.txt</white></bg-blue>                                                 "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["<Up>"],
+      "keys": [
+        "<Up>"
+      ],
       "expect": [
         "VISUAL(1) : {fixture_root}                                        ",
         "                                                                                ",
         "<bg-white><black>-rw-rw-r--        7 clean.txt</black></bg-white>                                                   ",
+        "<blue>-rw-rw-r--       12 tracked.txt</blue>                                                 ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -154,8 +173,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<blue>-rw-rw-r--       12 tracked.txt</blue>                                                 "
+        "                                                                                "
       ]
     }
   ]

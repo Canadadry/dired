@@ -13,6 +13,7 @@
         "                                                                                ",
         "<bg-white><black>-rw-rw-r--        1 a.txt</black></bg-white>                                                       ",
         "-rw-rw-r--        2 b.txt                                                       ",
+        "-rw-rw-r--        3 c.txt                                                       ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -31,17 +32,19 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        3 c.txt                                                       "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["v"],
+      "keys": [
+        "v"
+      ],
       "expect": [
         "VISUAL : {fixture_root}                                           ",
         "                                                                                ",
         "<bg-white><black>-rw-rw-r--        1 a.txt</black></bg-white>                                                       ",
         "-rw-rw-r--        2 b.txt                                                       ",
+        "-rw-rw-r--        3 c.txt                                                       ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -60,17 +63,19 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        3 c.txt                                                       "
+        "                                                                                "
       ]
     },
     {
-      "keys": [" "],
+      "keys": [
+        " "
+      ],
       "expect": [
         "VISUAL(1) : {fixture_root}                                        ",
         "                                                                                ",
         "<bg-blue><white>-rw-rw-r--        1 a.txt</white></bg-blue>                                                       ",
         "-rw-rw-r--        2 b.txt                                                       ",
+        "-rw-rw-r--        3 c.txt                                                       ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -89,17 +94,19 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        3 c.txt                                                       "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["<Down>"],
+      "keys": [
+        "<Down>"
+      ],
       "expect": [
         "VISUAL(1) : {fixture_root}                                        ",
         "                                                                                ",
         "<blue>-rw-rw-r--        1 a.txt</blue>                                                       ",
         "<bg-white><black>-rw-rw-r--        2 b.txt</black></bg-white>                                                       ",
+        "-rw-rw-r--        3 c.txt                                                       ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -118,17 +125,19 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        3 c.txt                                                       "
+        "                                                                                "
       ]
     },
     {
-      "keys": [" "],
+      "keys": [
+        " "
+      ],
       "expect": [
         "VISUAL(2) : {fixture_root}                                        ",
         "                                                                                ",
         "<blue>-rw-rw-r--        1 a.txt</blue>                                                       ",
         "<bg-blue><white>-rw-rw-r--        2 b.txt</white></bg-blue>                                                       ",
+        "-rw-rw-r--        3 c.txt                                                       ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -147,17 +156,19 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        3 c.txt                                                       "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["x"],
+      "keys": [
+        "x"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
         "Delete 'b.txt' ? [y/N]                                                          ",
         "<blue>-rw-rw-r--        1 a.txt</blue>                                                       ",
         "<bg-blue><white>-rw-rw-r--        2 b.txt</white></bg-blue>                                                       ",
+        "-rw-rw-r--        3 c.txt                                                       ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -176,15 +187,17 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        3 c.txt                                                       "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["y"],
+      "keys": [
+        "y"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
         "                                                                                ",
+        "<bg-white><black>-rw-rw-r--        3 c.txt</black></bg-white>                                                       ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -205,8 +218,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<bg-white><black>-rw-rw-r--        3 c.txt</black></bg-white>                                                       "
+        "                                                                                "
       ]
     }
   ]

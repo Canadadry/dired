@@ -11,6 +11,7 @@
         "Path: {fixture_root}                                              ",
         "                                                                                ",
         "<bg-white><black>-rw-rw-r--        4 one.txt</black></bg-white>                                                     ",
+        "-rw-rw-r--        2 two.txt                                                     ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -30,8 +31,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        2 two.txt                                                     "
+        "                                                                                "
       ]
     },
     {
@@ -42,6 +42,7 @@
         "Path: {fixture_root}                                              ",
         "                                                                                ",
         "-rw-rw-r--        4 one.txt                                                     ",
+        "<bg-white><black>-rw-rw-r--        2 two.txt</black></bg-white>                                                     ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -61,8 +62,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<bg-white><black>-rw-rw-r--        2 two.txt</black></bg-white>                                                     "
+        "                                                                                "
       ]
     },
     {
@@ -85,6 +85,7 @@
         "Path: {fixture_root}                                              ",
         "                                                                                ",
         "<bg-white><black>-rw-rw-r--        4 one.txt</black></bg-white>                                                     ",
+        "-rw-rw-r--        2 renamed.txt                                                 ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -104,8 +105,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        2 renamed.txt                                                 "
+        "                                                                                "
       ]
     }
   ]

@@ -25,6 +25,7 @@
         "Path: {fixture_root}/sub                                          ",
         "                                                                                ",
         "<bg-white><black>-rw-rw-r--        5 tracked.txt</black></bg-white>                                                 ",
+        "<green>-rw-rw-r--        3 untracked.txt</green>                                               ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -44,8 +45,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<green>-rw-rw-r--        3 untracked.txt</green>                                               "
+        "                                                                                "
       ]
     }
   ]

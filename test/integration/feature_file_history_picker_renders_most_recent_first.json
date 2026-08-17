@@ -21,6 +21,7 @@
         "                                                                                ",
         "<bg-white><black>-rw-rw-r--        4 fileA.txt</black></bg-white>                                                   ",
         "-rw-rw-r--        2 fileB.txt                                                   ",
+        "-rw-rw-r--        1 fileC.txt                                                   ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -39,8 +40,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        1 fileC.txt                                                   "
+        "                                                                                "
       ]
     },
     {
@@ -52,6 +52,7 @@
         "                                                                                ",
         "<bg-white><black>{fixture_root}/fileC.txt</black></bg-white>                                          ",
         "{fixture_root}/fileB.txt                                          ",
+        "{fixture_root}/fileA.txt                                          ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -70,8 +71,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "{fixture_root}/fileA.txt                                          "
+        "                                                                                "
       ]
     },
     {
@@ -83,6 +83,7 @@
         "                                                                                ",
         "<bg-white><black>-rw-rw-r--        4 fileA.txt</black></bg-white>                                                   ",
         "-rw-rw-r--        2 fileB.txt                                                   ",
+        "-rw-rw-r--        1 fileC.txt                                                   ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -101,8 +102,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        1 fileC.txt                                                   "
+        "                                                                                "
       ]
     }
   ]

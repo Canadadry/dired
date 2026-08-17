@@ -21,6 +21,7 @@
         "                                                                                ",
         "<bg-white><black>drwxrwxr-x       60 project-apple</black></bg-white>                                               ",
         "drwxrwxr-x       60 project-banana                                              ",
+        "drwxrwxr-x       60 project-cherry                                              ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -39,8 +40,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "drwxrwxr-x       60 project-cherry                                              "
+        "                                                                                "
       ]
     },
     {
@@ -52,6 +52,7 @@
         "                                                                                ",
         "<bg-white><black>{fixture_root}/project-cherry</black></bg-white>                                     ",
         "{fixture_root}/project-banana                                     ",
+        "{fixture_root}/project-apple                                      ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -70,8 +71,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "{fixture_root}/project-apple                                      "
+        "                                                                                "
       ]
     },
     {
@@ -87,6 +87,7 @@
       "expect": [
         "Folder History                                                                  ",
         "<green>f:banana</green>                                                                        ",
+        "<bg-white><black>{fixture_root}/project-banana</black></bg-white>                                     ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -107,8 +108,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<bg-white><black>{fixture_root}/project-banana</black></bg-white>                                     "
+        "                                                                                "
       ]
     },
     {
@@ -118,6 +118,7 @@
       "expect": [
         "Folder History                                                                  ",
         "Filter: banana                                                                  ",
+        "<bg-white><black>{fixture_root}/project-banana</black></bg-white>                                     ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -138,8 +139,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<bg-white><black>{fixture_root}/project-banana</black></bg-white>                                     "
+        "                                                                                "
       ]
     },
     {
@@ -151,6 +151,7 @@
         "                                                                                ",
         "<bg-white><black>{fixture_root}/project-cherry</black></bg-white>                                     ",
         "{fixture_root}/project-banana                                     ",
+        "{fixture_root}/project-apple                                      ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -169,8 +170,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "{fixture_root}/project-apple                                      "
+        "                                                                                "
       ]
     },
     {
@@ -193,6 +193,7 @@
         "Folder History                                                                  ",
         "<green>F:apple|cherry</green>                                                                  ",
         "<bg-white><black>{fixture_root}/project-cherry</black></bg-white>                                     ",
+        "{fixture_root}/project-apple                                      ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -212,8 +213,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "{fixture_root}/project-apple                                      "
+        "                                                                                "
       ]
     },
     {
@@ -224,6 +224,7 @@
         "Folder History                                                                  ",
         "Filter: apple|cherry                                                            ",
         "<bg-white><black>{fixture_root}/project-cherry</black></bg-white>                                     ",
+        "{fixture_root}/project-apple                                      ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -243,8 +244,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "{fixture_root}/project-apple                                      "
+        "                                                                                "
       ]
     },
     {
@@ -256,6 +256,7 @@
         "                                                                                ",
         "<bg-white><black>{fixture_root}/project-cherry</black></bg-white>                                     ",
         "{fixture_root}/project-banana                                     ",
+        "{fixture_root}/project-apple                                      ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -274,8 +275,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "{fixture_root}/project-apple                                      "
+        "                                                                                "
       ]
     },
     {
@@ -287,6 +287,7 @@
         "                                                                                ",
         "<bg-white><black>drwxrwxr-x       60 project-apple</black></bg-white>                                               ",
         "drwxrwxr-x       60 project-banana                                              ",
+        "drwxrwxr-x       60 project-cherry                                              ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -305,8 +306,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "drwxrwxr-x       60 project-cherry                                              "
+        "                                                                                "
       ]
     }
   ]

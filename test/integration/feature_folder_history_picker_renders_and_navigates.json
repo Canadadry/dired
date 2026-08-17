@@ -21,6 +21,7 @@
         "                                                                                ",
         "<bg-white><black>drwxrwxr-x       60 one</black></bg-white>                                                         ",
         "drwxrwxr-x       60 three                                                       ",
+        "drwxrwxr-x       60 two                                                         ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -39,8 +40,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "drwxrwxr-x       60 two                                                         "
+        "                                                                                "
       ]
     },
     {
@@ -52,6 +52,7 @@
         "                                                                                ",
         "<bg-white><black>{fixture_root}/three</black></bg-white>                                              ",
         "{fixture_root}/two                                                ",
+        "{fixture_root}/one                                                ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -70,8 +71,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "{fixture_root}/one                                                "
+        "                                                                                "
       ]
     },
     {
@@ -83,6 +83,7 @@
         "                                                                                ",
         "{fixture_root}/three                                              ",
         "<bg-white><black>{fixture_root}/two</black></bg-white>                                                ",
+        "{fixture_root}/one                                                ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -101,8 +102,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "{fixture_root}/one                                                "
+        "                                                                                "
       ]
     },
     {
@@ -114,6 +114,7 @@
         "                                                                                ",
         "{fixture_root}/three                                              ",
         "{fixture_root}/two                                                ",
+        "<bg-white><black>{fixture_root}/one</black></bg-white>                                                ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -132,8 +133,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<bg-white><black>{fixture_root}/one</black></bg-white>                                                "
+        "                                                                                "
       ]
     },
     {
@@ -145,6 +145,7 @@
         "                                                                                ",
         "<bg-white><black>drwxrwxr-x       60 one</black></bg-white>                                                         ",
         "drwxrwxr-x       60 three                                                       ",
+        "drwxrwxr-x       60 two                                                         ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -163,8 +164,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "drwxrwxr-x       60 two                                                         "
+        "                                                                                "
       ]
     }
   ]

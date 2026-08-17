@@ -5,9 +5,19 @@
       "tracked.txt": "hello\n"
     },
     "setup": [
-      ["add", "clean.txt"],
-      ["add", "tracked.txt"],
-      ["commit", "-m", "init"]
+      [
+        "add",
+        "clean.txt"
+      ],
+      [
+        "add",
+        "tracked.txt"
+      ],
+      [
+        "commit",
+        "-m",
+        "init"
+      ]
     ],
     "mutate": {
       "tracked.txt": "hello world\n"
@@ -15,9 +25,12 @@
   },
   "steps": [
     {
-      "keys": ["g"],
+      "keys": [
+        "g"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
+        "<green>g:</green>                                                                              ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -39,14 +52,18 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<green>g:</green>                                                                              "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["t", "x", "t"],
+      "keys": [
+        "t",
+        "x",
+        "t"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
+        "<green>g:txt</green>                                                                           ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -68,16 +85,18 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<green>g:txt</green>                                                                           "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["<Enter>"],
+      "keys": [
+        "<Enter>"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
         "Glob: txt                                                                       ",
         "<bg-white><black>-rw-rw-r--        7 clean.txt</black></bg-white>                                                   ",
+        "<yellow>-rw-rw-r--       12 tracked.txt</yellow>                                                 ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -97,8 +116,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<yellow>-rw-rw-r--       12 tracked.txt</yellow>                                                 "
+        "                                                                                "
       ]
     }
   ]

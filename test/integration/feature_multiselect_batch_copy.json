@@ -8,12 +8,15 @@
   },
   "steps": [
     {
-      "keys": ["<Down>"],
+      "keys": [
+        "<Down>"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
         "                                                                                ",
         "drwxrwxr-x       60 dest                                                        ",
         "<bg-white><black>-rw-rw-r--        1 x.txt</black></bg-white>                                                       ",
+        "-rw-rw-r--        2 y.txt                                                       ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -32,17 +35,19 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        2 y.txt                                                       "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["v"],
+      "keys": [
+        "v"
+      ],
       "expect": [
         "VISUAL : {fixture_root}                                           ",
         "                                                                                ",
         "drwxrwxr-x       60 dest                                                        ",
         "<bg-white><black>-rw-rw-r--        1 x.txt</black></bg-white>                                                       ",
+        "-rw-rw-r--        2 y.txt                                                       ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -61,17 +66,19 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        2 y.txt                                                       "
+        "                                                                                "
       ]
     },
     {
-      "keys": [" "],
+      "keys": [
+        " "
+      ],
       "expect": [
         "VISUAL(1) : {fixture_root}                                        ",
         "                                                                                ",
         "drwxrwxr-x       60 dest                                                        ",
         "<bg-blue><white>-rw-rw-r--        1 x.txt</white></bg-blue>                                                       ",
+        "-rw-rw-r--        2 y.txt                                                       ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -90,17 +97,19 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        2 y.txt                                                       "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["<Down>"],
+      "keys": [
+        "<Down>"
+      ],
       "expect": [
         "VISUAL(1) : {fixture_root}                                        ",
         "                                                                                ",
         "drwxrwxr-x       60 dest                                                        ",
         "<blue>-rw-rw-r--        1 x.txt</blue>                                                       ",
+        "<bg-white><black>-rw-rw-r--        2 y.txt</black></bg-white>                                                       ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -119,17 +128,19 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<bg-white><black>-rw-rw-r--        2 y.txt</black></bg-white>                                                       "
+        "                                                                                "
       ]
     },
     {
-      "keys": [" "],
+      "keys": [
+        " "
+      ],
       "expect": [
         "VISUAL(2) : {fixture_root}                                        ",
         "                                                                                ",
         "drwxrwxr-x       60 dest                                                        ",
         "<blue>-rw-rw-r--        1 x.txt</blue>                                                       ",
+        "<bg-blue><white>-rw-rw-r--        2 y.txt</white></bg-blue>                                                       ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -148,17 +159,19 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<bg-blue><white>-rw-rw-r--        2 y.txt</white></bg-blue>                                                       "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["c"],
+      "keys": [
+        "c"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
         "Yanked: 2 items (copy)                                                          ",
         "drwxrwxr-x       60 dest                                                        ",
         "-rw-rw-r--        1 x.txt                                                       ",
+        "<bg-white><black>-rw-rw-r--        2 y.txt</black></bg-white>                                                       ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -177,14 +190,18 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<bg-white><black>-rw-rw-r--        2 y.txt</black></bg-white>                                                       "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["<Up>", "<Up>", "<Right>"],
+      "keys": [
+        "<Up>",
+        "<Up>",
+        "<Right>"
+      ],
       "expect": [
         "Path: {fixture_root}/dest                                         ",
+        "Yanked: 2 items (copy)                                                          ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -206,16 +223,18 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "Yanked: 2 items (copy)                                                          "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["p"],
+      "keys": [
+        "p"
+      ],
       "expect": [
         "Path: {fixture_root}/dest                                         ",
         "                                                                                ",
         "<bg-white><black>-rw-rw-r--        1 x.txt</black></bg-white>                                                       ",
+        "-rw-rw-r--        2 y.txt                                                       ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -235,17 +254,19 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        2 y.txt                                                       "
+        "                                                                                "
       ]
     },
     {
-      "keys": ["<Left>"],
+      "keys": [
+        "<Left>"
+      ],
       "expect": [
         "Path: {fixture_root}                                              ",
         "                                                                                ",
         "drwxrwxr-x      100 dest                                                        ",
         "<bg-white><black>-rw-rw-r--        1 x.txt</black></bg-white>                                                       ",
+        "-rw-rw-r--        2 y.txt                                                       ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -264,8 +285,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        2 y.txt                                                       "
+        "                                                                                "
       ]
     }
   ]
