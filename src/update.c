@@ -280,6 +280,61 @@ static void refresh_current_listing(Model *out_model, Cmd *out_cmd)
     out_cmd->path[sizeof(out_cmd->path) - 1] = '\0';
 }
 
+static void move_picker_cursor(Model *out_model, int delta)
+{
+    int max_index = out_model->picker_count > 0 ? out_model->picker_count - 1 : 0;
+    int next = out_model->picker_selected + delta;
+
+    if (next < 0)
+        next = 0;
+    else if (next > max_index)
+        next = max_index;
+
+    out_model->picker_selected = next;
+}
+
+static void picker_recompute_filter(Model *out_model, const char *pattern)
+{
+    int count = 0;
+    for (int i = 0; i < out_model->picker_unfiltered_count; i++) {
+        if (!filter_matches(out_model->picker_unfiltered[i], out_model->picker_filter_type, pattern))
+            continue;
+        if (count >= MAX_ENTRIES)
+            break;
+        snprintf(out_model->picker_entries[count], sizeof(out_model->picker_entries[count]),
+                 "%s", out_model->picker_unfiltered[i]);
+        count++;
+    }
+    out_model->picker_count = count;
+    out_model->picker_selected = 0;
+}
+
+static void open_picker_from_arena(Model *out_model, AppMode mode,
+                                    const unsigned char *arena_data, int arena_bytes)
+{
+    out_model->mode = mode;
+    out_model->picker_filter_type = FILTER_NONE;
+    out_model->picker_filter_pattern[0] = '\0';
+    out_model->picker_filtering = 0;
+    out_model->edit_buf[0] = '\0';
+    out_model->edit_len = 0;
+
+    out_model->picker_unfiltered_count = 0;
+    if (arena_data) {
+        HistoryArenaState state = history_arena_state(arena_data, arena_bytes);
+        for (int i = 0; i < state.count && i < MAX_ENTRIES; i++) {
+            const char *path = history_arena_command_at(arena_data, arena_bytes, i);
+            if (!path)
+                break;
+            snprintf(out_model->picker_unfiltered[out_model->picker_unfiltered_count],
+                     sizeof(out_model->picker_unfiltered[0]), "%s", path);
+            out_model->picker_unfiltered_count++;
+        }
+    }
+
+    picker_recompute_filter(out_model, "");
+}
+
 static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
 {
     switch (msg->type) {
@@ -490,6 +545,18 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
     case MSG_TOGGLE_HIDDEN:
         out_model->show_hidden = !out_model->show_hidden;
         refresh_current_listing(out_model, out_cmd);
+        break;
+
+    case MSG_OPEN_FILE_PICKER:
+        open_picker_from_arena(out_model, MODE_FILE_PICKER,
+                                out_model->file_history ? out_model->file_history->data : NULL,
+                                FILE_HISTORY_ARENA_BYTES);
+        break;
+
+    case MSG_OPEN_FOLDER_PICKER:
+        open_picker_from_arena(out_model, MODE_FOLDER_PICKER,
+                                out_model->folder_history ? out_model->folder_history->data : NULL,
+                                FOLDER_HISTORY_ARENA_BYTES);
         break;
 
     case MSG_QUIT:
@@ -1139,6 +1206,83 @@ static void handle_select(const Msg *msg, Model *out_model, Cmd *out_cmd)
     }
 }
 
+static void picker_start_filter(Model *out_model, FilterType type)
+{
+    out_model->picker_filter_type = type;
+    out_model->picker_filtering = 1;
+    strncpy(out_model->edit_buf, out_model->picker_filter_pattern, sizeof(out_model->edit_buf) - 1);
+    out_model->edit_buf[sizeof(out_model->edit_buf) - 1] = '\0';
+    out_model->edit_len = strlen(out_model->edit_buf);
+}
+
+static void picker_clear_filter(Model *out_model)
+{
+    out_model->picker_filter_type = FILTER_NONE;
+    out_model->picker_filter_pattern[0] = '\0';
+    out_model->picker_filtering = 0;
+    out_model->edit_buf[0] = '\0';
+    out_model->edit_len = 0;
+    picker_recompute_filter(out_model, "");
+}
+
+static void handle_picker(const Msg *msg, Model *out_model, Cmd *out_cmd)
+{
+    (void)out_cmd;
+
+    switch (msg->type) {
+    case MSG_MOVE_UP:
+        move_picker_cursor(out_model, -1);
+        break;
+
+    case MSG_MOVE_DOWN:
+        move_picker_cursor(out_model, 1);
+        break;
+
+    case MSG_FILTER_PLAIN:
+        picker_start_filter(out_model, FILTER_PLAIN);
+        break;
+
+    case MSG_FILTER_REGEX:
+        picker_start_filter(out_model, FILTER_REGEX);
+        break;
+
+    case MSG_TEXT_INPUT:
+        if (out_model->picker_filtering && out_model->edit_len < NAME_MAX_LEN) {
+            out_model->edit_buf[out_model->edit_len++] = msg->ch;
+            out_model->edit_buf[out_model->edit_len] = '\0';
+            picker_recompute_filter(out_model, out_model->edit_buf);
+        }
+        break;
+
+    case MSG_DELETE:
+        if (out_model->picker_filtering) {
+            if (out_model->edit_len > 0)
+                out_model->edit_buf[--out_model->edit_len] = '\0';
+            picker_recompute_filter(out_model, out_model->edit_buf);
+        }
+        break;
+
+    case MSG_ACTIVATE:
+        if (out_model->picker_filtering) {
+            strncpy(out_model->picker_filter_pattern, out_model->edit_buf,
+                    sizeof(out_model->picker_filter_pattern) - 1);
+            out_model->picker_filter_pattern[sizeof(out_model->picker_filter_pattern) - 1] = '\0';
+            out_model->picker_filtering = 0;
+        }
+        break;
+
+    case MSG_CANCEL:
+        if (out_model->picker_filtering || out_model->picker_filter_type != FILTER_NONE)
+            picker_clear_filter(out_model);
+        else
+            out_model->mode = MODE_NAV;
+        break;
+
+    default:
+        break;
+    }
+}
+
 void update(const Msg *msg, const Model *model, Model *out_model, Cmd *out_cmd)
 {
     *out_model = *model;
@@ -1192,6 +1336,8 @@ void update(const Msg *msg, const Model *model, Model *out_model, Cmd *out_cmd)
         handle_confirm_delete(msg, out_model, out_cmd);
     else if (model->mode == MODE_SELECT)
         handle_select(msg, out_model, out_cmd);
+    else if (model->mode == MODE_FOLDER_PICKER || model->mode == MODE_FILE_PICKER)
+        handle_picker(msg, out_model, out_cmd);
     else if (model->mode == MODE_ERROR) {
         out_model->mode = MODE_NAV;
     }

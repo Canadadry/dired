@@ -34,6 +34,8 @@ static int g_preview_rule_count = 0;
 
 static History g_history;
 static char g_history_path[PATH_MAX_LEN];
+static FolderHistoryArena g_folder_history;
+static FileHistoryArena g_file_history;
 
 static const char PREVIEW_CONFIG_TEMPLATE[] =
     "# ~/.config/dired -- per-extension preview commands\n"
@@ -921,7 +923,7 @@ static void render(const Model *model)
 /* Command keys (MSG_RENAME/MSG_NEW/MSG_QUIT) are only
  * recognized outside text-entry modes, so typing "r" while naming a file
  * inserts the letter instead of re-triggering rename. */
-static Msg translate_event(struct tb_event ev, AppMode mode)
+static Msg translate_event(struct tb_event ev, AppMode mode, int picker_filtering)
 {
     Msg msg = { .type = MSG_NONE };
 
@@ -936,7 +938,8 @@ static Msg translate_event(struct tb_event ev, AppMode mode)
         return msg;
 
     int text_entry = (mode == MODE_RENAME || mode == MODE_CREATE || mode == MODE_RUN_CMD ||
-                       mode == MODE_FILTER || mode == MODE_GLOB);
+                       mode == MODE_FILTER || mode == MODE_GLOB ||
+                       ((mode == MODE_FOLDER_PICKER || mode == MODE_FILE_PICKER) && picker_filtering));
 
     if (text_entry) {
         if (ev.key == TB_KEY_ESC)
@@ -1018,6 +1021,10 @@ static Msg translate_event(struct tb_event ev, AppMode mode)
         msg.type = MSG_CYCLE_PAGE;
     else if (ev.ch == 'a' || ev.ch == 'A')
         msg.type = MSG_TOGGLE_HIDDEN;
+    else if (ev.ch == 'i')
+        msg.type = MSG_OPEN_FILE_PICKER;
+    else if (ev.ch == 'I')
+        msg.type = MSG_OPEN_FOLDER_PICKER;
     else if (ev.ch == 'x')
         msg.type = MSG_DELETE_PERMANENT;
     else if (ev.ch == 'q')
@@ -1136,6 +1143,25 @@ static void load_history(void)
         g_history_path[0] = '\0';
 
     sweep_deleted_history_folders();
+
+    history_folder_history_load_default(&g_folder_history);
+    history_file_history_load_default(&g_file_history);
+
+    int folder_count_before = history_arena_state(g_folder_history.data, FOLDER_HISTORY_ARENA_BYTES).count;
+    int file_count_before = history_arena_state(g_file_history.data, FILE_HISTORY_ARENA_BYTES).count;
+
+    history_prune_folder_history(&g_folder_history);
+    history_prune_file_history(&g_file_history);
+
+    int folder_pruned = history_arena_state(g_folder_history.data, FOLDER_HISTORY_ARENA_BYTES).count != folder_count_before;
+    int file_pruned = history_arena_state(g_file_history.data, FILE_HISTORY_ARENA_BYTES).count != file_count_before;
+
+    if (g_history_path[0] != '\0') {
+        if (folder_pruned)
+            history_write_folder_history(g_history_path, &g_folder_history);
+        if (file_pruned)
+            history_write_file_history(g_history_path, &g_file_history);
+    }
 }
 
 #ifdef BUILD_DEBUG
@@ -1169,6 +1195,8 @@ int main(int argc, char **argv)
     memset(&model, 0, sizeof(model));
     model.mode = MODE_NAV;
     model.history = &g_history;
+    model.folder_history = &g_folder_history;
+    model.file_history = &g_file_history;
     getcwd(model.current_path, sizeof(model.current_path));
     model.term_height = tb_height();
     model.term_width = tb_width();
@@ -1194,7 +1222,7 @@ int main(int argc, char **argv)
 
         struct tb_event ev;
         tb_poll_event(&ev);
-        Msg msg = translate_event(ev, model.mode);
+        Msg msg = translate_event(ev, model.mode, model.picker_filtering);
 
         static Model next_model;
         Cmd next_cmd;

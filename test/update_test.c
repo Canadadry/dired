@@ -5005,6 +5005,353 @@ static void test_dir_loaded_reapplies_committed_filter(void)
     }
 }
 
+static void test_open_file_picker_populates_from_arena_most_recent_first(void)
+{
+    FileHistoryArena arena;
+    memset(&arena, 0, sizeof(arena));
+    history_arena_push(arena.data, FILE_HISTORY_ARENA_BYTES, "/a/one.c");
+    history_arena_push(arena.data, FILE_HISTORY_ARENA_BYTES, "/a/two.c");
+    history_arena_push(arena.data, FILE_HISTORY_ARENA_BYTES, "/a/three.c");
+
+    Model in = make_nav_model(0, 0);
+    in.file_history = &arena;
+    Msg msg = { .type = MSG_OPEN_FILE_PICKER };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.mode != MODE_FILE_PICKER) {
+        TEST_ERRORF("open file picker", "mode = %d, want MODE_FILE_PICKER", out.mode);
+    }
+    if (out.picker_count != 3) {
+        TEST_ERRORF("open file picker", "picker_count = %d, want 3", out.picker_count);
+    }
+    if (strcmp(out.picker_entries[0], "/a/three.c") != 0 ||
+        strcmp(out.picker_entries[1], "/a/two.c") != 0 ||
+        strcmp(out.picker_entries[2], "/a/one.c") != 0) {
+        TEST_ERRORF("open file picker", "entries = [%s, %s, %s], want [/a/three.c, /a/two.c, /a/one.c]",
+                    out.picker_entries[0], out.picker_entries[1], out.picker_entries[2]);
+    }
+    if (out.picker_selected != 0) {
+        TEST_ERRORF("open file picker", "picker_selected = %d, want 0", out.picker_selected);
+    }
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("open file picker", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+}
+
+static void test_open_folder_picker_populates_from_arena_most_recent_first(void)
+{
+    FolderHistoryArena arena;
+    memset(&arena, 0, sizeof(arena));
+    history_arena_push(arena.data, FOLDER_HISTORY_ARENA_BYTES, "/a/one");
+    history_arena_push(arena.data, FOLDER_HISTORY_ARENA_BYTES, "/a/two");
+    history_arena_push(arena.data, FOLDER_HISTORY_ARENA_BYTES, "/a/three");
+
+    Model in = make_nav_model(0, 0);
+    in.folder_history = &arena;
+    Msg msg = { .type = MSG_OPEN_FOLDER_PICKER };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.mode != MODE_FOLDER_PICKER) {
+        TEST_ERRORF("open folder picker", "mode = %d, want MODE_FOLDER_PICKER", out.mode);
+    }
+    if (out.picker_count != 3) {
+        TEST_ERRORF("open folder picker", "picker_count = %d, want 3", out.picker_count);
+    }
+    if (strcmp(out.picker_entries[0], "/a/three") != 0 ||
+        strcmp(out.picker_entries[1], "/a/two") != 0 ||
+        strcmp(out.picker_entries[2], "/a/one") != 0) {
+        TEST_ERRORF("open folder picker", "entries = [%s, %s, %s], want [/a/three, /a/two, /a/one]",
+                    out.picker_entries[0], out.picker_entries[1], out.picker_entries[2]);
+    }
+    if (out.picker_selected != 0) {
+        TEST_ERRORF("open folder picker", "picker_selected = %d, want 0", out.picker_selected);
+    }
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("open folder picker", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+}
+
+static void test_open_pickers_are_noop_outside_nav(void)
+{
+    AppMode other_modes[] = { MODE_SELECT, MODE_FILTER, MODE_GLOB, MODE_RENAME, MODE_CREATE };
+    MsgType open_msgs[] = { MSG_OPEN_FILE_PICKER, MSG_OPEN_FOLDER_PICKER };
+
+    FileHistoryArena files;
+    memset(&files, 0, sizeof(files));
+    history_arena_push(files.data, FILE_HISTORY_ARENA_BYTES, "/a/one.c");
+
+    FolderHistoryArena folders;
+    memset(&folders, 0, sizeof(folders));
+    history_arena_push(folders.data, FOLDER_HISTORY_ARENA_BYTES, "/a/one");
+
+    for (size_t m = 0; m < sizeof(open_msgs) / sizeof(open_msgs[0]); m++) {
+        for (size_t i = 0; i < sizeof(other_modes) / sizeof(other_modes[0]); i++) {
+            Model in = make_nav_model(0, 0);
+            in.mode = other_modes[i];
+            in.file_history = &files;
+            in.folder_history = &folders;
+            Msg msg = { .type = open_msgs[m] };
+            Model out;
+            Cmd cmd;
+
+            update(&msg, &in, &out, &cmd);
+
+            if (out.mode == MODE_FILE_PICKER || out.mode == MODE_FOLDER_PICKER) {
+                TEST_ERRORF("open picker noop outside nav",
+                            "msg %d from mode %d: mode = %d, want unaffected", open_msgs[m], other_modes[i], out.mode);
+            }
+            if (out.picker_count != 0) {
+                TEST_ERRORF("open picker noop outside nav",
+                            "msg %d from mode %d: picker_count = %d, want 0", open_msgs[m], other_modes[i], out.picker_count);
+            }
+        }
+    }
+}
+
+static Model make_picker_model(AppMode mode, int count, int selected)
+{
+    Model m = make_nav_model(0, 0);
+    m.mode = mode;
+    m.picker_count = count;
+    m.picker_selected = selected;
+    return m;
+}
+
+static void test_picker_move_selection_clamped(void)
+{
+    typedef struct {
+        const char *label;
+        AppMode mode;
+        int picker_count;
+        int picker_selected;
+        MsgType msg_type;
+        int expected_selected;
+    } Case;
+
+    Case cases[] = {
+        {"file picker up from middle", MODE_FILE_PICKER, 5, 2, MSG_MOVE_UP, 1},
+        {"file picker up clamped at top", MODE_FILE_PICKER, 5, 0, MSG_MOVE_UP, 0},
+        {"file picker down from middle", MODE_FILE_PICKER, 5, 2, MSG_MOVE_DOWN, 3},
+        {"file picker down clamped at bottom", MODE_FILE_PICKER, 5, 4, MSG_MOVE_DOWN, 4},
+        {"folder picker up clamped at top", MODE_FOLDER_PICKER, 5, 0, MSG_MOVE_UP, 0},
+        {"folder picker down clamped at bottom", MODE_FOLDER_PICKER, 5, 4, MSG_MOVE_DOWN, 4},
+        {"empty picker down stays put", MODE_FILE_PICKER, 0, 0, MSG_MOVE_DOWN, 0},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model in = make_picker_model(cases[i].mode, cases[i].picker_count, cases[i].picker_selected);
+        Msg msg = { .type = cases[i].msg_type };
+        Model out;
+        Cmd cmd;
+
+        update(&msg, &in, &out, &cmd);
+
+        if (out.picker_selected != cases[i].expected_selected) {
+            TEST_ERRORF(cases[i].label, "picker_selected = %d, want %d",
+                        out.picker_selected, cases[i].expected_selected);
+        }
+        if (out.mode != cases[i].mode) {
+            TEST_ERRORF(cases[i].label, "mode = %d, want unchanged %d", out.mode, cases[i].mode);
+        }
+        if (cmd.type != CMD_NONE) {
+            TEST_ERRORF(cases[i].label, "cmd.type = %d, want CMD_NONE", cmd.type);
+        }
+    }
+}
+
+static Model make_picker_filter_compose_model(AppMode mode, FilterType type, const char *edit_buf, int selected)
+{
+    Model m = make_picker_model(mode, 0, selected);
+    m.picker_filtering = 1;
+    m.picker_filter_type = type;
+    strcpy(m.edit_buf, edit_buf);
+    m.edit_len = strlen(edit_buf);
+
+    strcpy(m.picker_unfiltered[0], "/a/report.txt");
+    strcpy(m.picker_unfiltered[1], "/a/other.txt");
+    strcpy(m.picker_unfiltered[2], "/a/reporter.log");
+    m.picker_unfiltered_count = 3;
+    return m;
+}
+
+static void test_picker_filter_plain_live_narrows_on_text_input(void)
+{
+    Model in = make_picker_filter_compose_model(MODE_FILE_PICKER, FILTER_PLAIN, "repor", 2);
+    Msg msg = { .type = MSG_TEXT_INPUT, .ch = 't' };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (strcmp(out.edit_buf, "report") != 0) {
+        TEST_ERRORF("picker filter plain live narrow", "edit_buf = '%s', want 'report'", out.edit_buf);
+    }
+    if (out.picker_count != 2 || strcmp(out.picker_entries[0], "/a/report.txt") != 0 ||
+        strcmp(out.picker_entries[1], "/a/reporter.log") != 0) {
+        TEST_ERRORF("picker filter plain live narrow", "entries = [%s, %s] (%d), want [/a/report.txt, /a/reporter.log] (2)",
+                    out.picker_entries[0], out.picker_entries[1], out.picker_count);
+    }
+    if (out.picker_selected != 0) {
+        TEST_ERRORF("picker filter plain live narrow", "picker_selected = %d, want 0", out.picker_selected);
+    }
+    if (out.mode != MODE_FILE_PICKER) {
+        TEST_ERRORF("picker filter plain live narrow", "mode = %d, want MODE_FILE_PICKER (unchanged)", out.mode);
+    }
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("picker filter plain live narrow", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+}
+
+static void test_picker_filter_regex_live_narrows_on_text_input(void)
+{
+    Model in = make_picker_filter_compose_model(MODE_FOLDER_PICKER, FILTER_REGEX, "\\.tx", 0);
+    Msg msg = { .type = MSG_TEXT_INPUT, .ch = 't' };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (strcmp(out.edit_buf, "\\.txt") != 0) {
+        TEST_ERRORF("picker filter regex live narrow", "edit_buf = '%s', want '\\.txt'", out.edit_buf);
+    }
+    if (out.picker_count != 2 || strcmp(out.picker_entries[0], "/a/report.txt") != 0 ||
+        strcmp(out.picker_entries[1], "/a/other.txt") != 0) {
+        TEST_ERRORF("picker filter regex live narrow", "entries = [%s, %s] (%d), want [/a/report.txt, /a/other.txt] (2)",
+                    out.picker_entries[0], out.picker_entries[1], out.picker_count);
+    }
+}
+
+static void test_picker_filter_live_narrows_on_delete(void)
+{
+    Model in = make_picker_filter_compose_model(MODE_FILE_PICKER, FILTER_PLAIN, "reporter", 1);
+    Msg msg = { .type = MSG_DELETE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (strcmp(out.edit_buf, "reporte") != 0) {
+        TEST_ERRORF("picker filter live narrow on delete", "edit_buf = '%s', want 'reporte'", out.edit_buf);
+    }
+    if (out.picker_count != 1 || strcmp(out.picker_entries[0], "/a/reporter.log") != 0) {
+        TEST_ERRORF("picker filter live narrow on delete", "entries = [%s] (%d), want [/a/reporter.log] (1)",
+                    out.picker_entries[0], out.picker_count);
+    }
+}
+
+static void test_picker_filter_commit_on_activate_stays_in_picker(void)
+{
+    Model in = make_picker_filter_compose_model(MODE_FILE_PICKER, FILTER_PLAIN, "report", 0);
+    strcpy(in.picker_entries[0], "/a/report.txt");
+    strcpy(in.picker_entries[1], "/a/reporter.log");
+    in.picker_count = 2;
+    Msg msg = { .type = MSG_ACTIVATE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.mode != MODE_FILE_PICKER) {
+        TEST_ERRORF("picker filter commit", "mode = %d, want MODE_FILE_PICKER (stays in picker)", out.mode);
+    }
+    if (out.picker_filtering) {
+        TEST_ERRORF("picker filter commit", "picker_filtering = %d, want 0", out.picker_filtering);
+    }
+    if (out.picker_filter_type != FILTER_PLAIN || strcmp(out.picker_filter_pattern, "report") != 0) {
+        TEST_ERRORF("picker filter commit", "picker_filter = {%d, '%s'}, want {FILTER_PLAIN, 'report'}",
+                    out.picker_filter_type, out.picker_filter_pattern);
+    }
+    if (out.picker_count != 2 || strcmp(out.picker_entries[0], "/a/report.txt") != 0 ||
+        strcmp(out.picker_entries[1], "/a/reporter.log") != 0) {
+        TEST_ERRORF("picker filter commit", "entries = [%s, %s] (%d), want [/a/report.txt, /a/reporter.log] (2)",
+                    out.picker_entries[0], out.picker_entries[1], out.picker_count);
+    }
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("picker filter commit", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+}
+
+static void test_picker_esc_while_typing_clears_filter_and_stays_open(void)
+{
+    Model in = make_picker_filter_compose_model(MODE_FOLDER_PICKER, FILTER_PLAIN, "repor", 0);
+    Msg msg = { .type = MSG_CANCEL };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.mode != MODE_FOLDER_PICKER) {
+        TEST_ERRORF("picker esc while typing", "mode = %d, want MODE_FOLDER_PICKER (stays open)", out.mode);
+    }
+    if (out.picker_filtering) {
+        TEST_ERRORF("picker esc while typing", "picker_filtering = %d, want 0", out.picker_filtering);
+    }
+    if (out.picker_filter_type != FILTER_NONE || out.picker_filter_pattern[0] != '\0') {
+        TEST_ERRORF("picker esc while typing", "picker_filter = {%d, '%s'}, want {FILTER_NONE, ''}",
+                    out.picker_filter_type, out.picker_filter_pattern);
+    }
+    if (out.picker_count != 3) {
+        TEST_ERRORF("picker esc while typing", "picker_count = %d, want 3 (unfiltered)", out.picker_count);
+    }
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("picker esc while typing", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+}
+
+static void test_picker_esc_twice_clears_then_exits(void)
+{
+    Model committed = make_picker_model(MODE_FILE_PICKER, 0, 0);
+    committed.picker_filter_type = FILTER_PLAIN;
+    strcpy(committed.picker_filter_pattern, "report");
+    strcpy(committed.picker_unfiltered[0], "/a/report.txt");
+    strcpy(committed.picker_unfiltered[1], "/a/other.txt");
+    committed.picker_unfiltered_count = 2;
+    strcpy(committed.picker_entries[0], "/a/report.txt");
+    committed.picker_count = 1;
+
+    Msg first_esc = { .type = MSG_CANCEL };
+    Model after_first;
+    Cmd cmd;
+    update(&first_esc, &committed, &after_first, &cmd);
+
+    if (after_first.mode != MODE_FILE_PICKER) {
+        TEST_ERRORF("picker esc twice", "after first esc: mode = %d, want MODE_FILE_PICKER (first press only clears)",
+                    after_first.mode);
+    }
+    if (after_first.picker_filter_type != FILTER_NONE || after_first.picker_count != 2) {
+        TEST_ERRORF("picker esc twice", "after first esc: filter_type = %d picker_count = %d, want FILTER_NONE, 2",
+                    after_first.picker_filter_type, after_first.picker_count);
+    }
+
+    Model after_second;
+    update(&first_esc, &after_first, &after_second, &cmd);
+
+    if (after_second.mode != MODE_NAV) {
+        TEST_ERRORF("picker esc twice", "after second esc: mode = %d, want MODE_NAV (second press exits)",
+                    after_second.mode);
+    }
+}
+
+static void test_picker_esc_with_no_filter_exits_immediately(void)
+{
+    Model in = make_picker_model(MODE_FOLDER_PICKER, 3, 1);
+    Msg msg = { .type = MSG_CANCEL };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.mode != MODE_NAV) {
+        TEST_ERRORF("picker esc no filter", "mode = %d, want MODE_NAV (single press exits)", out.mode);
+    }
+}
+
 static void test_quit(void)
 {
     Model in = make_nav_model(3, 1);
@@ -5276,6 +5623,17 @@ void test_update(void)
     test_resort_keeps_selection_on_same_file();
     test_dir_loaded_sorts_entries();
     test_dir_loaded_reapplies_committed_filter();
+    test_open_file_picker_populates_from_arena_most_recent_first();
+    test_open_folder_picker_populates_from_arena_most_recent_first();
+    test_open_pickers_are_noop_outside_nav();
+    test_picker_move_selection_clamped();
+    test_picker_filter_plain_live_narrows_on_text_input();
+    test_picker_filter_regex_live_narrows_on_text_input();
+    test_picker_filter_live_narrows_on_delete();
+    test_picker_filter_commit_on_activate_stays_in_picker();
+    test_picker_esc_while_typing_clears_filter_and_stays_open();
+    test_picker_esc_twice_clears_then_exits();
+    test_picker_esc_with_no_filter_exits_immediately();
     test_quit();
     test_error_dismissed_by_any_key();
 }

@@ -21,6 +21,8 @@ typedef enum {
     MODE_FILTER,
     MODE_GLOB,
     MODE_SELECT,
+    MODE_FOLDER_PICKER,
+    MODE_FILE_PICKER,
 } AppMode;
 
 typedef enum {
@@ -157,6 +159,18 @@ typedef struct {
     int recall_cursor;
     char recall_stash[NAME_MAX_LEN + 1];
     size_t recall_stash_len;
+
+    FolderHistoryArena *folder_history;
+    FileHistoryArena *file_history;
+
+    char picker_unfiltered[MAX_ENTRIES][PATH_MAX_LEN];
+    int picker_unfiltered_count;
+    char picker_entries[MAX_ENTRIES][PATH_MAX_LEN];
+    int picker_count;
+    int picker_selected;
+    FilterType picker_filter_type;
+    char picker_filter_pattern[NAME_MAX_LEN + 1];
+    int picker_filtering;
 
     int should_quit;
 } Model;
