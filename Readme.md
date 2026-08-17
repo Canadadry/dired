@@ -13,6 +13,7 @@ A lightweight terminal-based file manager written in C using termbox2 (vendored 
 * Preview a file's contents (paged as text, or hex-dumped if binary) without leaving the app.
 * Configure custom preview commands per file extension (e.g. render markdown or images) via `~/.config/dired`.
 * Run an ad-hoc shell command against the current directory without leaving the app, with Up/Down recall of that folder's previously run commands.
+* Create a `.zip`/`.tar`/`.tar.gz` archive from the selection, or extract an archive under the cursor (or the marked set) into a new subfolder, with the archive tool's own progress streamed straight to the terminal.
 * Filter the listing live by filename, either a plain substring or an extended regex.
 * Recursively glob the current directory tree by filename, either a plain substring or an extended regex.
 * Sort by name, date, size, or extension, with independent directory grouping.
@@ -71,7 +72,21 @@ Selection mode (v)
 
 Command prompt (:!)
   up/down      Recall history
+
+Archive commands (typed into the : command prompt, no arguments)
+  :zip         Create archive.zip from the selection (recursive)
+  :tar         Create archive.tar from the selection (recursive)
+  :tar.gz      Create archive.tar.gz from the selection (recursive)
+  :extract     Extract the archive under the cursor, or every archive in
+               the marked set, each into its own new subfolder
 ```
+
+A name/subfolder collision (`archive.zip` or the extraction subfolder
+already exists) auto-resolves to `archive (2).zip` / `something (2)/`,
+exactly like paste. `:extract` accepts any format dired can already browse
+into (zip, tar, tar.gz/tgz, tar.bz2/tbz2, tar.xz/txz, tar.Z); a marked
+entry that isn't a recognized archive is silently skipped rather than
+blocking the batch.
 
 ## Testing
 

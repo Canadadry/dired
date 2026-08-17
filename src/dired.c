@@ -730,6 +730,64 @@ static Msg execute_run_cmd(const char *cwd, const char *cmd_text, const char *se
     return (Msg){ .type = MSG_OP_SUCCEEDED };
 }
 
+static void run_tty_handoff(char *const argv[])
+{
+    pid_t pid = fork();
+    if (pid == 0) {
+        execvp(argv[0], argv);
+        _exit(EXIT_FAILURE);
+    } else if (pid > 0) {
+        waitpid(pid, NULL, 0);
+    }
+}
+
+static Msg execute_cmd_create_archive(const Cmd *cmd)
+{
+    char *argv[MAX_ENTRIES + 4];
+    int argc = 0;
+
+    if (cmd->type == CMD_CREATE_ZIP) {
+        argv[argc++] = "zip";
+        argv[argc++] = "-r";
+    } else {
+        argv[argc++] = "tar";
+        argv[argc++] = (cmd->type == CMD_CREATE_TARGZ) ? "-czvf" : "-cvf";
+    }
+    argv[argc++] = (char *)cmd->path;
+
+    for (int i = 0; i < cmd->batch_count && argc < MAX_ENTRIES + 3; i++)
+        argv[argc++] = (char *)cmd->batch_items[i].path;
+    argv[argc] = NULL;
+
+    tb_shutdown();
+    run_tty_handoff(argv);
+    tb_init();
+
+    return (Msg){ .type = MSG_OP_SUCCEEDED };
+}
+
+static Msg execute_cmd_extract_archive(const Cmd *cmd)
+{
+    tb_shutdown();
+
+    for (int i = 0; i < cmd->batch_count; i++) {
+        const CmdBatchItem *item = &cmd->batch_items[i];
+        mkdir(item->dest, 0755);
+
+        if (item->archive_format == ARCHIVE_ZIP) {
+            char *argv[] = { "unzip", "-d", (char *)item->dest, (char *)item->path, NULL };
+            run_tty_handoff(argv);
+        } else {
+            char *argv[] = { "tar", "-xvf", (char *)item->path, "-C", (char *)item->dest, NULL };
+            run_tty_handoff(argv);
+        }
+    }
+
+    tb_init();
+
+    return (Msg){ .type = MSG_OP_SUCCEEDED };
+}
+
 static void forget_deleted_folder_history(const char *path)
 {
     history_delete_folder(&g_history, path);
@@ -828,6 +886,10 @@ static Msg execute_cmd(const Cmd *cmd)
     case CMD_COPY:          return execute_cmd_copy(cmd);
     case CMD_MOVE:          return execute_cmd_move(cmd);
     case CMD_RUN:           return execute_run_cmd(cmd->path, cmd->cmd_text, cmd->selected_path);
+    case CMD_CREATE_ZIP:
+    case CMD_CREATE_TAR:
+    case CMD_CREATE_TARGZ:  return execute_cmd_create_archive(cmd);
+    case CMD_EXTRACT_ARCHIVE: return execute_cmd_extract_archive(cmd);
     default:                return (Msg){ .type = MSG_NONE };
     }
 }
