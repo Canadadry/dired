@@ -26,6 +26,10 @@ typedef enum {
     CMD_COPY,
     CMD_MOVE,
     CMD_RUN,
+    CMD_CREATE_ZIP,
+    CMD_CREATE_TAR,
+    CMD_CREATE_TARGZ,
+    CMD_EXTRACT_ARCHIVE,
 } CmdType;
 
 typedef struct {

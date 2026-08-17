@@ -2990,6 +2990,43 @@ static void test_validate_run_cmd_carries_selected_path(void)
     }
 }
 
+static void test_validate_run_cmd_archive_commands(void)
+{
+    typedef struct {
+        const char *label;
+        const char *edit_buf;
+        CmdType expected_cmd_type;
+    } Case;
+
+    Case cases[] = {
+        {"bare zip creates zip archive cmd", "zip", CMD_CREATE_ZIP},
+        {"bare tar creates tar archive cmd", "tar", CMD_CREATE_TAR},
+        {"bare tar.gz creates tar.gz archive cmd", "tar.gz", CMD_CREATE_TARGZ},
+        {"bare extract extracts archive cmd", "extract", CMD_EXTRACT_ARCHIVE},
+        {"zip with trailing text does not match", "zipfoo", CMD_NONE},
+        {"extract with argument does not match", "extract foo", CMD_NONE},
+        {"unrecognized word cancels", "gzip", CMD_NONE},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model in = make_edit_model(MODE_RUN_CMD, cases[i].edit_buf, 1, 3);
+        strcpy(in.current_path, "/tmp");
+        Msg msg = { .type = MSG_ACTIVATE };
+        Model out;
+        Cmd cmd;
+
+        update(&msg, &in, &out, &cmd);
+
+        if (cmd.type != cases[i].expected_cmd_type) {
+            TEST_ERRORF(cases[i].label, "cmd.type = %d, want %d", cmd.type, cases[i].expected_cmd_type);
+            continue;
+        }
+        if (out.mode != MODE_NAV) {
+            TEST_ERRORF(cases[i].label, "mode = %d, want MODE_NAV", out.mode);
+        }
+    }
+}
+
 static History make_recall_history_fixture(void)
 {
     History h = history_create();
@@ -5939,6 +5976,7 @@ void test_update(void)
     test_validate_create();
     test_validate_run_cmd();
     test_validate_run_cmd_carries_selected_path();
+    test_validate_run_cmd_archive_commands();
     test_recall_prev_first_press_recalls_most_recent_and_stashes_draft();
     test_recall_prev_repeated_walks_older_and_clamps_at_oldest();
     test_recall_next_walks_toward_newest();

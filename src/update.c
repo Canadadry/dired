@@ -949,6 +949,14 @@ static void handle_edit(const Msg *msg, Model *out_model, Cmd *out_cmd)
                               out_cmd->selected_path, sizeof(out_cmd->selected_path));
                 else
                     out_cmd->selected_path[0] = '\0';
+            } else if (strcmp(out_model->edit_buf, "zip") == 0) {
+                out_cmd->type = CMD_CREATE_ZIP;
+            } else if (strcmp(out_model->edit_buf, "tar") == 0) {
+                out_cmd->type = CMD_CREATE_TAR;
+            } else if (strcmp(out_model->edit_buf, "tar.gz") == 0) {
+                out_cmd->type = CMD_CREATE_TARGZ;
+            } else if (strcmp(out_model->edit_buf, "extract") == 0) {
+                out_cmd->type = CMD_EXTRACT_ARCHIVE;
             }
         }
 
