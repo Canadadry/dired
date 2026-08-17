@@ -111,6 +111,15 @@ Requires `python3` and `make`; `make test` installs its own virtualenv
 and pinned dependencies automatically (or run `make install` first to
 do just that step).
 
+A scenario's JSON fixture spec can also declare an `"archives"` key —
+`{"<name>.zip|.tar|.tar.gz|.tgz": {"<member path>": "<content>"}}` — to
+materialize a real archive file before the scenario runs. The fixture
+builder (`test/integration/fixture.py`) writes each archive's members to a
+scratch staging directory (reusing the same flat-path-to-content shape as
+the top-level `"tree"` key) and shells out to the real `zip`/`tar` binary
+to pack it, so the resulting file matches byte-for-byte what those tools
+would produce for a real user, rather than hand-crafted archive bytes.
+
 ## Per-Extension Preview Commands
 
 By default, previewing a file (Space) pages its text through `less -R`, or hex-dumps it through `hexdump -C` piped into `less -R` if it looks binary. You can override this per file extension by editing `~/.config/dired` — the file (and `~/.config` itself, if missing) is created automatically the first time you run dired, pre-filled with a commented-out example config to get you started (every line commented out, so it has no effect until you uncomment something).

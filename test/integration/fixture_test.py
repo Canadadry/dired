@@ -2,7 +2,9 @@ import os
 import shutil
 import struct
 import subprocess
+import tarfile
 import unittest
+import zipfile
 from unittest import mock
 
 import fixture
@@ -131,6 +133,122 @@ class BuildFixtureTest(unittest.TestCase):
                 })
             run.assert_not_called()
             mkdtemp.assert_not_called()
+
+
+class BuildArchiveFixtureTest(unittest.TestCase):
+    def setUp(self):
+        self.roots = []
+
+    def tearDown(self):
+        for root in self.roots:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def build(self, spec):
+        root = fixture.build_fixture(spec)
+        self.roots.append(root)
+        return root
+
+    def test_zip_archive_has_real_members(self):
+        root = self.build({
+            "archives": {
+                "sample.zip": {"a.txt": "hello", "dir/b.txt": "world"},
+            },
+        })
+        archive_path = os.path.join(root, "sample.zip")
+        self.assertTrue(os.path.isfile(archive_path))
+        with zipfile.ZipFile(archive_path) as zf:
+            file_names = {n for n in zf.namelist() if not n.endswith("/")}
+            self.assertEqual(file_names, {"a.txt", "dir/b.txt"})
+            self.assertEqual(zf.read("a.txt").decode(), "hello")
+            self.assertEqual(zf.read("dir/b.txt").decode(), "world")
+
+    def test_tar_archive_has_real_members(self):
+        root = self.build({
+            "archives": {
+                "sample.tar": {"a.txt": "hello", "dir/b.txt": "world"},
+            },
+        })
+        archive_path = os.path.join(root, "sample.tar")
+        self.assertTrue(os.path.isfile(archive_path))
+        with tarfile.open(archive_path, "r") as tf:
+            names = {m.name for m in tf.getmembers() if m.isfile()}
+            self.assertEqual(names, {"a.txt", "dir/b.txt"})
+            self.assertEqual(tf.extractfile("a.txt").read().decode(), "hello")
+            self.assertEqual(tf.extractfile("dir/b.txt").read().decode(), "world")
+
+    def test_tar_gz_archive_has_real_members(self):
+        root = self.build({
+            "archives": {
+                "sample.tar.gz": {"a.txt": "hello"},
+            },
+        })
+        archive_path = os.path.join(root, "sample.tar.gz")
+        self.assertTrue(os.path.isfile(archive_path))
+        with tarfile.open(archive_path, "r:gz") as tf:
+            names = {m.name for m in tf.getmembers() if m.isfile()}
+            self.assertEqual(names, {"a.txt"})
+            self.assertEqual(tf.extractfile("a.txt").read().decode(), "hello")
+
+    def test_tgz_suffix_also_builds_gzip_tar(self):
+        root = self.build({
+            "archives": {
+                "sample.tgz": {"a.txt": "hello"},
+            },
+        })
+        archive_path = os.path.join(root, "sample.tgz")
+        with tarfile.open(archive_path, "r:gz") as tf:
+            self.assertEqual(tf.extractfile("a.txt").read().decode(), "hello")
+
+    def test_multiple_archives_in_one_fixture(self):
+        root = self.build({
+            "archives": {
+                "one.zip": {"x.txt": "1"},
+                "two.tar": {"y.txt": "2"},
+            },
+        })
+        self.assertTrue(os.path.isfile(os.path.join(root, "one.zip")))
+        self.assertTrue(os.path.isfile(os.path.join(root, "two.tar")))
+
+    def test_archive_coexists_with_tree_and_plain_files(self):
+        root = self.build({
+            "tree": {"plain.txt": "plain"},
+            "archives": {"sample.zip": {"a.txt": "hello"}},
+        })
+        with open(os.path.join(root, "plain.txt")) as f:
+            self.assertEqual(f.read(), "plain")
+        self.assertTrue(os.path.isfile(os.path.join(root, "sample.zip")))
+
+    def test_no_archives_when_key_absent(self):
+        root = self.build({"tree": {"a.txt": "hello"}})
+        self.assertEqual(os.listdir(root), ["a.txt"])
+
+    def test_unrecognized_extension_raises(self):
+        with self.assertRaises(ValueError):
+            self.build({"archives": {"sample.rar": {"a.txt": "hello"}}})
+
+    def test_empty_member_tree_raises(self):
+        with self.assertRaises(ValueError):
+            self.build({"archives": {"sample.zip": {}}})
+
+    def test_zip_shells_out_to_real_zip_binary(self):
+        with mock.patch("fixture.subprocess.run", wraps=subprocess.run) as run:
+            root = self.build({"archives": {"sample.zip": {"a.txt": "hello"}}})
+        zip_calls = [c for c in run.call_args_list if c.args[0][0] == "zip"]
+        self.assertEqual(len(zip_calls), 1)
+        argv = zip_calls[0].args[0]
+        self.assertEqual(argv[:2], ["zip", "-r"])
+        self.assertEqual(argv[2], os.path.join(root, "sample.zip"))
+        self.assertIn("a.txt", argv)
+
+    def test_tar_gz_shells_out_to_real_tar_binary(self):
+        with mock.patch("fixture.subprocess.run", wraps=subprocess.run) as run:
+            root = self.build({"archives": {"sample.tar.gz": {"a.txt": "hello"}}})
+        tar_calls = [c for c in run.call_args_list if c.args[0][0] == "tar"]
+        self.assertEqual(len(tar_calls), 1)
+        argv = tar_calls[0].args[0]
+        self.assertEqual(argv[:2], ["tar", "-czf"])
+        self.assertEqual(argv[2], os.path.join(root, "sample.tar.gz"))
+        self.assertIn("a.txt", argv)
 
 
 def _decode_arena(buf):

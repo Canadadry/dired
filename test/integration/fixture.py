@@ -1,9 +1,23 @@
 import os
+import shutil
 import struct
 import subprocess
 import tempfile
 
 ALLOWED_GIT_SUBCOMMANDS = {"add", "commit"}
+
+# Ordered longest-suffix-first so "archive.tar.gz" resolves to "tar.gz" and
+# not "gz" (which isn't a format we build). Mirrors the three creatable
+# formats from the :zip/:tar/:tar.gz commands (archive-create-extract-
+# commands.md); .tgz is accepted too since the *reading* side already
+# recognizes it (014-read-archive.md's format classifier), even though it
+# isn't one of the create commands' own literal output names.
+ARCHIVE_FORMAT_BY_SUFFIX = [
+    (".tar.gz", "tar.gz"),
+    (".tgz", "tar.gz"),
+    (".tar", "tar"),
+    (".zip", "zip"),
+]
 
 # Mirrors src/history.h/src/history.c: two fixed-size arenas (folder/file
 # history) live right after a 12-byte header (3 x uint32_t, no padding) in
@@ -67,6 +81,56 @@ def write_history(fixture_root, resolved_root, history_spec):
         f.write(file_arena)
 
 
+def _write_tree(base_dir, tree):
+    """Materializes a flat {relpath: text_content} spec as real files under
+    base_dir, creating parent directories as needed. Shared by the
+    top-level fixture tree and by archive-member staging below, so both
+    use the exact same spec shape."""
+    for path, file_content in tree.items():
+        full_path = os.path.join(base_dir, path)
+        dirname = os.path.dirname(full_path)
+        if dirname:
+            os.makedirs(dirname, exist_ok=True)
+        with open(full_path, "w") as f:
+            f.write(file_content)
+
+
+def _archive_format_for(dest_path):
+    for suffix, fmt in ARCHIVE_FORMAT_BY_SUFFIX:
+        if dest_path.endswith(suffix):
+            return fmt
+    raise ValueError("cannot infer archive format from fixture archive path: {!r}".format(dest_path))
+
+
+def _build_archive(dest_path, member_tree):
+    """Materializes member_tree (same {relpath: text_content} shape as the
+    top-level "tree" spec) into a scratch staging directory, then shells
+    out to the real zip/tar binary to pack it into dest_path - so the
+    resulting file is byte-for-byte what a real user's zip/tar would
+    produce, not hand-crafted archive bytes."""
+    fmt = _archive_format_for(dest_path)
+
+    staging_dir = tempfile.mkdtemp()
+    try:
+        _write_tree(staging_dir, member_tree)
+        entries = sorted(os.listdir(staging_dir))
+        if not entries:
+            raise ValueError("archive fixture {!r} has no members".format(dest_path))
+
+        if fmt == "zip":
+            argv = ["zip", "-r", dest_path] + entries
+        elif fmt == "tar":
+            argv = ["tar", "-cf", dest_path] + entries
+        elif fmt == "tar.gz":
+            argv = ["tar", "-czf", dest_path] + entries
+        else:
+            raise ValueError("unsupported archive format: {!r}".format(fmt))
+
+        subprocess.run(argv, cwd=staging_dir, check=True, capture_output=True)
+    finally:
+        shutil.rmtree(staging_dir, ignore_errors=True)
+
+
 def build_fixture(spec):
     setup = spec.get("setup", [])
     for entry in setup:
@@ -75,13 +139,14 @@ def build_fixture(spec):
 
     root = tempfile.mkdtemp()
 
-    for path, file_content in spec.get("tree", {}).items():
-        full_path = os.path.join(root, path)
-        dirname = os.path.dirname(full_path)
+    _write_tree(root, spec.get("tree", {}))
+
+    for path, member_tree in spec.get("archives", {}).items():
+        dest_path = os.path.join(root, path)
+        dirname = os.path.dirname(dest_path)
         if dirname:
             os.makedirs(dirname, exist_ok=True)
-        with open(full_path, "w") as f:
-            f.write(file_content)
+        _build_archive(dest_path, member_tree)
 
     if setup:
         subprocess.run(["git", "init"], cwd=root, check=True, capture_output=True)
