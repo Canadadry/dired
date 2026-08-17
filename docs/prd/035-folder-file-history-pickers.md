@@ -1,7 +1,7 @@
 ---
 title: "Folder and file history pickers"
 description: "dired remembers nothing about where a user has been or what they've edited across a session, forcing them to re-navigate from scratch to a folder or file they touched recently."
-status: needs-triage
+status: done
 ---
 
 ## Problem Statement
