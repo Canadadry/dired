@@ -1,16 +1,26 @@
 {
   "fixture": {
     "tree": {
-      "one.txt": "1111",
-      "two.txt": "22"
+      "one/.keep": "",
+      "two/.keep": "",
+      "three/.keep": ""
+    },
+    "history": {
+      "folder_history": [
+        "one",
+        "two",
+        "three"
+      ]
     }
   },
   "steps": [
     {
+      "keys": [],
       "expect": [
         "Path: {fixture_root}                                              ",
         "                                                                                ",
-        "<bg-white><black>-rw-rw-r--        4 one.txt</black></bg-white>                                                     ",
+        "<bg-white><black>drwxrwxr-x       60 one</black></bg-white>                                                         ",
+        "drwxrwxr-x       60 three                                                       ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -30,8 +40,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        2 two.txt                                                     "
+        "drwxrwxr-x       60 two                                                         "
       ]
     },
     {
@@ -41,6 +50,8 @@
       "expect": [
         "Folder History                                                                  ",
         "                                                                                ",
+        "<bg-white><black>{fixture_root}/three</black></bg-white>                                              ",
+        "{fixture_root}/two                                                ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -60,135 +71,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                "
-      ]
-    },
-    {
-      "keys": [
-        "f",
-        "a",
-        "b"
-      ],
-      "expect": [
-        "Folder History                                                                  ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "<green>f:ab</green>                                                                            "
-      ]
-    },
-    {
-      "keys": [
-        "<BS>"
-      ],
-      "expect": [
-        "Folder History                                                                  ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "<green>f:a</green>                                                                             "
-      ]
-    },
-    {
-      "keys": [
-        "<Esc>"
-      ],
-      "expect": [
-        "Folder History                                                                  ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                "
-      ]
-    },
-    {
-      "keys": [
-        "<Esc>"
-      ],
-      "expect": [
-        "Path: {fixture_root}                                              ",
-        "                                                                                ",
-        "<bg-white><black>-rw-rw-r--        4 one.txt</black></bg-white>                                                     ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        2 two.txt                                                     "
+        "{fixture_root}/one                                                "
       ]
     },
     {
@@ -196,9 +79,72 @@
         "<Down>"
       ],
       "expect": [
+        "Folder History                                                                  ",
+        "                                                                                ",
+        "{fixture_root}/three                                              ",
+        "<bg-white><black>{fixture_root}/two</black></bg-white>                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "{fixture_root}/one                                                "
+      ]
+    },
+    {
+      "keys": [
+        "<Down>"
+      ],
+      "expect": [
+        "Folder History                                                                  ",
+        "                                                                                ",
+        "{fixture_root}/three                                              ",
+        "{fixture_root}/two                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "<bg-white><black>{fixture_root}/one</black></bg-white>                                                "
+      ]
+    },
+    {
+      "keys": [
+        "<Esc>"
+      ],
+      "expect": [
         "Path: {fixture_root}                                              ",
         "                                                                                ",
-        "-rw-rw-r--        4 one.txt                                                     ",
+        "<bg-white><black>drwxrwxr-x       60 one</black></bg-white>                                                         ",
+        "drwxrwxr-x       60 three                                                       ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -218,8 +164,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<bg-white><black>-rw-rw-r--        2 two.txt</black></bg-white>                                                     "
+        "drwxrwxr-x       60 two                                                         "
       ]
     }
   ]

@@ -668,6 +668,168 @@ static void test_view_page_indicator_during_create_mode(void)
     assert_no_entry_row_has_marker(&v, "create mode indicator");
 }
 
+static void test_view_picker_title_line(void)
+{
+    typedef struct {
+        const char *label;
+        AppMode mode;
+        const char *expected_text;
+    } Case;
+
+    Case cases[] = {
+        {"folder picker shows Folder History", MODE_FOLDER_PICKER, "Folder History"},
+        {"file picker shows File History", MODE_FILE_PICKER, "File History"},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model m = make_view_model();
+        m.mode = cases[i].mode;
+
+        View v = view(&m);
+
+        if (strcmp(v.lines[0].text, cases[i].expected_text) != 0 || v.lines[0].style != STYLE_NORMAL) {
+            TEST_ERRORF(cases[i].label, "lines[0] = '%s' style=%d, want '%s' STYLE_NORMAL",
+                        v.lines[0].text, v.lines[0].style, cases[i].expected_text);
+        }
+    }
+}
+
+static void set_picker_entry(Model *m, int i, const char *path)
+{
+    strcpy(m->picker_entries[i], path);
+}
+
+static void test_view_picker_entries_most_recent_first_with_selection(void)
+{
+    typedef struct {
+        const char *label;
+        AppMode mode;
+    } Case;
+
+    Case cases[] = {
+        {"folder picker", MODE_FOLDER_PICKER},
+        {"file picker", MODE_FILE_PICKER},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model m = make_view_model();
+        m.mode = cases[i].mode;
+        set_picker_entry(&m, 0, "/proj/most-recent");
+        set_picker_entry(&m, 1, "/proj/middle");
+        set_picker_entry(&m, 2, "/proj/oldest");
+        m.picker_count = 3;
+        m.picker_selected = 1;
+
+        View v = view(&m);
+
+        if (v.line_count != 5) {
+            TEST_ERRORF(cases[i].label, "line_count = %d, want 5 (title, status, 3 entries)", v.line_count);
+            continue;
+        }
+        if (strcmp(v.lines[2].text, "/proj/most-recent") != 0 || v.lines[2].style != STYLE_NORMAL) {
+            TEST_ERRORF(cases[i].label, "lines[2] = '%s' style=%d, want '/proj/most-recent' STYLE_NORMAL",
+                        v.lines[2].text, v.lines[2].style);
+        }
+        if (strcmp(v.lines[3].text, "/proj/middle") != 0 || v.lines[3].style != STYLE_SELECTED) {
+            TEST_ERRORF(cases[i].label, "lines[3] = '%s' style=%d, want '/proj/middle' STYLE_SELECTED",
+                        v.lines[3].text, v.lines[3].style);
+        }
+        if (strcmp(v.lines[4].text, "/proj/oldest") != 0 || v.lines[4].style != STYLE_NORMAL) {
+            TEST_ERRORF(cases[i].label, "lines[4] = '%s' style=%d, want '/proj/oldest' STYLE_NORMAL",
+                        v.lines[4].text, v.lines[4].style);
+        }
+    }
+}
+
+static void test_view_picker_filter_echoes_on_prompt_line(void)
+{
+    typedef struct {
+        const char *label;
+        AppMode mode;
+        FilterType type;
+        const char *pattern;
+        const char *expected_text;
+        StyleTag expected_style;
+    } Case;
+
+    Case cases[] = {
+        {"folder picker plain filter shows valid style", MODE_FOLDER_PICKER, FILTER_PLAIN, "proj", "f:proj", STYLE_VALID},
+        {"folder picker valid regex shows valid style", MODE_FOLDER_PICKER, FILTER_REGEX, "\\.git$", "F:\\.git$", STYLE_VALID},
+        {"folder picker invalid regex shows error style", MODE_FOLDER_PICKER, FILTER_REGEX, "[unterminated", "F:[unterminated", STYLE_ERROR},
+        {"file picker plain filter shows valid style", MODE_FILE_PICKER, FILTER_PLAIN, "main", "f:main", STYLE_VALID},
+        {"file picker valid regex shows valid style", MODE_FILE_PICKER, FILTER_REGEX, "\\.c$", "F:\\.c$", STYLE_VALID},
+        {"file picker invalid regex shows error style", MODE_FILE_PICKER, FILTER_REGEX, "[unterminated", "F:[unterminated", STYLE_ERROR},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model m = make_view_model();
+        m.mode = cases[i].mode;
+        m.picker_filtering = 1;
+        m.picker_filter_type = cases[i].type;
+        strcpy(m.edit_buf, cases[i].pattern);
+        m.edit_len = strlen(cases[i].pattern);
+
+        View v = view(&m);
+
+        if (strcmp(v.lines[1].text, cases[i].expected_text) != 0) {
+            TEST_ERRORF(cases[i].label, "lines[1] = '%s', want '%s'", v.lines[1].text, cases[i].expected_text);
+        }
+        if (v.lines[1].style != cases[i].expected_style) {
+            TEST_ERRORF(cases[i].label, "lines[1].style = %d, want %d", v.lines[1].style, cases[i].expected_style);
+        }
+    }
+}
+
+static void test_view_picker_filter_status_committed_and_idle(void)
+{
+    typedef struct {
+        const char *label;
+        AppMode mode;
+        FilterType picker_filter_type;
+        const char *picker_filter_pattern;
+        const char *expected_text;
+    } Case;
+
+    Case cases[] = {
+        {"folder picker committed filter shows Filter: prefix", MODE_FOLDER_PICKER, FILTER_PLAIN, "proj", "Filter: proj"},
+        {"file picker committed filter shows Filter: prefix", MODE_FILE_PICKER, FILTER_PLAIN, "main", "Filter: main"},
+        {"folder picker with no active filter is blank", MODE_FOLDER_PICKER, FILTER_NONE, "", ""},
+        {"file picker with no active filter is blank", MODE_FILE_PICKER, FILTER_NONE, "", ""},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model m = make_view_model();
+        m.mode = cases[i].mode;
+        m.picker_filtering = 0;
+        m.picker_filter_type = cases[i].picker_filter_type;
+        strcpy(m.picker_filter_pattern, cases[i].picker_filter_pattern);
+
+        View v = view(&m);
+
+        if (strcmp(v.lines[1].text, cases[i].expected_text) != 0) {
+            TEST_ERRORF(cases[i].label, "lines[1] = '%s', want '%s'", v.lines[1].text, cases[i].expected_text);
+        }
+    }
+}
+
+static void test_view_picker_empty_renders_no_entry_rows(void)
+{
+    AppMode modes[] = {MODE_FOLDER_PICKER, MODE_FILE_PICKER};
+
+    for (size_t i = 0; i < sizeof(modes) / sizeof(modes[0]); i++) {
+        Model m = make_view_model();
+        m.mode = modes[i];
+        m.picker_count = 0;
+        m.picker_selected = 0;
+
+        View v = view(&m);
+
+        if (v.line_count != 2) {
+            TEST_ERRORF("empty picker", "line_count = %d, want 2 (title, status only)", v.line_count);
+        }
+    }
+}
+
 void test_view(void)
 {
     test_view_nav_listing();
@@ -697,4 +859,9 @@ void test_view(void)
     test_view_yank_pending_batch_shows_count();
     test_view_no_yank_pending_is_blank();
     test_view_error_message();
+    test_view_picker_title_line();
+    test_view_picker_entries_most_recent_first_with_selection();
+    test_view_picker_filter_echoes_on_prompt_line();
+    test_view_picker_filter_status_committed_and_idle();
+    test_view_picker_empty_renders_no_entry_rows();
 }

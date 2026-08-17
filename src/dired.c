@@ -69,6 +69,7 @@ static const char HELP_CONTENT[] =
     "  left         Parent dir        F            Filter (regex)\n"
     "  right/Enter  Open/enter        g            Glob (plain)\n"
     "  r            Rename            G            Glob (regex)\n"
+    "  i            File history      I            Folder history\n"
     "  n            New file/dir      v            Selection mode\n"
     "  :!           Run command       space        Preview\n"
     "  c            Yank copy         s            Cycle sort\n"

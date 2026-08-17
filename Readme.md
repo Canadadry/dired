@@ -53,6 +53,7 @@ Navigation mode
   left         Parent dir        F            Filter (regex)
   right/Enter  Open/enter        g            Glob (plain)
   r            Rename            G            Glob (regex)
+  i            File history      I            Folder history
   n            New file/dir      v            Selection mode
   :!           Run command       space        Preview
   c            Yank copy         s            Cycle sort

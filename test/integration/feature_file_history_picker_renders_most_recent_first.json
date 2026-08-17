@@ -1,24 +1,26 @@
 {
   "fixture": {
     "tree": {
-      "alpha/.keep": "",
-      "beta/.keep": "",
-      "gamma.txt": "gg"
+      "fileA.txt": "aaaa",
+      "fileB.txt": "bb",
+      "fileC.txt": "c"
     },
     "history": {
-      "folder_history": [
-        "alpha",
-        "beta"
+      "file_history": [
+        "fileA.txt",
+        "fileB.txt",
+        "fileC.txt"
       ]
     }
   },
   "steps": [
     {
+      "keys": [],
       "expect": [
         "Path: {fixture_root}                                              ",
         "                                                                                ",
-        "<bg-white><black>drwxrwxr-x       60 alpha</black></bg-white>                                                       ",
-        "drwxrwxr-x       60 beta                                                        ",
+        "<bg-white><black>-rw-rw-r--        4 fileA.txt</black></bg-white>                                                   ",
+        "-rw-rw-r--        2 fileB.txt                                                   ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -38,20 +40,18 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "-rw-rw-r--        2 gamma.txt                                                   "
+        "-rw-rw-r--        1 fileC.txt                                                   "
       ]
     },
     {
       "keys": [
-        "I"
+        "i"
       ],
       "expect": [
-        "Folder History                                                                  ",
+        "File History                                                                    ",
         "                                                                                ",
-        "<bg-white><black>{fixture_root}/beta</black></bg-white>                                               ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
+        "<bg-white><black>{fixture_root}/fileC.txt</black></bg-white>                                          ",
+        "{fixture_root}/fileB.txt                                          ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -69,49 +69,20 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "{fixture_root}/alpha                                              "
+        "                                                                                ",
+        "                                                                                ",
+        "{fixture_root}/fileA.txt                                          "
       ]
     },
     {
       "keys": [
-        "<Enter>"
-      ],
-      "expect": [
-        "Path: {fixture_root}/beta                                         ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                "
-      ]
-    },
-    {
-      "keys": [
-        "<Left>"
+        "<Esc>"
       ],
       "expect": [
         "Path: {fixture_root}                                              ",
         "                                                                                ",
-        "<bg-white><black>drwxrwxr-x       60 alpha</black></bg-white>                                                       ",
-        "drwxrwxr-x       60 beta                                                        ",
+        "<bg-white><black>-rw-rw-r--        4 fileA.txt</black></bg-white>                                                   ",
+        "-rw-rw-r--        2 fileB.txt                                                   ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -131,40 +102,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "-rw-rw-r--        2 gamma.txt                                                   "
-      ]
-    },
-    {
-      "keys": [
-        "I",
-        "<Down>",
-        "<Enter>"
-      ],
-      "expect": [
-        "Path: {fixture_root}/alpha                                        ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                "
+        "-rw-rw-r--        1 fileC.txt                                                   "
       ]
     }
   ]

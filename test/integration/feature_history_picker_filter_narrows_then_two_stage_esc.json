@@ -1,16 +1,26 @@
 {
   "fixture": {
     "tree": {
-      "one.txt": "1111",
-      "two.txt": "22"
+      "project-apple/.keep": "",
+      "project-banana/.keep": "",
+      "project-cherry/.keep": ""
+    },
+    "history": {
+      "folder_history": [
+        "project-apple",
+        "project-banana",
+        "project-cherry"
+      ]
     }
   },
   "steps": [
     {
+      "keys": [],
       "expect": [
         "Path: {fixture_root}                                              ",
         "                                                                                ",
-        "<bg-white><black>-rw-rw-r--        4 one.txt</black></bg-white>                                                     ",
+        "<bg-white><black>drwxrwxr-x       60 project-apple</black></bg-white>                                               ",
+        "drwxrwxr-x       60 project-banana                                              ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -30,8 +40,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        2 two.txt                                                     "
+        "drwxrwxr-x       60 project-cherry                                              "
       ]
     },
     {
@@ -41,6 +50,8 @@
       "expect": [
         "Folder History                                                                  ",
         "                                                                                ",
+        "<bg-white><black>{fixture_root}/project-cherry</black></bg-white>                                     ",
+        "{fixture_root}/project-banana                                     ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -60,19 +71,22 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                "
+        "{fixture_root}/project-apple                                      "
       ]
     },
     {
       "keys": [
         "f",
+        "b",
         "a",
-        "b"
+        "n",
+        "a",
+        "n",
+        "a"
       ],
       "expect": [
         "Folder History                                                                  ",
+        "<green>f:banana</green>                                                                        ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -94,16 +108,16 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<green>f:ab</green>                                                                            "
+        "<bg-white><black>{fixture_root}/project-banana</black></bg-white>                                     "
       ]
     },
     {
       "keys": [
-        "<BS>"
+        "<Enter>"
       ],
       "expect": [
         "Folder History                                                                  ",
+        "Filter: banana                                                                  ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -125,8 +139,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "<green>f:a</green>                                                                             "
+        "<bg-white><black>{fixture_root}/project-banana</black></bg-white>                                     "
       ]
     },
     {
@@ -136,6 +149,50 @@
       "expect": [
         "Folder History                                                                  ",
         "                                                                                ",
+        "<bg-white><black>{fixture_root}/project-cherry</black></bg-white>                                     ",
+        "{fixture_root}/project-banana                                     ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "{fixture_root}/project-apple                                      "
+      ]
+    },
+    {
+      "keys": [
+        "F",
+        "a",
+        "p",
+        "p",
+        "l",
+        "e",
+        "|",
+        "c",
+        "h",
+        "e",
+        "r",
+        "r",
+        "y"
+      ],
+      "expect": [
+        "Folder History                                                                  ",
+        "<green>F:apple|cherry</green>                                                                  ",
+        "<bg-white><black>{fixture_root}/project-cherry</black></bg-white>                                     ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -156,8 +213,69 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
+        "{fixture_root}/project-apple                                      "
+      ]
+    },
+    {
+      "keys": [
+        "<Enter>"
+      ],
+      "expect": [
+        "Folder History                                                                  ",
+        "Filter: apple|cherry                                                            ",
+        "<bg-white><black>{fixture_root}/project-cherry</black></bg-white>                                     ",
         "                                                                                ",
-        "                                                                                "
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "{fixture_root}/project-apple                                      "
+      ]
+    },
+    {
+      "keys": [
+        "<Esc>"
+      ],
+      "expect": [
+        "Folder History                                                                  ",
+        "                                                                                ",
+        "<bg-white><black>{fixture_root}/project-cherry</black></bg-white>                                     ",
+        "{fixture_root}/project-banana                                     ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "{fixture_root}/project-apple                                      "
       ]
     },
     {
@@ -167,7 +285,8 @@
       "expect": [
         "Path: {fixture_root}                                              ",
         "                                                                                ",
-        "<bg-white><black>-rw-rw-r--        4 one.txt</black></bg-white>                                                     ",
+        "<bg-white><black>drwxrwxr-x       60 project-apple</black></bg-white>                                               ",
+        "drwxrwxr-x       60 project-banana                                              ",
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
@@ -187,39 +306,7 @@
         "                                                                                ",
         "                                                                                ",
         "                                                                                ",
-        "                                                                                ",
-        "-rw-rw-r--        2 two.txt                                                     "
-      ]
-    },
-    {
-      "keys": [
-        "<Down>"
-      ],
-      "expect": [
-        "Path: {fixture_root}                                              ",
-        "                                                                                ",
-        "-rw-rw-r--        4 one.txt                                                     ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "                                                                                ",
-        "<bg-white><black>-rw-rw-r--        2 two.txt</black></bg-white>                                                     "
+        "drwxrwxr-x       60 project-cherry                                              "
       ]
     }
   ]

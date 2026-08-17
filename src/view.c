@@ -123,8 +123,61 @@ static void add_virtual_line(View *v, const Model *m)
     add_line(v, style, "          %s", m->edit_buf);
 }
 
+static void add_picker_prompt_line(View *v, const Model *m)
+{
+    if (m->picker_filtering) {
+        const char *prefix = (m->picker_filter_type == FILTER_REGEX) ? "F:" : "f:";
+        StyleTag style = filter_is_valid(m->picker_filter_type, m->edit_buf) ? STYLE_VALID : STYLE_ERROR;
+        add_line(v, style, "%s%s", prefix, m->edit_buf);
+    } else if (m->picker_filter_type != FILTER_NONE) {
+        add_line(v, STYLE_NORMAL, "Filter: %s", m->picker_filter_pattern);
+    } else {
+        add_line(v, STYLE_NORMAL, "");
+    }
+}
+
+static void add_picker_entry_line(View *v, const Model *m, int i)
+{
+    StyleTag style = entry_style_tag(GIT_STATUS_NONE, i == m->picker_selected, 0);
+    add_line(v, style, "%s", m->picker_entries[i]);
+}
+
+static View view_picker(const Model *model)
+{
+    static View v;
+    v.line_count = 0;
+
+    const char *title = (model->mode == MODE_FOLDER_PICKER) ? "Folder History" : "File History";
+    add_line(&v, STYLE_NORMAL, "%s", title);
+    add_picker_prompt_line(&v, model);
+    Line *status_line = &v.lines[v.line_count - 1];
+
+    int visible_rows = visible_entry_rows(model->term_height, 0);
+    int offset = page_snap_offset(model->picker_selected, model->picker_count, visible_rows);
+    int end = offset + visible_rows;
+    if (end > model->picker_count)
+        end = model->picker_count;
+
+    for (int i = offset; i < end; i++)
+        add_picker_entry_line(&v, model, i);
+
+    int more_above = offset > 0;
+    int more_below = end < model->picker_count;
+    if (more_above && more_below)
+        append_scroll_marker(status_line, model->term_width, "<- ->");
+    else if (more_above)
+        append_scroll_marker(status_line, model->term_width, "<-");
+    else if (more_below)
+        append_scroll_marker(status_line, model->term_width, "->");
+
+    return v;
+}
+
 View view(const Model *model)
 {
+    if (model->mode == MODE_FOLDER_PICKER || model->mode == MODE_FILE_PICKER)
+        return view_picker(model);
+
     static View v;
     v.line_count = 0;
 
