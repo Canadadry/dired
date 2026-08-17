@@ -335,6 +335,20 @@ static void open_picker_from_arena(Model *out_model, AppMode mode,
     picker_recompute_filter(out_model, "");
 }
 
+static void record_folder_history(Model *out_model, const char *folder_path)
+{
+    if (!out_model->folder_history)
+        return;
+    history_arena_record(out_model->folder_history->data, FOLDER_HISTORY_ARENA_BYTES, folder_path);
+}
+
+static void record_file_history(Model *out_model, const char *file_path)
+{
+    if (!out_model->file_history)
+        return;
+    history_arena_record(out_model->file_history->data, FILE_HISTORY_ARENA_BYTES, file_path);
+}
+
 static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
 {
     switch (msg->type) {
@@ -640,9 +654,11 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
                 strncpy(out_cmd->path, level->source_path, sizeof(out_cmd->path) - 1);
                 out_cmd->path[sizeof(out_cmd->path) - 1] = '\0';
                 append_subfolder_segment(level->subfolder, e->name, out_cmd->path2, sizeof(out_cmd->path2));
+                record_folder_history(out_model, out_model->current_path);
             } else {
                 out_cmd->type = CMD_PREVIEW;
                 join_path(out_model->current_path, e->name, out_cmd->path, sizeof(out_cmd->path));
+                record_folder_history(out_model, out_model->current_path);
             }
         }
         break;
@@ -720,9 +736,12 @@ static void handle_nav(const Msg *msg, Model *out_model, Cmd *out_cmd)
                 strncpy(out_cmd->path, level->source_path, sizeof(out_cmd->path) - 1);
                 out_cmd->path[sizeof(out_cmd->path) - 1] = '\0';
                 append_subfolder_segment(level->subfolder, e->name, out_cmd->path2, sizeof(out_cmd->path2));
+                record_folder_history(out_model, out_model->current_path);
             } else {
                 out_cmd->type = CMD_LAUNCH_EDITOR;
                 join_path(out_model->current_path, e->name, out_cmd->path, sizeof(out_cmd->path));
+                record_folder_history(out_model, out_model->current_path);
+                record_file_history(out_model, out_cmd->path);
             }
         }
         break;
@@ -1225,9 +1244,80 @@ static void picker_clear_filter(Model *out_model)
     picker_recompute_filter(out_model, "");
 }
 
+static void exit_all_archive_levels(Model *out_model)
+{
+    while (out_model->archive_depth > 0) {
+        ArchiveLevel *level = &out_model->archive_stack[out_model->archive_depth - 1];
+        if (level->source_is_tmp) {
+            char tmp_dir[PATH_MAX_LEN];
+            snprintf(tmp_dir, sizeof(tmp_dir), "%s", level->source_path);
+            char *slash = strrchr(tmp_dir, '/');
+            if (slash)
+                *slash = '\0';
+            remove(level->source_path);
+            rmdir(tmp_dir);
+        }
+        free(level->members);
+        level->members = NULL;
+        out_model->archive_depth--;
+    }
+}
+
+static void activate_folder_picker_entry(Model *out_model, Cmd *out_cmd)
+{
+    if (out_model->picker_selected >= out_model->picker_count)
+        return;
+
+    char path[PATH_MAX_LEN];
+    snprintf(path, sizeof(path), "%s", out_model->picker_entries[out_model->picker_selected]);
+
+    exit_all_archive_levels(out_model);
+
+    out_model->mode = MODE_NAV;
+    out_model->filter_type = FILTER_NONE;
+    out_model->filter_pattern[0] = '\0';
+    out_model->glob_type = GLOB_NONE;
+    out_model->glob_pattern[0] = '\0';
+
+    out_cmd->type = CMD_LOAD_DIR;
+    out_cmd->show_hidden = out_model->show_hidden;
+    strncpy(out_cmd->path, path, sizeof(out_cmd->path) - 1);
+    out_cmd->path[sizeof(out_cmd->path) - 1] = '\0';
+}
+
+static void activate_file_picker_entry(Model *out_model, Cmd *out_cmd, int preview_only)
+{
+    if (out_model->picker_selected >= out_model->picker_count)
+        return;
+
+    char path[PATH_MAX_LEN];
+    snprintf(path, sizeof(path), "%s", out_model->picker_entries[out_model->picker_selected]);
+
+    exit_all_archive_levels(out_model);
+
+    char dir[PATH_MAX_LEN];
+    parent_path(path, dir, sizeof(dir));
+
+    out_model->mode = MODE_NAV;
+    strncpy(out_model->current_path, dir, sizeof(out_model->current_path) - 1);
+    out_model->current_path[sizeof(out_model->current_path) - 1] = '\0';
+    out_model->filter_type = FILTER_NONE;
+    out_model->filter_pattern[0] = '\0';
+    out_model->glob_type = GLOB_NONE;
+    out_model->glob_pattern[0] = '\0';
+
+    out_cmd->type = preview_only ? CMD_PREVIEW : CMD_LAUNCH_EDITOR;
+    strncpy(out_cmd->path, path, sizeof(out_cmd->path) - 1);
+    out_cmd->path[sizeof(out_cmd->path) - 1] = '\0';
+
+    record_folder_history(out_model, out_model->current_path);
+    if (!preview_only)
+        record_file_history(out_model, out_cmd->path);
+}
+
 static void handle_picker(const Msg *msg, Model *out_model, Cmd *out_cmd)
 {
-    (void)out_cmd;
+    AppMode picker_mode = out_model->mode;
 
     switch (msg->type) {
     case MSG_MOVE_UP:
@@ -1268,7 +1358,16 @@ static void handle_picker(const Msg *msg, Model *out_model, Cmd *out_cmd)
                     sizeof(out_model->picker_filter_pattern) - 1);
             out_model->picker_filter_pattern[sizeof(out_model->picker_filter_pattern) - 1] = '\0';
             out_model->picker_filtering = 0;
+        } else if (picker_mode == MODE_FOLDER_PICKER) {
+            activate_folder_picker_entry(out_model, out_cmd);
+        } else {
+            activate_file_picker_entry(out_model, out_cmd, 0);
         }
+        break;
+
+    case MSG_PREVIEW:
+        if (!out_model->picker_filtering && picker_mode == MODE_FILE_PICKER)
+            activate_file_picker_entry(out_model, out_cmd, 1);
         break;
 
     case MSG_CANCEL:

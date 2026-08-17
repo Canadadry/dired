@@ -5352,6 +5352,377 @@ static void test_picker_esc_with_no_filter_exits_immediately(void)
     }
 }
 
+static void test_preview_real_file_records_folder_history(void)
+{
+    FolderHistoryArena folders;
+    memset(&folders, 0, sizeof(folders));
+
+    Model in = make_model_with_entry("/home/user", "main.c", S_IFREG | 0644, 0);
+    in.folder_history = &folders;
+    Msg msg = { .type = MSG_PREVIEW };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    const char *recorded = history_arena_command_at(out.folder_history->data, FOLDER_HISTORY_ARENA_BYTES, 0);
+    if (!recorded || strcmp(recorded, "/home/user") != 0) {
+        TEST_ERRORF("preview real file records folder history", "most-recent = '%s', want '/home/user'",
+                    recorded ? recorded : "(none)");
+    }
+}
+
+static void test_edit_real_file_records_folder_and_file_history(void)
+{
+    FolderHistoryArena folders;
+    memset(&folders, 0, sizeof(folders));
+    FileHistoryArena files;
+    memset(&files, 0, sizeof(files));
+
+    Model in = make_model_with_entry("/home/user", "main.c", S_IFREG | 0644, 0);
+    in.folder_history = &folders;
+    in.file_history = &files;
+    Msg msg = { .type = MSG_ACTIVATE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    const char *recorded_folder = history_arena_command_at(out.folder_history->data, FOLDER_HISTORY_ARENA_BYTES, 0);
+    if (!recorded_folder || strcmp(recorded_folder, "/home/user") != 0) {
+        TEST_ERRORF("edit real file records folder history", "most-recent folder = '%s', want '/home/user'",
+                    recorded_folder ? recorded_folder : "(none)");
+    }
+    const char *recorded_file = history_arena_command_at(out.file_history->data, FILE_HISTORY_ARENA_BYTES, 0);
+    if (!recorded_file || strcmp(recorded_file, "/home/user/main.c") != 0) {
+        TEST_ERRORF("edit real file records file history", "most-recent file = '%s', want '/home/user/main.c'",
+                    recorded_file ? recorded_file : "(none)");
+    }
+}
+
+static void test_navigating_into_directory_does_not_record_folder_history(void)
+{
+    FolderHistoryArena folders;
+    memset(&folders, 0, sizeof(folders));
+
+    Model in = make_model_with_entry("/home/user", "sub", S_IFDIR | 0755, 0);
+    in.folder_history = &folders;
+    Msg msg = { .type = MSG_ACTIVATE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    HistoryArenaState state = history_arena_state(out.folder_history->data, FOLDER_HISTORY_ARENA_BYTES);
+    if (state.count != 0) {
+        TEST_ERRORF("plain navigation does not record folder history", "folder_history count = %d, want 0", state.count);
+    }
+}
+
+static void test_preview_archive_member_records_virtual_folder_history(void)
+{
+    ArchiveMember members[] = {
+        make_archive_member("sub1", 1, 0),
+        make_archive_member("sub1/notes.txt", 0, 12),
+    };
+    int member_count = sizeof(members) / sizeof(members[0]);
+
+    Model in = make_archive_level_model(members, member_count, "sub1", "outer.tar",
+                                         "/home/user/outer.tar/sub1");
+    in.archive_stack[0].format = ARCHIVE_TAR;
+    strcpy(in.archive_stack[0].source_path, "/home/user/outer.tar");
+    strcpy(in.entries[0].name, "notes.txt");
+    in.entries[0].st.st_mode = S_IFREG | 0644;
+    in.entry_count = 1;
+    in.selected = 0;
+
+    FolderHistoryArena folders;
+    memset(&folders, 0, sizeof(folders));
+    in.folder_history = &folders;
+
+    Msg msg = { .type = MSG_PREVIEW };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    const char *recorded = history_arena_command_at(out.folder_history->data, FOLDER_HISTORY_ARENA_BYTES, 0);
+    if (!recorded || strcmp(recorded, "/home/user/outer.tar/sub1") != 0) {
+        TEST_ERRORF("preview archive member records virtual folder history",
+                    "most-recent = '%s', want '/home/user/outer.tar/sub1'", recorded ? recorded : "(none)");
+    }
+
+    free(out.archive_stack[0].members);
+}
+
+static void test_edit_archive_member_records_virtual_folder_but_not_file_history(void)
+{
+    ArchiveMember members[] = {
+        make_archive_member("sub1", 1, 0),
+        make_archive_member("sub1/notes.txt", 0, 12),
+    };
+    int member_count = sizeof(members) / sizeof(members[0]);
+
+    Model in = make_archive_level_model(members, member_count, "sub1", "outer.tar",
+                                         "/home/user/outer.tar/sub1");
+    in.archive_stack[0].format = ARCHIVE_TAR;
+    strcpy(in.archive_stack[0].source_path, "/home/user/outer.tar");
+    strcpy(in.entries[0].name, "notes.txt");
+    in.entries[0].st.st_mode = S_IFREG | 0644;
+    in.entry_count = 1;
+    in.selected = 0;
+
+    FolderHistoryArena folders;
+    memset(&folders, 0, sizeof(folders));
+    in.folder_history = &folders;
+    FileHistoryArena files;
+    memset(&files, 0, sizeof(files));
+    in.file_history = &files;
+
+    Msg msg = { .type = MSG_ACTIVATE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    const char *recorded = history_arena_command_at(out.folder_history->data, FOLDER_HISTORY_ARENA_BYTES, 0);
+    if (!recorded || strcmp(recorded, "/home/user/outer.tar/sub1") != 0) {
+        TEST_ERRORF("edit archive member records virtual folder history",
+                    "most-recent folder = '%s', want '/home/user/outer.tar/sub1'", recorded ? recorded : "(none)");
+    }
+    HistoryArenaState file_state = history_arena_state(out.file_history->data, FILE_HISTORY_ARENA_BYTES);
+    if (file_state.count != 0) {
+        TEST_ERRORF("edit archive member does not record file history",
+                    "file_history count = %d, want 0 (archive-member edits are disposable copies)", file_state.count);
+    }
+
+    free(out.archive_stack[0].members);
+}
+
+static void test_revisiting_folder_moves_it_to_most_recent(void)
+{
+    FolderHistoryArena folders;
+    memset(&folders, 0, sizeof(folders));
+    history_arena_push(folders.data, FOLDER_HISTORY_ARENA_BYTES, "/home/user/older");
+    history_arena_push(folders.data, FOLDER_HISTORY_ARENA_BYTES, "/home/user");
+
+    Model in = make_model_with_entry("/home/user/older", "main.c", S_IFREG | 0644, 0);
+    in.folder_history = &folders;
+    Msg msg = { .type = MSG_PREVIEW };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    HistoryArenaState state = history_arena_state(out.folder_history->data, FOLDER_HISTORY_ARENA_BYTES);
+    if (state.count != 2) {
+        TEST_ERRORF("revisiting folder moves to most recent", "count = %d, want 2 (dedup, not duplicate)", state.count);
+    }
+    const char *newest = history_arena_command_at(out.folder_history->data, FOLDER_HISTORY_ARENA_BYTES, 0);
+    if (!newest || strcmp(newest, "/home/user/older") != 0) {
+        TEST_ERRORF("revisiting folder moves to most recent", "most-recent = '%s', want '/home/user/older'",
+                    newest ? newest : "(none)");
+    }
+}
+
+static Model make_picker_model_with_entry(AppMode mode, const char *path)
+{
+    Model m = make_picker_model(mode, 1, 0);
+    strcpy(m.picker_entries[0], path);
+    return m;
+}
+
+static void test_activate_folder_picker_entry_navigates_like_normal_activation(void)
+{
+    Model in = make_picker_model_with_entry(MODE_FOLDER_PICKER, "/a/three");
+    in.show_hidden = 1;
+    in.filter_type = FILTER_PLAIN;
+    strcpy(in.filter_pattern, "report");
+    in.glob_type = GLOB_PLAIN;
+    strcpy(in.glob_pattern, "report");
+    Msg msg = { .type = MSG_ACTIVATE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_LOAD_DIR) {
+        TEST_ERRORF("activate folder picker entry", "cmd.type = %d, want CMD_LOAD_DIR", cmd.type);
+    }
+    if (strcmp(cmd.path, "/a/three") != 0) {
+        TEST_ERRORF("activate folder picker entry", "cmd.path = '%s', want '/a/three'", cmd.path);
+    }
+    if (!cmd.show_hidden) {
+        TEST_ERRORF("activate folder picker entry", "cmd.show_hidden = %d, want 1 (carried from model)", cmd.show_hidden);
+    }
+    if (out.mode != MODE_NAV) {
+        TEST_ERRORF("activate folder picker entry", "mode = %d, want MODE_NAV (drops into normal navigation)", out.mode);
+    }
+    if (out.filter_type != FILTER_NONE || out.filter_pattern[0] != '\0') {
+        TEST_ERRORF("activate folder picker entry",
+                    "filter = {%d, '%s'}, want {FILTER_NONE, ''} (matches normal activate-into-directory reset)",
+                    out.filter_type, out.filter_pattern);
+    }
+    if (out.glob_type != GLOB_NONE || out.glob_pattern[0] != '\0') {
+        TEST_ERRORF("activate folder picker entry", "glob = {%d, '%s'}, want {GLOB_NONE, ''}",
+                    out.glob_type, out.glob_pattern);
+    }
+}
+
+static void test_activate_folder_picker_entry_on_empty_picker_is_noop(void)
+{
+    Model in = make_picker_model(MODE_FOLDER_PICKER, 0, 0);
+    Msg msg = { .type = MSG_ACTIVATE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("activate empty folder picker", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+    if (out.mode != MODE_FOLDER_PICKER) {
+        TEST_ERRORF("activate empty folder picker", "mode = %d, want unchanged MODE_FOLDER_PICKER", out.mode);
+    }
+}
+
+static void test_activate_file_picker_entry_edits_relocates_and_records(void)
+{
+    FolderHistoryArena folders;
+    memset(&folders, 0, sizeof(folders));
+    FileHistoryArena files;
+    memset(&files, 0, sizeof(files));
+
+    Model in = make_picker_model_with_entry(MODE_FILE_PICKER, "/projects/app/main.c");
+    in.folder_history = &folders;
+    in.file_history = &files;
+    in.filter_type = FILTER_PLAIN;
+    strcpy(in.filter_pattern, "report");
+    Msg msg = { .type = MSG_ACTIVATE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_LAUNCH_EDITOR) {
+        TEST_ERRORF("activate file picker entry", "cmd.type = %d, want CMD_LAUNCH_EDITOR", cmd.type);
+    }
+    if (strcmp(cmd.path, "/projects/app/main.c") != 0) {
+        TEST_ERRORF("activate file picker entry", "cmd.path = '%s', want '/projects/app/main.c'", cmd.path);
+    }
+    if (out.mode != MODE_NAV) {
+        TEST_ERRORF("activate file picker entry", "mode = %d, want MODE_NAV", out.mode);
+    }
+    if (strcmp(out.current_path, "/projects/app") != 0) {
+        TEST_ERRORF("activate file picker entry",
+                    "current_path = '%s', want '/projects/app' (picked file's directory)", out.current_path);
+    }
+    if (out.filter_type != FILTER_NONE || out.filter_pattern[0] != '\0') {
+        TEST_ERRORF("activate file picker entry", "filter = {%d, '%s'}, want {FILTER_NONE, ''}",
+                    out.filter_type, out.filter_pattern);
+    }
+
+    const char *recorded_folder = history_arena_command_at(out.folder_history->data, FOLDER_HISTORY_ARENA_BYTES, 0);
+    if (!recorded_folder || strcmp(recorded_folder, "/projects/app") != 0) {
+        TEST_ERRORF("activate file picker entry re-records folder history",
+                    "most-recent = '%s', want '/projects/app'", recorded_folder ? recorded_folder : "(none)");
+    }
+    const char *recorded_file = history_arena_command_at(out.file_history->data, FILE_HISTORY_ARENA_BYTES, 0);
+    if (!recorded_file || strcmp(recorded_file, "/projects/app/main.c") != 0) {
+        TEST_ERRORF("activate file picker entry re-records file history",
+                    "most-recent = '%s', want '/projects/app/main.c'", recorded_file ? recorded_file : "(none)");
+    }
+}
+
+static void test_preview_file_picker_entry_previews_and_records_folder_only(void)
+{
+    FolderHistoryArena folders;
+    memset(&folders, 0, sizeof(folders));
+    FileHistoryArena files;
+    memset(&files, 0, sizeof(files));
+
+    Model in = make_picker_model_with_entry(MODE_FILE_PICKER, "/projects/app/main.c");
+    in.folder_history = &folders;
+    in.file_history = &files;
+    Msg msg = { .type = MSG_PREVIEW };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_PREVIEW) {
+        TEST_ERRORF("preview file picker entry", "cmd.type = %d, want CMD_PREVIEW", cmd.type);
+    }
+    if (strcmp(cmd.path, "/projects/app/main.c") != 0) {
+        TEST_ERRORF("preview file picker entry", "cmd.path = '%s', want '/projects/app/main.c'", cmd.path);
+    }
+    if (out.mode != MODE_NAV) {
+        TEST_ERRORF("preview file picker entry", "mode = %d, want MODE_NAV", out.mode);
+    }
+    if (strcmp(out.current_path, "/projects/app") != 0) {
+        TEST_ERRORF("preview file picker entry", "current_path = '%s', want '/projects/app'", out.current_path);
+    }
+
+    HistoryArenaState folder_state = history_arena_state(out.folder_history->data, FOLDER_HISTORY_ARENA_BYTES);
+    if (folder_state.count != 1) {
+        TEST_ERRORF("preview file picker entry records folder history", "count = %d, want 1", folder_state.count);
+    }
+    HistoryArenaState file_state = history_arena_state(out.file_history->data, FILE_HISTORY_ARENA_BYTES);
+    if (file_state.count != 0) {
+        TEST_ERRORF("preview file picker entry does not record file history",
+                    "count = %d, want 0 (preview never records file history)", file_state.count);
+    }
+}
+
+static void test_preview_msg_in_folder_picker_is_noop(void)
+{
+    Model in = make_picker_model_with_entry(MODE_FOLDER_PICKER, "/a/three");
+    Msg msg = { .type = MSG_PREVIEW };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("preview in folder picker is noop", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+    if (out.mode != MODE_FOLDER_PICKER) {
+        TEST_ERRORF("preview in folder picker is noop", "mode = %d, want unchanged MODE_FOLDER_PICKER", out.mode);
+    }
+}
+
+static void test_activate_file_picker_entry_from_inside_archive_exits_archive_levels(void)
+{
+    ArchiveMember members[] = {
+        make_archive_member("notes.txt", 0, 12),
+    };
+    int member_count = sizeof(members) / sizeof(members[0]);
+
+    Model in = make_archive_level_model(members, member_count, "", "project.zip", "/home/user/project.zip");
+    in.mode = MODE_FILE_PICKER;
+    strcpy(in.picker_entries[0], "/other/place/doc.txt");
+    in.picker_count = 1;
+    in.picker_selected = 0;
+
+    Msg msg = { .type = MSG_ACTIVATE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (out.archive_depth != 0) {
+        TEST_ERRORF("activate file picker entry exits archive levels", "archive_depth = %d, want 0", out.archive_depth);
+    }
+    if (cmd.type != CMD_LAUNCH_EDITOR || strcmp(cmd.path, "/other/place/doc.txt") != 0) {
+        TEST_ERRORF("activate file picker entry exits archive levels",
+                    "cmd = {%d, '%s'}, want {CMD_LAUNCH_EDITOR, '/other/place/doc.txt'}", cmd.type, cmd.path);
+    }
+    if (strcmp(out.current_path, "/other/place") != 0) {
+        TEST_ERRORF("activate file picker entry exits archive levels",
+                    "current_path = '%s', want '/other/place'", out.current_path);
+    }
+}
+
 static void test_quit(void)
 {
     Model in = make_nav_model(3, 1);
@@ -5634,6 +6005,18 @@ void test_update(void)
     test_picker_esc_while_typing_clears_filter_and_stays_open();
     test_picker_esc_twice_clears_then_exits();
     test_picker_esc_with_no_filter_exits_immediately();
+    test_preview_real_file_records_folder_history();
+    test_edit_real_file_records_folder_and_file_history();
+    test_navigating_into_directory_does_not_record_folder_history();
+    test_preview_archive_member_records_virtual_folder_history();
+    test_edit_archive_member_records_virtual_folder_but_not_file_history();
+    test_revisiting_folder_moves_it_to_most_recent();
+    test_activate_folder_picker_entry_navigates_like_normal_activation();
+    test_activate_folder_picker_entry_on_empty_picker_is_noop();
+    test_activate_file_picker_entry_edits_relocates_and_records();
+    test_preview_file_picker_entry_previews_and_records_folder_only();
+    test_preview_msg_in_folder_picker_is_noop();
+    test_activate_file_picker_entry_from_inside_archive_exits_archive_levels();
     test_quit();
     test_error_dismissed_by_any_key();
 }

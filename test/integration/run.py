@@ -63,6 +63,7 @@ def run_test_file(path, diredd):
     fixture_root = fixture.build_fixture(spec["fixture"])
     apply_mutations(fixture_root, spec["fixture"].get("mutate", {}))
     resolved_root = os.path.realpath(fixture_root)
+    fixture.write_history(fixture_root, resolved_root, spec["fixture"].get("history", {}))
     session = None
     failures = []
     try:

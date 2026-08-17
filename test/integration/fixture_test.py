@@ -1,5 +1,6 @@
 import os
 import shutil
+import struct
 import subprocess
 import unittest
 from unittest import mock
@@ -130,6 +131,83 @@ class BuildFixtureTest(unittest.TestCase):
                 })
             run.assert_not_called()
             mkdtemp.assert_not_called()
+
+
+def _decode_arena(buf):
+    """Mirrors history_arena_command_at(): position_from_newest=0 is the
+    most-recently-pushed entry, matching what the folder/file picker itself
+    would display."""
+    size = len(buf)
+    count = struct.unpack_from("<H", buf, size - 2)[0]
+    entries = []
+    for position_from_newest in range(count):
+        i = count - 1 - position_from_newest
+        addr = size - 4 - 2 * i
+        offset = struct.unpack_from("<H", buf, addr)[0]
+        end = buf.index(b"\x00", offset)
+        entries.append(buf[offset:end].decode("utf-8"))
+    return entries
+
+
+class WriteHistoryTest(unittest.TestCase):
+    def setUp(self):
+        self.roots = []
+
+    def tearDown(self):
+        for root in self.roots:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def build(self, spec):
+        root = fixture.build_fixture(spec)
+        self.roots.append(root)
+        return root
+
+    def history_path(self, root):
+        return os.path.join(root, ".config", "dired_history")
+
+    def test_no_file_written_when_history_spec_absent(self):
+        root = self.build({"tree": {"a.txt": "hello"}})
+        fixture.write_history(root, root, {})
+        self.assertFalse(os.path.exists(self.history_path(root)))
+
+    def test_header_fields(self):
+        root = self.build({"tree": {"a.txt": "hello"}})
+        fixture.write_history(root, root, {"folder_history": ["a"]})
+        with open(self.history_path(root), "rb") as f:
+            magic, version, occupied_count = struct.unpack("<III", f.read(12))
+        self.assertEqual(magic, fixture.HISTORY_FILE_MAGIC)
+        self.assertEqual(version, fixture.HISTORY_FILE_VERSION)
+        self.assertEqual(occupied_count, 0)
+
+    def test_folder_and_file_history_round_trip_most_recent_first(self):
+        root = self.build({"tree": {"alpha/.keep": "", "beta/.keep": ""}})
+        fixture.write_history(root, root, {
+            "folder_history": ["alpha", "beta"],
+            "file_history": ["alpha/.keep"],
+        })
+        with open(self.history_path(root), "rb") as f:
+            data = f.read()
+
+        folder_section = data[12:12 + fixture.FOLDER_HISTORY_ARENA_BYTES]
+        file_section = data[12 + fixture.FOLDER_HISTORY_ARENA_BYTES:
+                             12 + fixture.FOLDER_HISTORY_ARENA_BYTES + fixture.FILE_HISTORY_ARENA_BYTES]
+
+        self.assertEqual(
+            _decode_arena(folder_section),
+            [os.path.join(root, "beta"), os.path.join(root, "alpha")],
+        )
+        self.assertEqual(_decode_arena(file_section), [os.path.join(root, "alpha/.keep")])
+
+    def test_file_length_matches_header_plus_both_arenas(self):
+        root = self.build({"tree": {"alpha/.keep": ""}})
+        fixture.write_history(root, root, {"folder_history": ["alpha"]})
+        expected_size = 12 + fixture.FOLDER_HISTORY_ARENA_BYTES + fixture.FILE_HISTORY_ARENA_BYTES
+        self.assertEqual(os.path.getsize(self.history_path(root)), expected_size)
+
+    def test_entry_too_large_for_arena_raises(self):
+        root = self.build({"tree": {"a.txt": "hello"}})
+        with self.assertRaises(ValueError):
+            fixture.write_history(root, root, {"folder_history": ["x" * fixture.FOLDER_HISTORY_ARENA_BYTES]})
 
 
 if __name__ == "__main__":
