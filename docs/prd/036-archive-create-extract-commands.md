@@ -1,7 +1,7 @@
 ---
 title: "Archive creation and extraction commands"
 description: "dired can browse into an existing .zip/.tar.gz archive and copy a single member out, but has no way to create a new archive from files/dirs, or extract an existing archive's full contents to disk — and the integration suite has no way to build archive fixtures to test the browsing side either."
-status: needs-triage
+status: done
 ---
 
 ## Problem Statement
