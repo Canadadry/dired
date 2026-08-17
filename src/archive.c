@@ -6,6 +6,55 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+const char *archive_create_base_name(ArchiveCreateFormat format)
+{
+    switch (format) {
+    case ARCHIVE_CREATE_ZIP:   return "archive.zip";
+    case ARCHIVE_CREATE_TAR:   return "archive.tar";
+    case ARCHIVE_CREATE_TARGZ: return "archive.tar.gz";
+    }
+    return "archive.zip";
+}
+
+void archive_create_destination_name(ArchiveCreateFormat format,
+                                      const Entry *entries, int entry_count,
+                                      char *out_name, size_t out_size)
+{
+    find_available_name(archive_create_base_name(format), entries, entry_count,
+                         out_name, out_size);
+}
+
+int archive_extract_subfolder_stem(const char *archive_name, char *out_stem, size_t out_size)
+{
+    const char *suffix = archive_suffix_for_name(archive_name);
+    if (!suffix) {
+        out_stem[0] = '\0';
+        return 0;
+    }
+
+    size_t stem_len = (size_t)(suffix - archive_name);
+    size_t copy_len = stem_len < out_size - 1 ? stem_len : out_size - 1;
+    memcpy(out_stem, archive_name, copy_len);
+    out_stem[copy_len] = '\0';
+    return 1;
+}
+
+int archive_extract_destination_name(const char *archive_name,
+                                      const Entry *entries, int entry_count,
+                                      const char *const *claimed_names, int claimed_count,
+                                      char *out_name, size_t out_size)
+{
+    char stem[NAME_MAX_LEN + 1];
+    if (!archive_extract_subfolder_stem(archive_name, stem, sizeof(stem))) {
+        out_name[0] = '\0';
+        return 0;
+    }
+
+    find_available_name_among(stem, entries, entry_count, claimed_names, claimed_count,
+                               out_name, out_size);
+    return 1;
+}
+
 static const char *skip_spaces(const char *s)
 {
     while (*s == ' ')

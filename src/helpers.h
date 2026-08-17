@@ -36,6 +36,9 @@ int dired_effective_home(char *out, size_t out_size);
 int is_protected_name(const char *name);
 int is_hidden_name(const char *name);
 ArchiveFormat archive_format_for_name(const char *name);
+
+const char *archive_suffix_for_name(const char *name);
+
 int filter_matches(const char *name, FilterType type, const char *pattern);
 int filter_is_valid(FilterType type, const char *pattern);
 
@@ -50,6 +53,12 @@ void mode_to_str(mode_t m, char *out);
 int is_binary_content(const unsigned char *buf, size_t len);
 void find_available_name(const char *base_name, const Entry *entries, int entry_count,
                           char *out_name, size_t out_size);
+
+void find_available_name_among(const char *base_name,
+                                const Entry *entries, int entry_count,
+                                const char *const *claimed_names, int claimed_count,
+                                char *out_name, size_t out_size);
+
 NameKind classify_new_name(const char *raw, char *out_name, size_t out_size);
 
 int visible_entry_rows(int term_height, int has_virtual_line);

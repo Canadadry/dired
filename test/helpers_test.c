@@ -172,6 +172,48 @@ static void test_find_available_name(void)
     }
 }
 
+static void test_find_available_name_among(void)
+{
+    typedef struct {
+        const char *label;
+        const char *base_name;
+        const char *existing[4];
+        int existing_count;
+        const char *claimed[4];
+        int claimed_count;
+        const char *expected;
+    } Case;
+
+    Case cases[] = {
+        {"no claimed names behaves like find_available_name", "notes",
+         {0}, 0, {0}, 0, "notes"},
+        {"claimed-only collision (nothing on disk) still resolves", "notes",
+         {0}, 0, {"notes"}, 1, "notes (1)"},
+        {"disk collision plus claimed collision skips both slots", "notes",
+         {"notes"}, 1, {"notes (1)"}, 1, "notes (2)"},
+        {"claimed name with extension preserves it like disk collisions do", "archive.zip",
+         {0}, 0, {"archive.zip"}, 1, "archive (1).zip"},
+        {"second batch item avoids first batch item's resolved name", "notes",
+         {0}, 0, {"notes", "notes (1)"}, 2, "notes (2)"},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Entry entries[4];
+        for (int j = 0; j < cases[i].existing_count; j++)
+            entries[j] = make_entry(cases[i].existing[j]);
+
+        char out[NAME_MAX_LEN + 1];
+        find_available_name_among(cases[i].base_name, entries, cases[i].existing_count,
+                                   cases[i].claimed, cases[i].claimed_count,
+                                   out, sizeof(out));
+
+        if (strcmp(out, cases[i].expected) != 0) {
+            TEST_ERRORF(cases[i].label, "find_available_name_among(%s) = %s, want %s",
+                        cases[i].base_name, out, cases[i].expected);
+        }
+    }
+}
+
 static void test_classify_new_name(void)
 {
     typedef struct {
@@ -557,6 +599,49 @@ static void test_archive_format_for_name(void)
     }
 }
 
+static void test_archive_suffix_for_name(void)
+{
+    typedef struct {
+        const char *name;
+        const char *expected_suffix;
+    } Case;
+
+    Case cases[] = {
+        {"project.tar", ".tar"},
+        {"project.tar.gz", ".tar.gz"},
+        {"project.tgz", ".tgz"},
+        {"project.tar.bz2", ".tar.bz2"},
+        {"project.tbz2", ".tbz2"},
+        {"project.tar.xz", ".tar.xz"},
+        {"project.txz", ".txz"},
+        {"project.tar.Z", ".tar.Z"},
+        {"project.zip", ".zip"},
+        {"notes.txt", NULL},
+        {"no_extension", NULL},
+        {"", NULL},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        const char *got = archive_suffix_for_name(cases[i].name);
+
+        if (cases[i].expected_suffix == NULL) {
+            if (got != NULL) {
+                TEST_ERRORF(cases[i].name, "archive_suffix_for_name(%s) = %s, want NULL",
+                            cases[i].name, got);
+            }
+            continue;
+        }
+
+        if (got == NULL) {
+            TEST_ERRORF(cases[i].name, "archive_suffix_for_name(%s) = NULL, want %s",
+                        cases[i].name, cases[i].expected_suffix);
+        } else if (strcmp(got, cases[i].expected_suffix) != 0) {
+            TEST_ERRORF(cases[i].name, "archive_suffix_for_name(%s) = %s, want %s",
+                        cases[i].name, got, cases[i].expected_suffix);
+        }
+    }
+}
+
 static void test_parse_preview_rules(void)
 {
     typedef struct {
@@ -796,6 +881,7 @@ void test_helpers(void)
     test_mode_to_str();
     test_is_binary_content();
     test_find_available_name();
+    test_find_available_name_among();
     test_classify_new_name();
     test_entry_compare();
     test_visible_entry_rows();
@@ -806,6 +892,7 @@ void test_helpers(void)
     test_apply_filter_truncation();
     test_dirname_of();
     test_archive_format_for_name();
+    test_archive_suffix_for_name();
     test_parse_preview_rules();
     test_match_preview_rule();
     test_build_preview_argv();

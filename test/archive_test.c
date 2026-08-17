@@ -2,6 +2,149 @@
 #include "../src/archive.h"
 #include <string.h>
 
+static Entry make_entry(const char *name)
+{
+    Entry e;
+    memset(&e, 0, sizeof(e));
+    strcpy(e.name, name);
+    return e;
+}
+
+static void test_archive_create_base_name(void)
+{
+    typedef struct {
+        ArchiveCreateFormat format;
+        const char *expected;
+    } Case;
+
+    Case cases[] = {
+        {ARCHIVE_CREATE_ZIP, "archive.zip"},
+        {ARCHIVE_CREATE_TAR, "archive.tar"},
+        {ARCHIVE_CREATE_TARGZ, "archive.tar.gz"},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        const char *got = archive_create_base_name(cases[i].format);
+        if (strcmp(got, cases[i].expected) != 0) {
+            TEST_ERRORF(cases[i].expected, "archive_create_base_name(%d) = %s, want %s",
+                        cases[i].format, got, cases[i].expected);
+        }
+    }
+}
+
+static void test_archive_create_destination_name(void)
+{
+    char out[NAME_MAX_LEN + 1];
+    archive_create_destination_name(ARCHIVE_CREATE_ZIP, NULL, 0, out, sizeof(out));
+    if (strcmp(out, "archive.zip") != 0) {
+        TEST_ERRORF("no collision", "archive_create_destination_name(...) = %s, want archive.zip", out);
+    }
+
+    Entry entries[1] = { make_entry("archive.zip") };
+    archive_create_destination_name(ARCHIVE_CREATE_ZIP, entries, 1, out, sizeof(out));
+    if (strcmp(out, "archive (1).zip") != 0) {
+        TEST_ERRORF("collision reuses (N) helper",
+                    "archive_create_destination_name(...) = %s, want archive (1).zip", out);
+    }
+}
+
+static void test_archive_extract_subfolder_stem(void)
+{
+    typedef struct {
+        const char *label;
+        const char *archive_name;
+        int expected_ok;
+        const char *expected_stem;
+    } Case;
+
+    Case cases[] = {
+        {"zip", "something.zip", 1, "something"},
+        {"tar", "something.tar", 1, "something"},
+        {"tar.gz", "something.tar.gz", 1, "something"},
+        {"tgz", "something.tgz", 1, "something"},
+        {"tar.bz2", "something.tar.bz2", 1, "something"},
+        {"tbz2", "something.tbz2", 1, "something"},
+        {"tar.xz", "something.tar.xz", 1, "something"},
+        {"txz", "something.txz", 1, "something"},
+        {"tar.Z", "something.tar.Z", 1, "something"},
+        {"not an archive", "notes.txt", 0, ""},
+        {"no extension at all", "notes", 0, ""},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        char out[NAME_MAX_LEN + 1];
+        int got = archive_extract_subfolder_stem(cases[i].archive_name, out, sizeof(out));
+
+        if (got != cases[i].expected_ok) {
+            TEST_ERRORF(cases[i].label, "archive_extract_subfolder_stem(%s) = %d, want %d",
+                        cases[i].archive_name, got, cases[i].expected_ok);
+            continue;
+        }
+        if (strcmp(out, cases[i].expected_stem) != 0) {
+            TEST_ERRORF(cases[i].label, "archive_extract_subfolder_stem(%s) stem = %s, want %s",
+                        cases[i].archive_name, out, cases[i].expected_stem);
+        }
+    }
+}
+
+static void test_archive_extract_destination_name_rejects_non_archive(void)
+{
+    char out[NAME_MAX_LEN + 1] = "untouched";
+    int got = archive_extract_destination_name("notes.txt", NULL, 0, NULL, 0, out, sizeof(out));
+
+    if (got != 0) {
+        TEST_ERRORF("non-archive", "archive_extract_destination_name(...) = %d, want 0", got);
+    }
+    if (out[0] != '\0') {
+        TEST_ERRORF("non-archive", "out = %s, want empty string", out);
+    }
+}
+
+static void test_archive_extract_destination_name_no_collision(void)
+{
+    char out[NAME_MAX_LEN + 1];
+    int got = archive_extract_destination_name("something.zip", NULL, 0, NULL, 0, out, sizeof(out));
+
+    if (got != 1) {
+        TEST_ERRORF("no collision", "archive_extract_destination_name(...) = %d, want 1", got);
+    }
+    if (strcmp(out, "something") != 0) {
+        TEST_ERRORF("no collision", "out = %s, want something", out);
+    }
+}
+
+static void test_archive_extract_destination_name_disk_collision(void)
+{
+    Entry entries[1] = { make_entry("something") };
+
+    char out[NAME_MAX_LEN + 1];
+    int got = archive_extract_destination_name("something.zip", entries, 1, NULL, 0, out, sizeof(out));
+
+    if (got != 1) {
+        TEST_ERRORF("disk collision", "archive_extract_destination_name(...) = %d, want 1", got);
+    }
+    if (strcmp(out, "something (1)") != 0) {
+        TEST_ERRORF("disk collision", "out = %s, want something (1)", out);
+    }
+}
+
+static void test_archive_extract_destination_name_batch_accumulation(void)
+{
+    char out1[NAME_MAX_LEN + 1];
+    int got1 = archive_extract_destination_name("notes.zip", NULL, 0, NULL, 0, out1, sizeof(out1));
+    if (got1 != 1 || strcmp(out1, "notes") != 0) {
+        TEST_ERRORF("batch first item", "= (%d, %s), want (1, notes)", got1, out1);
+    }
+
+    const char *claimed[1] = { out1 };
+    char out2[NAME_MAX_LEN + 1];
+    int got2 = archive_extract_destination_name("notes.tar.gz", NULL, 0, claimed, 1, out2, sizeof(out2));
+    if (got2 != 1 || strcmp(out2, "notes (1)") != 0) {
+        TEST_ERRORF("batch second item avoids first item's claimed name",
+                    "= (%d, %s), want (1, notes (1))", got2, out2);
+    }
+}
+
 static void test_parse_tar_listing_single_file(void)
 {
     const char *text =
@@ -480,6 +623,14 @@ static void test_archive_glob_matches_relative_to_subfolder(void)
 
 void test_archive(void)
 {
+    test_archive_create_base_name();
+    test_archive_create_destination_name();
+    test_archive_extract_subfolder_stem();
+    test_archive_extract_destination_name_rejects_non_archive();
+    test_archive_extract_destination_name_no_collision();
+    test_archive_extract_destination_name_disk_collision();
+    test_archive_extract_destination_name_batch_accumulation();
+
     test_parse_tar_listing_single_file();
     test_parse_tar_listing_multi_depth_with_explicit_dirs();
     test_parse_tar_listing_implied_directories();

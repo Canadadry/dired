@@ -43,27 +43,56 @@ static int ends_with(const char *name, const char *suffix)
     return strcmp(name + (name_len - suffix_len), suffix) == 0;
 }
 
-ArchiveFormat archive_format_for_name(const char *name)
+typedef struct {
+    const char *suffix;
+    ArchiveFormat format;
+} ArchiveSuffixInfo;
+
+static const ArchiveSuffixInfo archive_suffixes[] = {
+    {".tar.gz", ARCHIVE_TAR},
+    {".tgz", ARCHIVE_TAR},
+    {".tar.bz2", ARCHIVE_TAR},
+    {".tbz2", ARCHIVE_TAR},
+    {".tar.xz", ARCHIVE_TAR},
+    {".txz", ARCHIVE_TAR},
+    {".tar.Z", ARCHIVE_TAR},
+    {".tar", ARCHIVE_TAR},
+    {".zip", ARCHIVE_ZIP},
+};
+
+static const char *archive_suffix_match(const char *name, ArchiveFormat *out_format)
 {
-    static const char *tar_suffixes[] = {
-        ".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz", ".tar.Z",
-    };
-
-    for (size_t i = 0; i < sizeof(tar_suffixes) / sizeof(tar_suffixes[0]); i++) {
-        if (ends_with(name, tar_suffixes[i]))
-            return ARCHIVE_TAR;
+    for (size_t i = 0; i < sizeof(archive_suffixes) / sizeof(archive_suffixes[0]); i++) {
+        if (ends_with(name, archive_suffixes[i].suffix)) {
+            if (out_format)
+                *out_format = archive_suffixes[i].format;
+            return name + strlen(name) - strlen(archive_suffixes[i].suffix);
+        }
     }
-
-    if (ends_with(name, ".zip"))
-        return ARCHIVE_ZIP;
-
-    return ARCHIVE_NONE;
+    return NULL;
 }
 
-static int name_collides(const char *name, const Entry *entries, int entry_count)
+ArchiveFormat archive_format_for_name(const char *name)
+{
+    ArchiveFormat format = ARCHIVE_NONE;
+    archive_suffix_match(name, &format);
+    return format;
+}
+
+const char *archive_suffix_for_name(const char *name)
+{
+    return archive_suffix_match(name, NULL);
+}
+
+static int name_collides(const char *name, const Entry *entries, int entry_count,
+                          const char *const *claimed_names, int claimed_count)
 {
     for (int i = 0; i < entry_count; i++) {
         if (strcmp(entries[i].name, name) == 0)
+            return 1;
+    }
+    for (int i = 0; i < claimed_count; i++) {
+        if (strcmp(claimed_names[i], name) == 0)
             return 1;
     }
     return 0;
@@ -87,10 +116,12 @@ static void split_ext(const char *name, char *stem, char *ext)
     strcpy(ext, dot);
 }
 
-void find_available_name(const char *base_name, const Entry *entries, int entry_count,
-                          char *out_name, size_t out_size)
+void find_available_name_among(const char *base_name,
+                                const Entry *entries, int entry_count,
+                                const char *const *claimed_names, int claimed_count,
+                                char *out_name, size_t out_size)
 {
-    if (!name_collides(base_name, entries, entry_count)) {
+    if (!name_collides(base_name, entries, entry_count, claimed_names, claimed_count)) {
         snprintf(out_name, out_size, "%s", base_name);
         return;
     }
@@ -101,9 +132,15 @@ void find_available_name(const char *base_name, const Entry *entries, int entry_
 
     for (int n = 1; ; n++) {
         snprintf(out_name, out_size, "%s (%d)%s", stem, n, ext);
-        if (!name_collides(out_name, entries, entry_count))
+        if (!name_collides(out_name, entries, entry_count, claimed_names, claimed_count))
             return;
     }
+}
+
+void find_available_name(const char *base_name, const Entry *entries, int entry_count,
+                          char *out_name, size_t out_size)
+{
+    find_available_name_among(base_name, entries, entry_count, NULL, 0, out_name, out_size);
 }
 
 NameKind classify_new_name(const char *raw, char *out_name, size_t out_size)
