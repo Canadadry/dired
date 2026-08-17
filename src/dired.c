@@ -1227,6 +1227,22 @@ static void load_history(void)
     }
 }
 
+static void dispatch_and_persist_history(const Msg *msg, Model *model, Model *next_model, Cmd *next_cmd)
+{
+    FolderHistoryArena prev_folder_history = g_folder_history;
+    FileHistoryArena prev_file_history = g_file_history;
+
+    update(msg, model, next_model, next_cmd);
+
+    if (g_history_path[0] == '\0')
+        return;
+
+    if (memcmp(&prev_folder_history, &g_folder_history, sizeof(g_folder_history)) != 0)
+        history_write_folder_history(g_history_path, &g_folder_history);
+    if (memcmp(&prev_file_history, &g_file_history, sizeof(g_file_history)) != 0)
+        history_write_file_history(g_history_path, &g_file_history);
+}
+
 #ifdef BUILD_DEBUG
 static void dired_test_sync_signal(void)
 {
@@ -1272,7 +1288,7 @@ int main(int argc, char **argv)
             Msg outcome = execute_cmd(&cmd);
             static Model next_model;
             Cmd next_cmd;
-            update(&outcome, &model, &next_model, &next_cmd);
+            dispatch_and_persist_history(&outcome, &model, &next_model, &next_cmd);
             model = next_model;
             cmd = next_cmd;
             continue;
@@ -1289,7 +1305,7 @@ int main(int argc, char **argv)
 
         static Model next_model;
         Cmd next_cmd;
-        update(&msg, &model, &next_model, &next_cmd);
+        dispatch_and_persist_history(&msg, &model, &next_model, &next_cmd);
         model = next_model;
         cmd = next_cmd;
     }
