@@ -36,6 +36,7 @@ typedef struct {
     char path[PATH_MAX_LEN];
     char dest[PATH_MAX_LEN];
     int is_dir;
+    ArchiveFormat archive_format;
 } CmdBatchItem;
 
 typedef struct {

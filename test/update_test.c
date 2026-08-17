@@ -3011,6 +3011,8 @@ static void test_validate_run_cmd_archive_commands(void)
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
         Model in = make_edit_model(MODE_RUN_CMD, cases[i].edit_buf, 1, 3);
         strcpy(in.current_path, "/tmp");
+        strcpy(in.entries[1].name, "notes.zip");
+        in.entries[1].st.st_mode = S_IFREG | 0644;
         Msg msg = { .type = MSG_ACTIVATE };
         Model out;
         Cmd cmd;
@@ -3020,6 +3022,218 @@ static void test_validate_run_cmd_archive_commands(void)
         if (cmd.type != cases[i].expected_cmd_type) {
             TEST_ERRORF(cases[i].label, "cmd.type = %d, want %d", cmd.type, cases[i].expected_cmd_type);
             continue;
+        }
+        if (out.mode != MODE_NAV) {
+            TEST_ERRORF(cases[i].label, "mode = %d, want MODE_NAV", out.mode);
+        }
+    }
+}
+
+static void test_extract_archive_uses_cursor_entry_when_nothing_marked(void)
+{
+    Model in = make_edit_model(MODE_RUN_CMD, "extract", 0, 1);
+    strcpy(in.current_path, "/tmp");
+    strcpy(in.entries[0].name, "notes.zip");
+    in.entries[0].st.st_mode = S_IFREG | 0644;
+
+    Msg msg = { .type = MSG_ACTIVATE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_EXTRACT_ARCHIVE) {
+        TEST_ERRORF("extract uses cursor entry", "cmd.type = %d, want CMD_EXTRACT_ARCHIVE", cmd.type);
+    }
+    if (cmd.batch_count != 1) {
+        TEST_ERRORF("extract uses cursor entry", "cmd.batch_count = %d, want 1", cmd.batch_count);
+    }
+    if (strcmp(cmd.batch_items[0].path, "/tmp/notes.zip") != 0) {
+        TEST_ERRORF("extract uses cursor entry", "batch_items[0].path = %s, want /tmp/notes.zip",
+                    cmd.batch_items[0].path);
+    }
+    if (strcmp(cmd.batch_items[0].dest, "/tmp/notes") != 0) {
+        TEST_ERRORF("extract uses cursor entry", "batch_items[0].dest = %s, want /tmp/notes",
+                    cmd.batch_items[0].dest);
+    }
+    if (cmd.batch_items[0].archive_format != ARCHIVE_ZIP) {
+        TEST_ERRORF("extract uses cursor entry", "batch_items[0].archive_format = %d, want ARCHIVE_ZIP",
+                    cmd.batch_items[0].archive_format);
+    }
+    if (out.mode != MODE_NAV) {
+        TEST_ERRORF("extract uses cursor entry", "mode = %d, want MODE_NAV", out.mode);
+    }
+}
+
+static void test_extract_archive_cursor_not_archive_shows_error(void)
+{
+    Model in = make_edit_model(MODE_RUN_CMD, "extract", 0, 1);
+    strcpy(in.current_path, "/tmp");
+    strcpy(in.entries[0].name, "notes.txt");
+    in.entries[0].st.st_mode = S_IFREG | 0644;
+
+    Msg msg = { .type = MSG_ACTIVATE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_NONE) {
+        TEST_ERRORF("extract cursor not archive", "cmd.type = %d, want CMD_NONE", cmd.type);
+    }
+    if (out.mode != MODE_ERROR) {
+        TEST_ERRORF("extract cursor not archive", "mode = %d, want MODE_ERROR", out.mode);
+    }
+    if (out.error_msg[0] == '\0') {
+        TEST_ERRORF("extract cursor not archive", "error_msg is empty, want a message");
+    }
+}
+
+static void test_extract_archive_marked_set_skips_non_archives_and_accumulates_claimed_names(void)
+{
+    Model in = make_edit_model(MODE_RUN_CMD, "extract", 0, 1);
+    strcpy(in.current_path, "/tmp");
+    strcpy(in.entries[0].name, "cursor-entry.txt");
+    in.entries[0].st.st_mode = S_IFREG | 0644;
+
+    strcpy(in.marked_items[0].path, "/tmp/notes.zip");
+    in.marked_items[0].is_dir = 0;
+    strcpy(in.marked_items[1].path, "/tmp/readme.txt");
+    in.marked_items[1].is_dir = 0;
+    strcpy(in.marked_items[2].path, "/tmp/notes.tar.gz");
+    in.marked_items[2].is_dir = 0;
+    in.marked_count = 3;
+
+    Msg msg = { .type = MSG_ACTIVATE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_EXTRACT_ARCHIVE) {
+        TEST_ERRORF("extract marked set skips non-archives", "cmd.type = %d, want CMD_EXTRACT_ARCHIVE", cmd.type);
+    }
+    if (cmd.batch_count != 2) {
+        TEST_ERRORF("extract marked set skips non-archives", "cmd.batch_count = %d, want 2", cmd.batch_count);
+    }
+    if (strcmp(cmd.batch_items[0].path, "/tmp/notes.zip") != 0 ||
+        strcmp(cmd.batch_items[0].dest, "/tmp/notes") != 0 ||
+        cmd.batch_items[0].archive_format != ARCHIVE_ZIP) {
+        TEST_ERRORF("extract marked set skips non-archives",
+                    "batch_items[0] = {%s -> %s, fmt=%d}, want {/tmp/notes.zip -> /tmp/notes, fmt=ARCHIVE_ZIP}",
+                    cmd.batch_items[0].path, cmd.batch_items[0].dest, cmd.batch_items[0].archive_format);
+    }
+    if (strcmp(cmd.batch_items[1].path, "/tmp/notes.tar.gz") != 0 ||
+        strcmp(cmd.batch_items[1].dest, "/tmp/notes (1)") != 0 ||
+        cmd.batch_items[1].archive_format != ARCHIVE_TAR) {
+        TEST_ERRORF("extract marked set skips non-archives",
+                    "batch_items[1] = {%s -> %s, fmt=%d}, want {/tmp/notes.tar.gz -> /tmp/notes (1), fmt=ARCHIVE_TAR}",
+                    cmd.batch_items[1].path, cmd.batch_items[1].dest, cmd.batch_items[1].archive_format);
+    }
+}
+
+static void test_create_archive_uses_marked_set_ignoring_cursor(void)
+{
+    Model in = make_edit_model(MODE_RUN_CMD, "zip", 0, 1);
+    strcpy(in.current_path, "/tmp");
+    strcpy(in.entries[0].name, "cursor-entry.txt");
+    in.entries[0].st.st_mode = S_IFREG | 0644;
+
+    strcpy(in.marked_items[0].path, "/tmp/a.txt");
+    in.marked_items[0].is_dir = 0;
+    strcpy(in.marked_items[1].path, "/tmp/subdir");
+    in.marked_items[1].is_dir = 1;
+    in.marked_count = 2;
+
+    Msg msg = { .type = MSG_ACTIVATE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_CREATE_ZIP) {
+        TEST_ERRORF("create archive uses marked set", "cmd.type = %d, want CMD_CREATE_ZIP", cmd.type);
+    }
+    if (cmd.batch_count != 2) {
+        TEST_ERRORF("create archive uses marked set", "cmd.batch_count = %d, want 2", cmd.batch_count);
+    }
+    if (strcmp(cmd.batch_items[0].path, "/tmp/a.txt") != 0 || cmd.batch_items[0].is_dir != 0) {
+        TEST_ERRORF("create archive uses marked set", "batch_items[0] = {%s, is_dir=%d}, want {/tmp/a.txt, 0}",
+                    cmd.batch_items[0].path, cmd.batch_items[0].is_dir);
+    }
+    if (strcmp(cmd.batch_items[1].path, "/tmp/subdir") != 0 || cmd.batch_items[1].is_dir != 1) {
+        TEST_ERRORF("create archive uses marked set", "batch_items[1] = {%s, is_dir=%d}, want {/tmp/subdir, 1}",
+                    cmd.batch_items[1].path, cmd.batch_items[1].is_dir);
+    }
+    if (strcmp(cmd.path, "/tmp/archive.zip") != 0) {
+        TEST_ERRORF("create archive uses marked set", "cmd.path = %s, want /tmp/archive.zip", cmd.path);
+    }
+}
+
+static void test_create_archive_destination_resolves_collision_against_unfiltered_entries(void)
+{
+    Model in = make_edit_model(MODE_RUN_CMD, "tar", 0, 1);
+    strcpy(in.current_path, "/tmp");
+    strcpy(in.entries[0].name, "notes.txt");
+    in.entries[0].st.st_mode = S_IFREG | 0644;
+
+    strcpy(in.unfiltered_entries[0].name, "archive.tar");
+    in.unfiltered_count = 1;
+
+    Msg msg = { .type = MSG_ACTIVATE };
+    Model out;
+    Cmd cmd;
+
+    update(&msg, &in, &out, &cmd);
+
+    if (cmd.type != CMD_CREATE_TAR) {
+        TEST_ERRORF("create archive destination collision", "cmd.type = %d, want CMD_CREATE_TAR", cmd.type);
+    }
+    if (strcmp(cmd.path, "/tmp/archive (1).tar") != 0) {
+        TEST_ERRORF("create archive destination collision", "cmd.path = %s, want /tmp/archive (1).tar", cmd.path);
+    }
+}
+
+static void test_create_archive_uses_cursor_entry_when_nothing_marked(void)
+{
+    typedef struct {
+        const char *label;
+        const char *edit_buf;
+        CmdType expected_cmd_type;
+        const char *expected_dest;
+    } Case;
+
+    Case cases[] = {
+        {"zip archives cursor entry into archive.zip", "zip", CMD_CREATE_ZIP, "/tmp/archive.zip"},
+        {"tar archives cursor entry into archive.tar", "tar", CMD_CREATE_TAR, "/tmp/archive.tar"},
+        {"tar.gz archives cursor entry into archive.tar.gz", "tar.gz", CMD_CREATE_TARGZ, "/tmp/archive.tar.gz"},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        Model in = make_edit_model(MODE_RUN_CMD, cases[i].edit_buf, 0, 1);
+        strcpy(in.current_path, "/tmp");
+        strcpy(in.entries[0].name, "notes.txt");
+        in.entries[0].st.st_mode = S_IFREG | 0644;
+
+        Msg msg = { .type = MSG_ACTIVATE };
+        Model out;
+        Cmd cmd;
+
+        update(&msg, &in, &out, &cmd);
+
+        if (cmd.type != cases[i].expected_cmd_type) {
+            TEST_ERRORF(cases[i].label, "cmd.type = %d, want %d", cmd.type, cases[i].expected_cmd_type);
+            continue;
+        }
+        if (cmd.batch_count != 1) {
+            TEST_ERRORF(cases[i].label, "cmd.batch_count = %d, want 1", cmd.batch_count);
+            continue;
+        }
+        if (strcmp(cmd.batch_items[0].path, "/tmp/notes.txt") != 0) {
+            TEST_ERRORF(cases[i].label, "batch_items[0].path = %s, want /tmp/notes.txt", cmd.batch_items[0].path);
+        }
+        if (strcmp(cmd.path, cases[i].expected_dest) != 0) {
+            TEST_ERRORF(cases[i].label, "cmd.path = %s, want %s", cmd.path, cases[i].expected_dest);
         }
         if (out.mode != MODE_NAV) {
             TEST_ERRORF(cases[i].label, "mode = %d, want MODE_NAV", out.mode);
@@ -5977,6 +6191,12 @@ void test_update(void)
     test_validate_run_cmd();
     test_validate_run_cmd_carries_selected_path();
     test_validate_run_cmd_archive_commands();
+    test_extract_archive_uses_cursor_entry_when_nothing_marked();
+    test_extract_archive_cursor_not_archive_shows_error();
+    test_extract_archive_marked_set_skips_non_archives_and_accumulates_claimed_names();
+    test_create_archive_uses_marked_set_ignoring_cursor();
+    test_create_archive_destination_resolves_collision_against_unfiltered_entries();
+    test_create_archive_uses_cursor_entry_when_nothing_marked();
     test_recall_prev_first_press_recalls_most_recent_and_stashes_draft();
     test_recall_prev_repeated_walks_older_and_clamps_at_oldest();
     test_recall_next_walks_toward_newest();

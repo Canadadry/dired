@@ -179,6 +179,117 @@ static void block_select_on_glob(Model *out_model)
     out_model->error_msg[sizeof(out_model->error_msg) - 1] = '\0';
 }
 
+static void gather_create_archive(Model *out_model, Cmd *out_cmd, CmdType cmd_type, ArchiveCreateFormat format)
+{
+    out_cmd->type = cmd_type;
+    out_cmd->batch_count = 0;
+
+    if (out_model->marked_count > 0) {
+        for (int i = 0; i < out_model->marked_count && out_cmd->batch_count < MAX_ENTRIES; i++) {
+            const MarkedItem *marked_item = &out_model->marked_items[i];
+            CmdBatchItem *item = &out_cmd->batch_items[out_cmd->batch_count];
+            snprintf(item->path, sizeof(item->path), "%s", marked_item->path);
+            item->is_dir = marked_item->is_dir;
+            out_cmd->batch_count++;
+        }
+    } else if (out_model->selected < out_model->entry_count &&
+               !is_protected_name(out_model->entries[out_model->selected].name)) {
+        const Entry *e = &out_model->entries[out_model->selected];
+        CmdBatchItem *item = &out_cmd->batch_items[0];
+        join_path(out_model->current_path, e->name, item->path, sizeof(item->path));
+        item->is_dir = S_ISDIR(e->st.st_mode);
+        out_cmd->batch_count = 1;
+    }
+
+    if (out_cmd->batch_count == 0) {
+        out_cmd->type = CMD_NONE;
+        return;
+    }
+
+    char dest_name[NAME_MAX_LEN + 1];
+    archive_create_destination_name(format, out_model->unfiltered_entries, out_model->unfiltered_count,
+                                     dest_name, sizeof(dest_name));
+    join_path(out_model->current_path, dest_name, out_cmd->path, sizeof(out_cmd->path));
+}
+
+static void block_extract_not_archive(Model *out_model)
+{
+    out_model->mode = MODE_ERROR;
+    strncpy(out_model->error_msg, "not a recognized archive format", sizeof(out_model->error_msg) - 1);
+    out_model->error_msg[sizeof(out_model->error_msg) - 1] = '\0';
+}
+
+static void add_extract_batch_item(Model *out_model, Cmd *out_cmd, const char *full_path, const char *name,
+                                    ArchiveFormat fmt, char claimed_storage[][NAME_MAX_LEN + 1],
+                                    const char *claimed_names[], int *claimed_count)
+{
+    if (out_cmd->batch_count >= MAX_ENTRIES)
+        return;
+
+    char dest_name[NAME_MAX_LEN + 1];
+    if (!archive_extract_destination_name(name, out_model->unfiltered_entries, out_model->unfiltered_count,
+                                           claimed_names, *claimed_count, dest_name, sizeof(dest_name)))
+        return;
+
+    CmdBatchItem *item = &out_cmd->batch_items[out_cmd->batch_count];
+    snprintf(item->path, sizeof(item->path), "%s", full_path);
+    join_path(out_model->current_path, dest_name, item->dest, sizeof(item->dest));
+    item->is_dir = 0;
+    item->archive_format = fmt;
+    out_cmd->batch_count++;
+
+    snprintf(claimed_storage[*claimed_count], NAME_MAX_LEN + 1, "%s", dest_name);
+    claimed_names[*claimed_count] = claimed_storage[*claimed_count];
+    (*claimed_count)++;
+}
+
+static void gather_extract_archive(Model *out_model, Cmd *out_cmd)
+{
+    out_cmd->type = CMD_EXTRACT_ARCHIVE;
+    out_cmd->batch_count = 0;
+
+    static char claimed_storage[MAX_ENTRIES][NAME_MAX_LEN + 1];
+    const char *claimed_names[MAX_ENTRIES];
+    int claimed_count = 0;
+
+    if (out_model->marked_count > 0) {
+        for (int i = 0; i < out_model->marked_count; i++) {
+            const MarkedItem *marked_item = &out_model->marked_items[i];
+            char name[NAME_MAX_LEN + 1];
+            basename_of(marked_item->path, name, sizeof(name));
+
+            ArchiveFormat fmt = archive_format_for_name(name);
+            if (fmt == ARCHIVE_NONE)
+                continue;
+
+            add_extract_batch_item(out_model, out_cmd, marked_item->path, name, fmt,
+                                    claimed_storage, claimed_names, &claimed_count);
+        }
+
+        if (out_cmd->batch_count == 0)
+            out_cmd->type = CMD_NONE;
+        return;
+    }
+
+    if (out_model->selected >= out_model->entry_count) {
+        out_cmd->type = CMD_NONE;
+        return;
+    }
+
+    const Entry *e = &out_model->entries[out_model->selected];
+    ArchiveFormat fmt = archive_format_for_name(e->name);
+    if (fmt == ARCHIVE_NONE) {
+        out_cmd->type = CMD_NONE;
+        block_extract_not_archive(out_model);
+        return;
+    }
+
+    char full_path[PATH_MAX_LEN];
+    join_path(out_model->current_path, e->name, full_path, sizeof(full_path));
+    add_extract_batch_item(out_model, out_cmd, full_path, e->name, fmt,
+                            claimed_storage, claimed_names, &claimed_count);
+}
+
 static void selected_name(const Model *m, char *out, size_t out_size)
 {
     if (m->selected < m->entry_count)
@@ -950,17 +1061,18 @@ static void handle_edit(const Msg *msg, Model *out_model, Cmd *out_cmd)
                 else
                     out_cmd->selected_path[0] = '\0';
             } else if (strcmp(out_model->edit_buf, "zip") == 0) {
-                out_cmd->type = CMD_CREATE_ZIP;
+                gather_create_archive(out_model, out_cmd, CMD_CREATE_ZIP, ARCHIVE_CREATE_ZIP);
             } else if (strcmp(out_model->edit_buf, "tar") == 0) {
-                out_cmd->type = CMD_CREATE_TAR;
+                gather_create_archive(out_model, out_cmd, CMD_CREATE_TAR, ARCHIVE_CREATE_TAR);
             } else if (strcmp(out_model->edit_buf, "tar.gz") == 0) {
-                out_cmd->type = CMD_CREATE_TARGZ;
+                gather_create_archive(out_model, out_cmd, CMD_CREATE_TARGZ, ARCHIVE_CREATE_TARGZ);
             } else if (strcmp(out_model->edit_buf, "extract") == 0) {
-                out_cmd->type = CMD_EXTRACT_ARCHIVE;
+                gather_extract_archive(out_model, out_cmd);
             }
         }
 
-        cancel_edit(out_model);
+        if (out_model->mode != MODE_ERROR)
+            cancel_edit(out_model);
         break;
 
     default:
