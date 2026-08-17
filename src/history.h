@@ -15,6 +15,17 @@ CREATE_HASHMAP(CommandArena)
 
 typedef CommandArenaHashMap History;
 
+#define FOLDER_HISTORY_ARENA_BYTES 20480
+#define FILE_HISTORY_ARENA_BYTES 40960
+
+typedef struct {
+    unsigned char data[FOLDER_HISTORY_ARENA_BYTES];
+} FolderHistoryArena;
+
+typedef struct {
+    unsigned char data[FILE_HISTORY_ARENA_BYTES];
+} FileHistoryArena;
+
 typedef struct {
     int text_end;
     int index_top;
@@ -45,5 +56,15 @@ int history_load_default(History *out);
 int history_write_header(const char *path, uint32_t occupied_count);
 int history_write_folder_slot(const char *path, const char *folder_path, const CommandArena *arena);
 int history_delete_folder_slot(const char *path, const char *folder_path);
+
+int history_load_folder_history(const char *path, FolderHistoryArena *out);
+int history_load_file_history(const char *path, FileHistoryArena *out);
+int history_folder_history_load_default(FolderHistoryArena *out);
+int history_file_history_load_default(FileHistoryArena *out);
+int history_write_folder_history(const char *path, const FolderHistoryArena *arena);
+int history_write_file_history(const char *path, const FileHistoryArena *arena);
+
+void history_prune_folder_history(FolderHistoryArena *arena);
+void history_prune_file_history(FileHistoryArena *arena);
 
 #endif

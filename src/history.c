@@ -12,7 +12,7 @@
 WRITE_HASHMAP_IMPL(CommandArena)
 
 #define HISTORY_FILE_MAGIC 0x54534968u
-#define HISTORY_FILE_VERSION 1u
+#define HISTORY_FILE_VERSION 2u
 
 typedef struct {
     uint32_t magic;
@@ -275,14 +275,90 @@ static int read_header(int fd, HistoryFileHeader *hdr)
     ssize_t n = pread(fd, hdr, sizeof(*hdr), 0);
     if (n != (ssize_t)sizeof(*hdr))
         return -1;
-    if (hdr->magic != HISTORY_FILE_MAGIC || hdr->version != HISTORY_FILE_VERSION)
+    if (hdr->magic != HISTORY_FILE_MAGIC || (hdr->version != 1u && hdr->version != HISTORY_FILE_VERSION))
         return -1;
     return 0;
 }
 
-static off_t slot_offset(uint32_t slot_index)
+static off_t folder_history_section_offset(void)
 {
-    return (off_t)sizeof(HistoryFileHeader) + (off_t)slot_index * (off_t)HISTORY_SLOT_SIZE;
+    return (off_t)sizeof(HistoryFileHeader);
+}
+
+static off_t file_history_section_offset(void)
+{
+    return folder_history_section_offset() + (off_t)FOLDER_HISTORY_ARENA_BYTES;
+}
+
+static off_t slots_base_offset(uint32_t version)
+{
+    if (version >= HISTORY_FILE_VERSION)
+        return file_history_section_offset() + (off_t)FILE_HISTORY_ARENA_BYTES;
+    return (off_t)sizeof(HistoryFileHeader);
+}
+
+static off_t slot_offset(uint32_t version, uint32_t slot_index)
+{
+    return slots_base_offset(version) + (off_t)slot_index * (off_t)HISTORY_SLOT_SIZE;
+}
+
+static int migrate_v1_to_v2(int fd)
+{
+    HistoryFileHeader hdr;
+    ssize_t n = pread(fd, &hdr, sizeof(hdr), 0);
+    if (n != (ssize_t)sizeof(hdr) || hdr.magic != HISTORY_FILE_MAGIC)
+        return -1;
+    if (hdr.version == HISTORY_FILE_VERSION)
+        return 0;
+    if (hdr.version != 1u)
+        return -1;
+
+    size_t slots_bytes = (size_t)hdr.occupied_count * HISTORY_SLOT_SIZE;
+    unsigned char *slot_buf = NULL;
+    if (slots_bytes > 0) {
+        slot_buf = malloc(slots_bytes);
+        if (!slot_buf)
+            return -1;
+        ssize_t rn = pread(fd, slot_buf, slots_bytes, slots_base_offset(1u));
+        if (rn != (ssize_t)slots_bytes) {
+            free(slot_buf);
+            return -1;
+        }
+    }
+
+    size_t arenas_bytes = (size_t)FOLDER_HISTORY_ARENA_BYTES + (size_t)FILE_HISTORY_ARENA_BYTES;
+    unsigned char *zero_buf = calloc(1, arenas_bytes);
+    if (!zero_buf) {
+        free(slot_buf);
+        return -1;
+    }
+    ssize_t zn = pwrite(fd, zero_buf, arenas_bytes, folder_history_section_offset());
+    free(zero_buf);
+    if (zn != (ssize_t)arenas_bytes) {
+        free(slot_buf);
+        return -1;
+    }
+
+    if (slots_bytes > 0) {
+        ssize_t wn = pwrite(fd, slot_buf, slots_bytes, slots_base_offset(HISTORY_FILE_VERSION));
+        free(slot_buf);
+        if (wn != (ssize_t)slots_bytes)
+            return -1;
+    }
+
+    off_t final_size = slots_base_offset(HISTORY_FILE_VERSION) + (off_t)slots_bytes;
+    if (ftruncate(fd, final_size) != 0)
+        return -1;
+
+    HistoryFileHeader new_hdr = {
+        .magic = HISTORY_FILE_MAGIC,
+        .version = HISTORY_FILE_VERSION,
+        .occupied_count = hdr.occupied_count,
+    };
+    if (pwrite(fd, &new_hdr, sizeof(new_hdr), 0) != (ssize_t)sizeof(new_hdr))
+        return -1;
+
+    return 0;
 }
 
 int history_load_file(const char *path, History *out)
@@ -304,7 +380,7 @@ int history_load_file(const char *path, History *out)
 
     unsigned char key[HASMMAP_KEY_LEN];
     for (uint32_t i = 0; i < hdr.occupied_count; i++) {
-        off_t off = slot_offset(i);
+        off_t off = slot_offset(hdr.version, i);
         ssize_t kn = pread(fd, key, sizeof(key), off);
         if (kn != (ssize_t)sizeof(key))
             break;
@@ -335,8 +411,13 @@ int history_load_default(History *out)
 static int ensure_history_file(const char *path)
 {
     int fd = open(path, O_RDWR);
-    if (fd >= 0)
+    if (fd >= 0) {
+        if (migrate_v1_to_v2(fd) != 0) {
+            close(fd);
+            return -1;
+        }
         return fd;
+    }
     if (errno != ENOENT)
         return -1;
 
@@ -354,6 +435,10 @@ static int ensure_history_file(const char *path)
         .occupied_count = 0,
     };
     if (pwrite(fd, &hdr, sizeof(hdr), 0) != (ssize_t)sizeof(hdr)) {
+        close(fd);
+        return -1;
+    }
+    if (ftruncate(fd, slots_base_offset(HISTORY_FILE_VERSION)) != 0) {
         close(fd);
         return -1;
     }
@@ -376,11 +461,11 @@ int history_write_header(const char *path, uint32_t occupied_count)
     return n == (ssize_t)sizeof(hdr) ? 0 : -1;
 }
 
-static int find_slot(int fd, uint32_t occupied_count, const char *folder_path, uint32_t *out_index)
+static int find_slot(int fd, uint32_t version, uint32_t occupied_count, const char *folder_path, uint32_t *out_index)
 {
     unsigned char key[HASMMAP_KEY_LEN];
     for (uint32_t i = 0; i < occupied_count; i++) {
-        off_t off = slot_offset(i);
+        off_t off = slot_offset(version, i);
         ssize_t kn = pread(fd, key, sizeof(key), off);
         if (kn != (ssize_t)sizeof(key))
             return -1;
@@ -406,17 +491,17 @@ int history_write_folder_slot(const char *path, const char *folder_path, const C
     }
 
     uint32_t slot_index;
-    int found = find_slot(fd, hdr.occupied_count, folder_path, &slot_index) == 0;
+    int found = find_slot(fd, hdr.version, hdr.occupied_count, folder_path, &slot_index) == 0;
 
     if (found) {
-        off_t off = slot_offset(slot_index) + HASMMAP_KEY_LEN;
+        off_t off = slot_offset(hdr.version, slot_index) + HASMMAP_KEY_LEN;
         ssize_t n = pwrite(fd, arena->data, HISTORY_ARENA_BYTES, off);
         close(fd);
         return n == (ssize_t)HISTORY_ARENA_BYTES ? 0 : -1;
     }
 
     slot_index = hdr.occupied_count;
-    off_t off = slot_offset(slot_index);
+    off_t off = slot_offset(hdr.version, slot_index);
 
     unsigned char key_buf[HASMMAP_KEY_LEN];
     memset(key_buf, 0, sizeof(key_buf));
@@ -437,6 +522,11 @@ int history_delete_folder_slot(const char *path, const char *folder_path)
     if (fd < 0)
         return 0;
 
+    if (migrate_v1_to_v2(fd) != 0) {
+        close(fd);
+        return -1;
+    }
+
     HistoryFileHeader hdr;
     if (read_header(fd, &hdr) != 0) {
         close(fd);
@@ -444,7 +534,7 @@ int history_delete_folder_slot(const char *path, const char *folder_path)
     }
 
     uint32_t slot_index;
-    if (find_slot(fd, hdr.occupied_count, folder_path, &slot_index) != 0) {
+    if (find_slot(fd, hdr.version, hdr.occupied_count, folder_path, &slot_index) != 0) {
         close(fd);
         return 0;
     }
@@ -457,8 +547,8 @@ int history_delete_folder_slot(const char *path, const char *folder_path)
             close(fd);
             return -1;
         }
-        off_t src_off = slot_offset(slot_index + 1);
-        off_t dst_off = slot_offset(slot_index);
+        off_t src_off = slot_offset(hdr.version, slot_index + 1);
+        off_t dst_off = slot_offset(hdr.version, slot_index);
         ssize_t rn = pread(fd, buf, tail_bytes, src_off);
         if (rn != (ssize_t)tail_bytes) {
             free(buf);
@@ -473,7 +563,7 @@ int history_delete_folder_slot(const char *path, const char *folder_path)
         }
     }
 
-    off_t new_size = slot_offset(hdr.occupied_count - 1);
+    off_t new_size = slot_offset(hdr.version, hdr.occupied_count - 1);
     if (ftruncate(fd, new_size) != 0) {
         close(fd);
         return -1;
@@ -481,4 +571,136 @@ int history_delete_folder_slot(const char *path, const char *folder_path)
     close(fd);
 
     return history_write_header(path, hdr.occupied_count - 1);
+}
+
+int history_load_folder_history(const char *path, FolderHistoryArena *out)
+{
+    if (!path || !out)
+        return -1;
+
+    memset(out->data, 0, FOLDER_HISTORY_ARENA_BYTES);
+
+    int fd = open(path, O_RDONLY);
+    if (fd < 0)
+        return 0;
+
+    HistoryFileHeader hdr;
+    if (read_header(fd, &hdr) != 0) {
+        close(fd);
+        return 0;
+    }
+
+    if (hdr.version >= HISTORY_FILE_VERSION)
+        pread(fd, out->data, FOLDER_HISTORY_ARENA_BYTES, folder_history_section_offset());
+
+    close(fd);
+    return 0;
+}
+
+int history_load_file_history(const char *path, FileHistoryArena *out)
+{
+    if (!path || !out)
+        return -1;
+
+    memset(out->data, 0, FILE_HISTORY_ARENA_BYTES);
+
+    int fd = open(path, O_RDONLY);
+    if (fd < 0)
+        return 0;
+
+    HistoryFileHeader hdr;
+    if (read_header(fd, &hdr) != 0) {
+        close(fd);
+        return 0;
+    }
+
+    if (hdr.version >= HISTORY_FILE_VERSION)
+        pread(fd, out->data, FILE_HISTORY_ARENA_BYTES, file_history_section_offset());
+
+    close(fd);
+    return 0;
+}
+
+int history_folder_history_load_default(FolderHistoryArena *out)
+{
+    char path[PATH_MAX_LEN + 64];
+    if (history_default_path(path, sizeof(path)) != 0) {
+        memset(out->data, 0, FOLDER_HISTORY_ARENA_BYTES);
+        return 0;
+    }
+    return history_load_folder_history(path, out);
+}
+
+int history_file_history_load_default(FileHistoryArena *out)
+{
+    char path[PATH_MAX_LEN + 64];
+    if (history_default_path(path, sizeof(path)) != 0) {
+        memset(out->data, 0, FILE_HISTORY_ARENA_BYTES);
+        return 0;
+    }
+    return history_load_file_history(path, out);
+}
+
+int history_write_folder_history(const char *path, const FolderHistoryArena *arena)
+{
+    int fd = ensure_history_file(path);
+    if (fd < 0)
+        return -1;
+
+    ssize_t n = pwrite(fd, arena->data, FOLDER_HISTORY_ARENA_BYTES, folder_history_section_offset());
+    close(fd);
+    return n == (ssize_t)FOLDER_HISTORY_ARENA_BYTES ? 0 : -1;
+}
+
+int history_write_file_history(const char *path, const FileHistoryArena *arena)
+{
+    int fd = ensure_history_file(path);
+    if (fd < 0)
+        return -1;
+
+    ssize_t n = pwrite(fd, arena->data, FILE_HISTORY_ARENA_BYTES, file_history_section_offset());
+    close(fd);
+    return n == (ssize_t)FILE_HISTORY_ARENA_BYTES ? 0 : -1;
+}
+
+static void prune_arena(unsigned char *buf, int n, int (*path_exists)(const char *))
+{
+    HistoryArenaState initial = history_arena_state(buf, n);
+    int total = initial.count;
+
+    for (int i = 0; i < total; i++) {
+        HistoryArenaState s = history_arena_state(buf, n);
+        if (s.count == 0)
+            break;
+
+        const char *oldest = history_arena_command_at(buf, n, s.count - 1);
+        if (!oldest)
+            break;
+
+        if (path_exists(oldest))
+            history_arena_dedup(buf, n, oldest);
+        else
+            history_arena_evict_oldest(buf, n);
+    }
+}
+
+static int folder_path_still_exists(const char *path)
+{
+    struct stat st;
+    return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
+}
+
+static int file_path_still_exists(const char *path)
+{
+    return access(path, F_OK) == 0;
+}
+
+void history_prune_folder_history(FolderHistoryArena *arena)
+{
+    prune_arena(arena->data, FOLDER_HISTORY_ARENA_BYTES, folder_path_still_exists);
+}
+
+void history_prune_file_history(FileHistoryArena *arena)
+{
+    prune_arena(arena->data, FILE_HISTORY_ARENA_BYTES, file_path_still_exists);
 }

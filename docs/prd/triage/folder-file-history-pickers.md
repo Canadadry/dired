@@ -71,6 +71,60 @@ Both lists are stored in the same `~/.config/dired_history` file as the existing
 
 - **Backward compatibility**: loading a version-1 history file must not fail or discard the existing per-folder command data; it's treated as "folder/file history not present yet" and both new arenas start empty.
 
+## Implementation Chunks
+
+1. **Storage layer** (`src/history.c`/`src/history.h`): add the two
+   fixed-size arenas (20KB folder-history, 40KB file-history) as dedicated
+   sections after the file header, bump `HISTORY_FILE_VERSION` 1 → 2 with
+   backward-compatible loading of version-1 files, add the parallel
+   load/write functions for the two fixed sections, and add the two
+   startup-pruning sweeps (folder-existence via `stat`+`S_ISDIR`,
+   plain-file-existence). Tests per `history_test.c`'s existing style:
+   arena push/dedup/evict-oldest at the new sizes, versioned round-trip
+   (including loading a version-1 file with both new arenas empty and
+   existing per-folder data intact), and startup-pruning eviction.
+   Independent of chunks 2-4 (pure storage-layer addition, no `Model`/`update()`
+   wiring yet).
+2. **Picker open/browse/filter/exit state machine** (`src/model.h`'s
+   `AppMode` + new picker state fields, `src/update.c`, `src/dired.c` key
+   bindings): add the two new `AppMode` values, the `Model` fields for
+   which picker is open/highlighted index/live-filtered view, the `i`/`I`
+   key bindings (`MODE_NAV`-only) that open each picker pre-populated
+   from the in-memory arenas added in chunk 1, move-selection (clamped,
+   no wraparound), `f`/`F` live filter (plain/regex) reusing the existing
+   filter machinery's shape, and two-stage `Esc` (clear filter, then
+   exit to `MODE_NAV`). Tests per `update_test.c`'s table-driven style:
+   opening each picker from `MODE_NAV` vs. any other mode, move-selection
+   clamping, filter narrowing (plain and regex) on a small fixture list,
+   and `Esc` two-stage behavior. Depends on chunk 1 for the arena types/API
+   the picker state is built from; independent of chunks 3-4 otherwise.
+3. **Recording hooks and entry activation** (`src/update.c`): wire folder
+   history recording into both `handle_nav()` preview-command build sites
+   (`CMD_PREVIEW`, `CMD_PREVIEW_ARCHIVE_MEMBER`) and both edit-command
+   build sites (`CMD_LAUNCH_EDITOR`, `CMD_OPEN_ARCHIVE_MEMBER`), and file
+   history recording into the real-filesystem `CMD_LAUNCH_EDITOR` branch
+   only; wire Enter/Space on a picker entry to re-enter this same
+   dispatch path (so activation both performs the action and re-records
+   the entry as most-recent) and land back in `MODE_NAV` in the acted-on
+   entry's directory after leaving the editor/preview. Tests per
+   `update_test.c`'s style: dispatching a preview/edit action (real
+   folder, real file, archive-virtual folder) produces the expected arena
+   mutation on a fixture arena; activating a folder-history entry
+   produces the same `Cmd`/`Model` transition as normal navigation into
+   that folder; activating/previewing a file-history entry produces the
+   same `Cmd` as normal activation/preview from the directory listing.
+   Depends on chunks 1-2 (arenas to record into, picker state to activate
+   from).
+4. **Picker rendering** (`src/view.c`): render both picker screens
+   (most-recent-first list, highlighted selection, active filter
+   indicator) mirroring the existing directory-filter view. Per the PRD's
+   Testing Decisions, `view.c` rendering has no dedicated unit tests
+   (consistent with this codebase's absence of view-layer snapshot
+   testing) — validate manually: open each picker, filter, select an
+   entry, confirm the resulting navigation/preview/edit and post-action
+   landing spot. Depends on chunks 2-3 for the state it renders and the
+   activation behavior it triggers.
+
 ## Testing Decisions
 
 - Good tests here assert on `update()`'s returned `Model` or on the storage layer's exposed API directly — never on terminal output, real disk paths outside a test's own temp fixtures, or by shelling out to a real editor, consistent with this codebase's established testing conventions (`test/update_test.c`, `test/history_test.c`).

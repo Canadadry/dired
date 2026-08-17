@@ -153,6 +153,60 @@ static void test_arena_command_at_on_empty_arena_is_null(void)
         TEST_ERRORF("empty arena", "expected NULL for position 0 with no entries");
 }
 
+static void test_folder_history_arena_push_dedup_evict_at_its_own_size(void)
+{
+    FolderHistoryArena a;
+    int n = FOLDER_HISTORY_ARENA_BYTES;
+    history_arena_reset(a.data, n);
+
+    history_arena_push(a.data, n, "/home/user/project");
+    history_arena_push(a.data, n, "/home/user/other");
+    history_arena_push(a.data, n, "/home/user/third");
+
+    HistoryArenaState s = history_arena_state(a.data, n);
+    if (s.count != 3)
+        TEST_ERRORF("push", "count = %d, want 3", s.count);
+
+    history_arena_dedup(a.data, n, "/home/user/project");
+    const char *newest = history_arena_command_at(a.data, n, 0);
+    if (!newest || strcmp(newest, "/home/user/project") != 0)
+        TEST_ERRORF("dedup", "expected '/home/user/project' newest, got '%s'", newest ? newest : "(null)");
+
+    history_arena_evict_oldest(a.data, n);
+    s = history_arena_state(a.data, n);
+    if (s.count != 2)
+        TEST_ERRORF("evict", "count = %d, want 2", s.count);
+    if (history_arena_find(a.data, n, "/home/user/other") != -1)
+        TEST_ERRORF("evict", "'/home/user/other' should have been the oldest and evicted");
+}
+
+static void test_file_history_arena_push_dedup_evict_at_its_own_size(void)
+{
+    FileHistoryArena a;
+    int n = FILE_HISTORY_ARENA_BYTES;
+    history_arena_reset(a.data, n);
+
+    history_arena_push(a.data, n, "/home/user/project/src/main.c");
+    history_arena_push(a.data, n, "/home/user/project/src/history.c");
+    history_arena_push(a.data, n, "/home/user/project/src/history.h");
+
+    HistoryArenaState s = history_arena_state(a.data, n);
+    if (s.count != 3)
+        TEST_ERRORF("push", "count = %d, want 3", s.count);
+
+    history_arena_dedup(a.data, n, "/home/user/project/src/main.c");
+    const char *newest = history_arena_command_at(a.data, n, 0);
+    if (!newest || strcmp(newest, "/home/user/project/src/main.c") != 0)
+        TEST_ERRORF("dedup", "expected main.c newest, got '%s'", newest ? newest : "(null)");
+
+    history_arena_evict_oldest(a.data, n);
+    s = history_arena_state(a.data, n);
+    if (s.count != 2)
+        TEST_ERRORF("evict", "count = %d, want 2", s.count);
+    if (history_arena_find(a.data, n, "/home/user/project/src/history.c") != -1)
+        TEST_ERRORF("evict", "history.c should have been the oldest and evicted");
+}
+
 static void test_history_record_lookup_delete(void)
 {
     History h = history_create();
@@ -227,6 +281,80 @@ static char *make_tmpdir(char *out, const char *suffix)
         tmpdir = "/tmp";
     snprintf(out, 512, "%s/dired_history_test_%s_XXXXXX", tmpdir, suffix);
     return mkdtemp(out);
+}
+
+static void test_persistence_folder_and_file_history_round_trip(void)
+{
+    char dir[512];
+    if (!make_tmpdir(dir, "picker_sections")) {
+        TEST_ERRORF("setup", "mkdtemp failed");
+        return;
+    }
+    char file_path[600];
+    snprintf(file_path, sizeof(file_path), "%s/history", dir);
+
+    FolderHistoryArena folders;
+    history_arena_reset(folders.data, FOLDER_HISTORY_ARENA_BYTES);
+    history_arena_push(folders.data, FOLDER_HISTORY_ARENA_BYTES, "/home/user/project");
+    history_arena_push(folders.data, FOLDER_HISTORY_ARENA_BYTES, "/home/user/other");
+
+    FileHistoryArena files;
+    history_arena_reset(files.data, FILE_HISTORY_ARENA_BYTES);
+    history_arena_push(files.data, FILE_HISTORY_ARENA_BYTES, "/home/user/project/src/main.c");
+
+    if (history_write_folder_history(file_path, &folders) != 0)
+        TEST_ERRORF("write", "history_write_folder_history failed");
+    if (history_write_file_history(file_path, &files) != 0)
+        TEST_ERRORF("write", "history_write_file_history failed");
+
+    FolderHistoryArena loaded_folders;
+    if (history_load_folder_history(file_path, &loaded_folders) != 0)
+        TEST_ERRORF("load", "history_load_folder_history failed");
+    if (history_arena_find(loaded_folders.data, FOLDER_HISTORY_ARENA_BYTES, "/home/user/project") == -1)
+        TEST_ERRORF("load", "'/home/user/project' missing after round trip");
+    if (history_arena_find(loaded_folders.data, FOLDER_HISTORY_ARENA_BYTES, "/home/user/other") == -1)
+        TEST_ERRORF("load", "'/home/user/other' missing after round trip");
+
+    FileHistoryArena loaded_files;
+    if (history_load_file_history(file_path, &loaded_files) != 0)
+        TEST_ERRORF("load", "history_load_file_history failed");
+    if (history_arena_find(loaded_files.data, FILE_HISTORY_ARENA_BYTES, "/home/user/project/src/main.c") == -1)
+        TEST_ERRORF("load", "main.c missing after round trip");
+}
+
+static void test_persistence_folder_and_file_history_survive_folder_slot_writes(void)
+{
+    char dir[512];
+    if (!make_tmpdir(dir, "picker_and_slots")) {
+        TEST_ERRORF("setup", "mkdtemp failed");
+        return;
+    }
+    char file_path[600];
+    snprintf(file_path, sizeof(file_path), "%s/history", dir);
+
+    FolderHistoryArena folders;
+    history_arena_reset(folders.data, FOLDER_HISTORY_ARENA_BYTES);
+    history_arena_push(folders.data, FOLDER_HISTORY_ARENA_BYTES, "/home/user/project");
+    if (history_write_folder_history(file_path, &folders) != 0)
+        TEST_ERRORF("write", "history_write_folder_history failed");
+
+    History h = history_create();
+    history_record_command(&h, "/home/user/project", "make");
+    history_write_folder_slot(file_path, "/home/user/project", history_lookup(&h, "/home/user/project"));
+
+    FolderHistoryArena reloaded;
+    if (history_load_folder_history(file_path, &reloaded) != 0)
+        TEST_ERRORF("load", "history_load_folder_history failed");
+    if (history_arena_find(reloaded.data, FOLDER_HISTORY_ARENA_BYTES, "/home/user/project") == -1)
+        TEST_ERRORF("load", "folder-history section should survive a later per-folder command write");
+
+    History loaded;
+    history_load_file(file_path, &loaded);
+    if (history_lookup(&loaded, "/home/user/project") == NULL)
+        TEST_ERRORF("load", "per-folder command data should also be present");
+
+    history_free(&h);
+    history_free(&loaded);
 }
 
 static void test_persistence_write_then_load_round_trip_single_folder(void)
@@ -444,6 +572,187 @@ static void test_persistence_delete_folder_slot(void)
     history_free(&loaded);
 }
 
+#define TEST_HISTORY_FILE_MAGIC 0x54534968u
+
+typedef struct {
+    uint32_t magic;
+    uint32_t version;
+    uint32_t occupied_count;
+} TestHistoryFileHeaderV1;
+
+static void write_v1_fixture_file(const char *file_path, const char *folder_path, const char *cmd)
+{
+    int fd = open(file_path, O_RDWR | O_CREAT, 0600);
+    if (fd < 0)
+        return;
+
+    unsigned char arena[HISTORY_ARENA_BYTES];
+    history_arena_reset(arena, HISTORY_ARENA_BYTES);
+    history_arena_push(arena, HISTORY_ARENA_BYTES, cmd);
+
+    TestHistoryFileHeaderV1 hdr = { TEST_HISTORY_FILE_MAGIC, 1u, 1u };
+    pwrite(fd, &hdr, sizeof(hdr), 0);
+
+    unsigned char key[HASMMAP_KEY_LEN];
+    memset(key, 0, sizeof(key));
+    strncpy((char *)key, folder_path, sizeof(key) - 1);
+
+    off_t off = sizeof(hdr);
+    pwrite(fd, key, sizeof(key), off);
+    pwrite(fd, arena, HISTORY_ARENA_BYTES, off + HASMMAP_KEY_LEN);
+    close(fd);
+}
+
+static void test_persistence_version1_file_loads_with_folder_data_intact_and_new_arenas_empty(void)
+{
+    char dir[512];
+    if (!make_tmpdir(dir, "v1compat")) {
+        TEST_ERRORF("setup", "mkdtemp failed");
+        return;
+    }
+    char file_path[600];
+    snprintf(file_path, sizeof(file_path), "%s/history", dir);
+
+    write_v1_fixture_file(file_path, "/home/user/legacy", "make");
+
+    History loaded;
+    if (history_load_file(file_path, &loaded) != 0)
+        TEST_ERRORF("load", "history_load_file failed on v1 fixture");
+
+    const CommandArena *arena = history_lookup(&loaded, "/home/user/legacy");
+    if (!arena) {
+        TEST_ERRORF("load", "expected legacy folder command data to survive v1 load");
+    } else if (history_arena_find(arena->data, HISTORY_ARENA_BYTES, "make") == -1) {
+        TEST_ERRORF("load", "'make' missing from legacy folder arena");
+    }
+
+    FolderHistoryArena folders;
+    if (history_load_folder_history(file_path, &folders) != 0)
+        TEST_ERRORF("load", "history_load_folder_history failed on v1 fixture");
+    if (history_arena_state(folders.data, FOLDER_HISTORY_ARENA_BYTES).count != 0)
+        TEST_ERRORF("load", "expected empty folder history when loading a v1 file");
+
+    FileHistoryArena files;
+    if (history_load_file_history(file_path, &files) != 0)
+        TEST_ERRORF("load", "history_load_file_history failed on v1 fixture");
+    if (history_arena_state(files.data, FILE_HISTORY_ARENA_BYTES).count != 0)
+        TEST_ERRORF("load", "expected empty file history when loading a v1 file");
+
+    history_free(&loaded);
+}
+
+static void test_persistence_version1_file_upgrades_to_v2_on_next_write(void)
+{
+    char dir[512];
+    if (!make_tmpdir(dir, "v1upgrade")) {
+        TEST_ERRORF("setup", "mkdtemp failed");
+        return;
+    }
+    char file_path[600];
+    snprintf(file_path, sizeof(file_path), "%s/history", dir);
+
+    write_v1_fixture_file(file_path, "/home/user/legacy", "make");
+
+    FolderHistoryArena folders;
+    history_arena_reset(folders.data, FOLDER_HISTORY_ARENA_BYTES);
+    history_arena_push(folders.data, FOLDER_HISTORY_ARENA_BYTES, "/home/user/newly-recorded");
+    if (history_write_folder_history(file_path, &folders) != 0)
+        TEST_ERRORF("migrate", "history_write_folder_history failed to upgrade v1 file");
+
+    int fd = open(file_path, O_RDONLY);
+    uint32_t version = 0;
+    if (fd >= 0) {
+        pread(fd, &version, sizeof(version), sizeof(uint32_t));
+        close(fd);
+    }
+    if (version != 2u)
+        TEST_ERRORF("migrate", "on-disk version = %u, want 2 after upgrading write", version);
+
+    History loaded;
+    history_load_file(file_path, &loaded);
+    const CommandArena *arena = history_lookup(&loaded, "/home/user/legacy");
+    if (!arena || history_arena_find(arena->data, HISTORY_ARENA_BYTES, "make") == -1)
+        TEST_ERRORF("migrate", "legacy folder command data lost during v1->v2 upgrade");
+
+    FolderHistoryArena reloaded_folders;
+    history_load_folder_history(file_path, &reloaded_folders);
+    if (history_arena_find(reloaded_folders.data, FOLDER_HISTORY_ARENA_BYTES, "/home/user/newly-recorded") == -1)
+        TEST_ERRORF("migrate", "newly-written folder-history entry missing after upgrade");
+
+    history_free(&loaded);
+}
+
+static void test_prune_folder_history_evicts_only_nonexistent_folders(void)
+{
+    char dir[512];
+    if (!make_tmpdir(dir, "prune_folders")) {
+        TEST_ERRORF("setup", "mkdtemp failed");
+        return;
+    }
+
+    char existing_folder[600];
+    snprintf(existing_folder, sizeof(existing_folder), "%s/exists", dir);
+    if (mkdir(existing_folder, 0700) != 0)
+        TEST_ERRORF("setup", "mkdir failed for fixture folder");
+
+    char plain_file[600];
+    snprintf(plain_file, sizeof(plain_file), "%s/plainfile", dir);
+    FILE *f = fopen(plain_file, "w");
+    if (f)
+        fclose(f);
+
+    FolderHistoryArena arena;
+    history_arena_reset(arena.data, FOLDER_HISTORY_ARENA_BYTES);
+    history_arena_push(arena.data, FOLDER_HISTORY_ARENA_BYTES, existing_folder);
+    history_arena_push(arena.data, FOLDER_HISTORY_ARENA_BYTES, "/nonexistent/deleted/folder/xyz");
+    history_arena_push(arena.data, FOLDER_HISTORY_ARENA_BYTES, dir);
+    history_arena_push(arena.data, FOLDER_HISTORY_ARENA_BYTES, plain_file);
+
+    history_prune_folder_history(&arena);
+
+    HistoryArenaState s = history_arena_state(arena.data, FOLDER_HISTORY_ARENA_BYTES);
+    if (s.count != 2)
+        TEST_ERRORF("prune", "count = %d, want 2 survivors", s.count);
+    if (history_arena_find(arena.data, FOLDER_HISTORY_ARENA_BYTES, existing_folder) == -1)
+        TEST_ERRORF("prune", "existing folder should survive pruning");
+    if (history_arena_find(arena.data, FOLDER_HISTORY_ARENA_BYTES, dir) == -1)
+        TEST_ERRORF("prune", "existing dir should survive pruning");
+    if (history_arena_find(arena.data, FOLDER_HISTORY_ARENA_BYTES, "/nonexistent/deleted/folder/xyz") != -1)
+        TEST_ERRORF("prune", "nonexistent folder should have been evicted");
+    if (history_arena_find(arena.data, FOLDER_HISTORY_ARENA_BYTES, plain_file) != -1)
+        TEST_ERRORF("prune", "a plain file should not count as a surviving folder");
+}
+
+static void test_prune_file_history_evicts_only_nonexistent_files(void)
+{
+    char dir[512];
+    if (!make_tmpdir(dir, "prune_files")) {
+        TEST_ERRORF("setup", "mkdtemp failed");
+        return;
+    }
+
+    char existing_file[600];
+    snprintf(existing_file, sizeof(existing_file), "%s/exists.txt", dir);
+    FILE *f = fopen(existing_file, "w");
+    if (f)
+        fclose(f);
+
+    FileHistoryArena arena;
+    history_arena_reset(arena.data, FILE_HISTORY_ARENA_BYTES);
+    history_arena_push(arena.data, FILE_HISTORY_ARENA_BYTES, existing_file);
+    history_arena_push(arena.data, FILE_HISTORY_ARENA_BYTES, "/nonexistent/deleted/file.txt");
+
+    history_prune_file_history(&arena);
+
+    HistoryArenaState s = history_arena_state(arena.data, FILE_HISTORY_ARENA_BYTES);
+    if (s.count != 1)
+        TEST_ERRORF("prune", "count = %d, want 1 survivor", s.count);
+    if (history_arena_find(arena.data, FILE_HISTORY_ARENA_BYTES, existing_file) == -1)
+        TEST_ERRORF("prune", "existing file should survive pruning");
+    if (history_arena_find(arena.data, FILE_HISTORY_ARENA_BYTES, "/nonexistent/deleted/file.txt") != -1)
+        TEST_ERRORF("prune", "nonexistent file should have been evicted");
+}
+
 void test_history(void)
 {
     test_arena_worked_example();
@@ -452,6 +761,10 @@ void test_history(void)
     test_arena_evict_drops_oldest_and_reclaims_space();
     test_arena_command_at_indexes_by_recency();
     test_arena_command_at_on_empty_arena_is_null();
+    test_folder_history_arena_push_dedup_evict_at_its_own_size();
+    test_file_history_arena_push_dedup_evict_at_its_own_size();
+    test_persistence_folder_and_file_history_round_trip();
+    test_persistence_folder_and_file_history_survive_folder_slot_writes();
     test_history_record_lookup_delete();
     test_folder_enumeration_covers_every_recorded_folder();
     test_persistence_write_then_load_round_trip_single_folder();
@@ -461,4 +774,8 @@ void test_history(void)
     test_persistence_incremental_write_does_not_disturb_others();
     test_persistence_file_permissions_0600();
     test_persistence_delete_folder_slot();
+    test_persistence_version1_file_loads_with_folder_data_intact_and_new_arenas_empty();
+    test_persistence_version1_file_upgrades_to_v2_on_next_write();
+    test_prune_folder_history_evicts_only_nonexistent_folders();
+    test_prune_file_history_evicts_only_nonexistent_files();
 }
